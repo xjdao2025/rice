@@ -1,0 +1,34 @@
+lib/rice/semi_oauth.ex
+  s_c7c294ddcc30bc::t_68897619770085 65
+  s_c7c294ddcc30bc::t_7db51993539c0b 1-64,66-100,102-125,127-142
+  s_c7c294ddcc30bc::t_1ce6d0e89d5a43 101,126
+lib/rice_web/controllers/page_html.ex
+  s_c7c294ddcc30bc::t_51724e1d81ff49 10-30
+lib/rice_web/router.ex
+  s_c7c294ddcc30bc::t_f93d69aa3816f3 21-26
+config/runtime.exs
+  s_c7c294ddcc30bc::t_850f8a8489d9f7 34-37
+  s_c7c294ddcc30bc::t_27dfb874a18f1c 25-33,38
+lib/rice_web/controllers/page_controller.ex
+  s_c7c294ddcc30bc::t_e5123c9e732042 5
+lib/rice_web/controllers/page_html/home.html.heex
+  s_c7c294ddcc30bc::t_40aeb9502cb692 1-6,8-14,16-18,20-22,24-26,28-60,62,64
+lib/rice_web/controllers/semi_auth_controller.ex
+  s_c7c294ddcc30bc::t_ed5a6110b1a0f3 1-123
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "afff005e41893893cc42c4428328807badd5d6e9",
+  "prompts": {},
+  "sessions": {
+    "s_c7c294ddcc30bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4902de79-d943-413e-b8b7-c5a851e32947",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
