@@ -1,0 +1,42 @@
+config/runtime.exs
+  s_c7c294ddcc30bc::t_2ec7b0c6436055 49-56
+  s_c7c294ddcc30bc::t_1e697751ff42b3 39-48,57
+lib/rice_web/controllers/page_html/home.html.heex
+  s_c7c294ddcc30bc::t_4617cd63e4a19b 38-49
+lib/rice/vault.ex
+  s_c7c294ddcc30bc::t_b460ab5818e224 1-43
+lib/rice/pds.ex
+  s_c7c294ddcc30bc::t_a569b95a2ead8f 1-51
+lib/rice/accounts.ex
+  s_c7c294ddcc30bc::t_62a01956bc0264 1-15
+lib/rice/bridge.ex
+  s_c7c294ddcc30bc::t_8c650b45c6efbe 1-93
+lib/rice/accounts/semi_link.ex
+  s_c7c294ddcc30bc::t_ca220a82914e89 1-22
+lib/rice_web/controllers/semi_auth_controller.ex
+  s_c7c294ddcc30bc::t_5baba48d93640e 117-123
+  s_c7c294ddcc30bc::t_7df878dae516d7 77
+  s_c7c294ddcc30bc::t_0216935657b3b7 84-85,88-90,101-102
+  s_c7c294ddcc30bc::t_d99fa30104c4bd 103
+lib/rice_web/controllers/page_controller.ex
+  s_c7c294ddcc30bc::t_490239bb8e9c4b 5-8
+priv/repo/migrations/20260702183358_create_semi_links.exs
+  s_c7c294ddcc30bc::t_96ba11ffca0a15 1-4,14,20-21
+  s_c7c294ddcc30bc::t_dec6e6470eecfb 5-13,15-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "f16884328557f9e1b8ad2ac760756944281cf53c",
+  "prompts": {},
+  "sessions": {
+    "s_c7c294ddcc30bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4902de79-d943-413e-b8b7-c5a851e32947",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
