@@ -1,0 +1,21 @@
+config/runtime.exs
+  s_c7c294ddcc30bc::t_6fac0825f88cae 34-39
+lib/rice/semi_oauth.ex
+  s_c7c294ddcc30bc::t_f2b7d50f98f7ce 65-67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "b1a71bf019f64ed261402f4148f82eded5c69a54",
+  "prompts": {},
+  "sessions": {
+    "s_c7c294ddcc30bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4902de79-d943-413e-b8b7-c5a851e32947",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
