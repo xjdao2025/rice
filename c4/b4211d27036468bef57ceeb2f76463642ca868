@@ -1,0 +1,30 @@
+lib/rice/handoff.ex
+  s_c7c294ddcc30bc::t_d0edf2bc7a8abb 1-56,59-63
+  s_c7c294ddcc30bc::t_f18da0f654c3ff 57-58
+config/runtime.exs
+  s_c7c294ddcc30bc::t_b6cd91328edb61 43-45,48,52-57
+  s_c7c294ddcc30bc::t_79ad38656644ea 58
+lib/rice_web/controllers/semi_auth_controller.ex
+  s_c7c294ddcc30bc::t_62f7196515c416 86-90,95,105-131
+  s_c7c294ddcc30bc::t_9f72807f4964a6 132
+lib/rice_web/router.ex
+  s_c7c294ddcc30bc::t_05120de1483c8a 29-36
+lib/rice/application.ex
+  s_c7c294ddcc30bc::t_07a02cb884431d 15-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "c4b4211d27036468bef57ceeb2f76463642ca868",
+  "prompts": {},
+  "sessions": {
+    "s_c7c294ddcc30bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4902de79-d943-413e-b8b7-c5a851e32947",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
