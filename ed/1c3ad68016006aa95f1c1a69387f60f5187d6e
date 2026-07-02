@@ -1,0 +1,147 @@
+lib/rice_web/components/core_components.ex
+  s_c7c294ddcc30bc::t_0647705331c70f 217-314
+  s_c7c294ddcc30bc::t_8176576eb0c4f9 11-12
+  s_c7c294ddcc30bc::t_d8c4fdb0e27358 62-68
+  s_c7c294ddcc30bc::t_d8ffee6d97b86d 100-110
+  s_c7c294ddcc30bc::t_b8ff8e098bc7eb 376-398
+  s_c7c294ddcc30bc::t_d33539ebdee1b4 427-429
+  s_c7c294ddcc30bc::t_7571f2bf802baa 335
+  s_c7c294ddcc30bc::t_6bda1ef1d155e8 8-10
+  s_c7c294ddcc30bc::t_69185df8831ea0 13-15,59-61
+  s_c7c294ddcc30bc::t_520a3befe4444f 69-71,97-99
+  s_c7c294ddcc30bc::t_eb3d137379d9c1 111-113,214-216
+  s_c7c294ddcc30bc::t_f51f5281be0846 315-317,332-334
+  s_c7c294ddcc30bc::t_a208096ac2dbf8 336-338,373-375
+  s_c7c294ddcc30bc::t_69d31f4b8cd460 399-401,424-426
+  s_c7c294ddcc30bc::t_817ca5bf8786f1 430-432
+assets/css/app.css
+  s_c7c294ddcc30bc::t_49937df968bb98 21-22
+  s_c7c294ddcc30bc::t_0cb65dd8a8ba09 18-20
+  s_c7c294ddcc30bc::t_d307067bd9fb8a 23-25
+lib/rice_web/components/layouts/root.html.heex
+  s_c7c294ddcc30bc::t_735fdb5b51b84e 15-29,31
+  s_c7c294ddcc30bc::t_9de566f0eb07ec 42
+  s_c7c294ddcc30bc::t_1c7eab53722e3e 12-14
+  s_c7c294ddcc30bc::t_dbf39a3964681a 30
+  s_c7c294ddcc30bc::t_c44966d04bccbe 32-34,39-41
+  s_c7c294ddcc30bc::t_8deca9b0942601 43-45
+lib/rice_web/components/layouts.ex
+  s_c7c294ddcc30bc::t_bbdbab9003911f 38-70,72
+  s_c7c294ddcc30bc::t_d4cf4c36be55e0 138-146
+  s_c7c294ddcc30bc::t_4aeec5985902c2 35-37
+  s_c7c294ddcc30bc::t_796c9e70c25ae2 71
+  s_c7c294ddcc30bc::t_8b52b2ec07ba5d 73-75,135-137
+  s_c7c294ddcc30bc::t_b99b6e95388bbb 147-149
+.dockerignore
+  s_c7c294ddcc30bc::t_c5c4c982aece78 1-46
+.formatter.exs
+  s_c7c294ddcc30bc::t_2b0e04acab7d3b 1-6
+.gitignore
+  s_c7c294ddcc30bc::t_cbbb1829857fcd 1-37
+AGENTS.md
+  s_c7c294ddcc30bc::t_62a512171d7810 1-449
+Dockerfile
+  s_c7c294ddcc30bc::t_381152dd7d0d26 1-101
+README.md
+  s_c7c294ddcc30bc::t_ec2913fffe03c5 1-18
+assets/js/app.js
+  s_c7c294ddcc30bc::t_2656b6a7db0a7e 1-83
+assets/tsconfig.json
+  s_c7c294ddcc30bc::t_1c0f929d715823 1-32
+assets/vendor/heroicons.js
+  s_c7c294ddcc30bc::t_83d37d12ddf8ce 1-43
+assets/vendor/topbar.js
+  s_c7c294ddcc30bc::t_a6c1d9cd7685ff 1-138
+config/config.exs
+  s_c7c294ddcc30bc::t_e5ee5e63990c3c 1-71
+config/dev.exs
+  s_c7c294ddcc30bc::t_dc4cdd9120cba7 1-92
+config/prod.exs
+  s_c7c294ddcc30bc::t_689fb73e4b25d9 1-32
+config/runtime.exs
+  s_c7c294ddcc30bc::t_16d9a4a6d73a19 1-119
+config/test.exs
+  s_c7c294ddcc30bc::t_e95a7e2d624805 1-41
+lib/rice.ex
+  s_c7c294ddcc30bc::t_713fde63c5dd37 1-9
+lib/rice/application.ex
+  s_c7c294ddcc30bc::t_e55df3f249f864 1-34
+lib/rice/mailer.ex
+  s_c7c294ddcc30bc::t_ef895fe608b7ce 1-3
+lib/rice/release.ex
+  s_c7c294ddcc30bc::t_fd204c7731206f 1-30
+lib/rice/repo.ex
+  s_c7c294ddcc30bc::t_fe3f89422a865f 1-5
+lib/rice_web.ex
+  s_c7c294ddcc30bc::t_ba0bc81c95346e 1-114
+lib/rice_web/controllers/error_html.ex
+  s_c7c294ddcc30bc::t_ee40ce7a48f175 1-24
+lib/rice_web/controllers/error_json.ex
+  s_c7c294ddcc30bc::t_4377a487fb0d87 1-21
+lib/rice_web/controllers/page_controller.ex
+  s_c7c294ddcc30bc::t_05efdb5866ac24 1-7
+lib/rice_web/controllers/page_html.ex
+  s_c7c294ddcc30bc::t_441b099e8c844c 1-10
+lib/rice_web/controllers/page_html/home.html.heex
+  s_c7c294ddcc30bc::t_fd34209ae49843 1-199
+lib/rice_web/endpoint.ex
+  s_c7c294ddcc30bc::t_1384c65664039d 1-55
+lib/rice_web/gettext.ex
+  s_c7c294ddcc30bc::t_fa609f347e2da4 1-25
+lib/rice_web/router.ex
+  s_c7c294ddcc30bc::t_6fbb2b5d312a0a 1-44
+lib/rice_web/telemetry.ex
+  s_c7c294ddcc30bc::t_5e41c7a76ac5db 1-93
+mix.exs
+  s_c7c294ddcc30bc::t_ede11bfcdb4620 1-94
+mix.lock
+  s_c7c294ddcc30bc::t_bcd653d7476337 1-45
+priv/gettext/en/LC_MESSAGES/errors.po
+  s_c7c294ddcc30bc::t_92bf4ace95f6dc 1-112
+priv/gettext/errors.pot
+  s_c7c294ddcc30bc::t_4c5a963c2895f0 1-109
+priv/repo/migrations/.formatter.exs
+  s_c7c294ddcc30bc::t_48039bc745954c 1-4
+priv/repo/seeds.exs
+  s_c7c294ddcc30bc::t_1515a783dedb80 1-11
+priv/static/images/logo.svg
+  s_c7c294ddcc30bc::t_eee678645b82df 1-6
+priv/static/robots.txt
+  s_c7c294ddcc30bc::t_eb7b18987953c3 1-5
+rel/overlays/bin/migrate
+  s_c7c294ddcc30bc::t_812ed362ea6469 1-5
+rel/overlays/bin/migrate.bat
+  s_c7c294ddcc30bc::t_1c14e26bc574e3 1
+rel/overlays/bin/server
+  s_c7c294ddcc30bc::t_c35f60183f19d0 1-5
+rel/overlays/bin/server.bat
+  s_c7c294ddcc30bc::t_3d27eb0a77d6c6 1-2
+test/rice_web/controllers/error_html_test.exs
+  s_c7c294ddcc30bc::t_834af8a963ad40 1-14
+test/rice_web/controllers/error_json_test.exs
+  s_c7c294ddcc30bc::t_337e6721b87d93 1-12
+test/rice_web/controllers/page_controller_test.exs
+  s_c7c294ddcc30bc::t_cd4c6f6105755b 1-8
+test/support/conn_case.ex
+  s_c7c294ddcc30bc::t_99e167fa854e55 1-38
+test/support/data_case.ex
+  s_c7c294ddcc30bc::t_e0cce3f26e56f9 1-58
+test/test_helper.exs
+  s_c7c294ddcc30bc::t_29b7a265be40c6 1-2
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "ed1c3ad68016006aa95f1c1a69387f60f5187d6e",
+  "prompts": {},
+  "sessions": {
+    "s_c7c294ddcc30bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4902de79-d943-413e-b8b7-c5a851e32947",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
