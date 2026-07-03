@@ -1,0 +1,21 @@
+lib/rice/pds.ex
+  s_c7c294ddcc30bc::t_febe8a9b331949 25-61
+lib/rice/bridge.ex
+  s_c7c294ddcc30bc::t_e5994c177122b0 13,16-58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "5b79a099a1832434530b872d170ea1a7f859375f",
+  "prompts": {},
+  "sessions": {
+    "s_c7c294ddcc30bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4902de79-d943-413e-b8b7-c5a851e32947",
+        "model": "claude-fable-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
