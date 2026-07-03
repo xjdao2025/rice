@@ -1,0 +1,33 @@
+lib/rice/application.ex
+  s_c7c294ddcc30bc::t_5d32a0838ffb72 21-22,29-53
+  s_c7c294ddcc30bc::t_808f96fcb34bb7 54-55
+config/runtime.exs
+  s_c7c294ddcc30bc::t_1b3181975337ff 59-78
+mix.exs
+  s_c7c294ddcc30bc::t_f9b9295c4c0077 47-48
+lib/rice/bridge.ex
+  s_c7c294ddcc30bc::t_740a7f93450bd9 24-39
+lib/rice/dao.ex
+  s_c7c294ddcc30bc::t_9da2caa3ad93ee 128-129,131-132,135-138,140-151
+  s_c7c294ddcc30bc::t_61f6f09b4ed44f 1-127,130,133-134,139,152-157
+lib/rice_web/controllers/semi_auth_controller.ex
+  s_c7c294ddcc30bc::t_0122dd66ea30ab 121,128-134
+mix.lock
+  s_c7c294ddcc30bc::t_68c604ccaf30f3 23,37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.8",
+  "base_commit_sha": "0b21e4ace2aae858e767918312c9c2394053ac8a",
+  "prompts": {},
+  "sessions": {
+    "s_c7c294ddcc30bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4902de79-d943-413e-b8b7-c5a851e32947",
+        "model": "claude-fable-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
