@@ -1,0 +1,46 @@
+lib/rice_web/router.ex
+  s_c7c294ddcc30bc::t_6b3150886d57c6 69-70
+lib/rice/notifications/aliyun_sms.ex
+  s_c7c294ddcc30bc::t_42162c109fda39 1-145
+lib/rice/accounts.ex
+  s_c7c294ddcc30bc::t_6b3150886d57c6 54-72
+mix.exs
+  s_c7c294ddcc30bc::t_4dd2537e10765c 64-65
+lib/rice_web/api/badge_json.ex
+  s_c7c294ddcc30bc::t_83aede4a55117b 13
+lib/rice/notifications/dispatcher.ex
+  s_c7c294ddcc30bc::t_c5b543d0bfb34b 1-47
+lib/rice_web/api/badge_controller.ex
+  s_c7c294ddcc30bc::t_6b3150886d57c6 2-7,12-23,26-30
+lib/rice/community.ex
+  s_c7c294ddcc30bc::t_83aede4a55117b 44,48
+test/rice_web/api/badge_controller_test.exs
+  s_c7c294ddcc30bc::t_1535565d58b0ac 25,29
+  s_c7c294ddcc30bc::t_83aede4a55117b 6-8,10-24,26-28,30-32,37-46,49,54-57,59,61-78
+  s_c7c294ddcc30bc::t_5fbef89afc1402 33-36
+config/runtime.exs
+  s_c7c294ddcc30bc::t_6db0fb4bb604e0 115-145
+test/rice/notifications_test.exs
+  s_c7c294ddcc30bc::t_f808a948124e25 1-100,102-108
+  s_c7c294ddcc30bc::t_5fbef89afc1402 101
+lib/rice/notifications/smtp.ex
+  s_c7c294ddcc30bc::t_ef75c0f64c8e88 1-44
+mix.lock
+  s_c7c294ddcc30bc::t_61c869c2e12985 15,41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "8dd499079b5794847e95c20da9962be981660f4f",
+  "prompts": {},
+  "sessions": {
+    "s_c7c294ddcc30bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4902de79-d943-413e-b8b7-c5a851e32947",
+        "model": "claude-opus-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
