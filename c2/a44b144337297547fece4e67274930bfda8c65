@@ -1,0 +1,49 @@
+test/rice_web/api/admin/grain_controller_test.exs
+  s_c7c294ddcc30bc::t_ed893d4a3a6bea 4-6
+  s_c7c294ddcc30bc::t_6b48fed0fd8c8a 185-276,280-282,284-285,294-300
+  s_c7c294ddcc30bc::t_d37edc17daa664 7-8,10-13,15-27,40,58,77,94,147
+  s_c7c294ddcc30bc::t_47b86f9b30ee43 14,31,41,48,59,69,78,86,95,102,108,115,118,124,131,139,148,155,158,162,168,172,178
+  s_c7c294ddcc30bc::t_d7c3c36b74b899 359
+  s_c7c294ddcc30bc::t_7c76ceac4e7bfa 277-279,283,286-293
+lib/rice_web/router.ex
+  s_c7c294ddcc30bc::t_1783760deb1361 162-163,165
+lib/rice/admin/grants.ex
+  s_c7c294ddcc30bc::t_c4a920c7cc94ad 53-73
+  s_c7c294ddcc30bc::t_961972329e64d8 19-32,41-42,48-52,75
+  s_c7c294ddcc30bc::t_689a28315a7d15 18
+  s_c7c294ddcc30bc::t_39a21fc9eb4e09 74
+  s_c7c294ddcc30bc::t_f5e3ce17c648c4 76
+docs/api/README.md
+  s_c7c294ddcc30bc::t_1581f5a656da15 200
+docs/api/admin/grain_controller.md
+  s_c7c294ddcc30bc::t_9c2f18ebcaffb0 13-26,36,40-45,48-60
+  s_c7c294ddcc30bc::t_1581f5a656da15 92-93
+  s_c7c294ddcc30bc::t_9773993d8b22cc 61
+lib/rice/accounts/verification_code.ex
+  s_c7c294ddcc30bc::t_e35e1a813468f5 11
+lib/rice/admin.ex
+  s_c7c294ddcc30bc::t_dc20b35f695a9e 19
+  s_c7c294ddcc30bc::t_d60bfc5e7a793f 196-225
+  s_c7c294ddcc30bc::t_0994da341fe85b 226-229
+lib/rice_web/api/admin/grain_controller.ex
+  s_c7c294ddcc30bc::t_ef6b6c050f3091 100-103
+  s_c7c294ddcc30bc::t_f2d77cc64b8ddc 16-41,52,56-60,62-63
+  s_c7c294ddcc30bc::t_ee561550d3fea6 42-48,51,53-55
+  s_c7c294ddcc30bc::t_2b9e2d32e8e0cc 64-73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "c2a44b144337297547fece4e67274930bfda8c65",
+  "prompts": {},
+  "sessions": {
+    "s_c7c294ddcc30bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4902de79-d943-413e-b8b7-c5a851e32947",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
