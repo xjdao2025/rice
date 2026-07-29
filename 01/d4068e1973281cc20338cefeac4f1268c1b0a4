@@ -1,0 +1,22 @@
+test/rice_web/cors_test.exs
+  s_c7c294ddcc30bc::t_e7b29461ca7ec3 71-72,74-86
+  s_c7c294ddcc30bc::t_0ce9a8a13ccd95 73
+config/dev.exs
+  s_c7c294ddcc30bc::t_88a940f5fbf6ba 13-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "01d4068e1973281cc20338cefeac4f1268c1b0a4",
+  "prompts": {},
+  "sessions": {
+    "s_c7c294ddcc30bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4902de79-d943-413e-b8b7-c5a851e32947",
+        "model": "claude-opus-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
