@@ -1,0 +1,25 @@
+test/rice/files_test.exs
+  s_c7c294ddcc30bc::t_0cceab97373d05 147-176
+docs/api/admin/template_controller.md
+  s_c7c294ddcc30bc::t_643c3e119c14cd 44,46-47,49
+lib/rice/files.ex
+  s_c7c294ddcc30bc::t_8c1d00761257b2 19-22,27-29
+docs/api/attachment_controller.md
+  s_c7c294ddcc30bc::t_faba9e2947d719 44-45,47-48,50-52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "46fce799feecc3c047852792002d8359a9bc87ad",
+  "prompts": {},
+  "sessions": {
+    "s_c7c294ddcc30bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4902de79-d943-413e-b8b7-c5a851e32947",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
