@@ -1,0 +1,90 @@
+docs/api/node_controller.md
+  s_c7c294ddcc30bc::t_8375af04e07bc8 1-59
+lib/rice/admin/admin_user.ex
+  s_c7c294ddcc30bc::t_a14a2b3347bb4e 57
+  s_c7c294ddcc30bc::t_c93820c28eab31 14-19
+priv/repo/migrations/20260729090000_require_admin_phone.exs
+  s_c7c294ddcc30bc::t_da2aec259bd7b3 11
+  s_c7c294ddcc30bc::t_41731488c804b9 1-10,12-21
+docs/api/user_controller.md
+  s_c7c294ddcc30bc::t_4816e446aabf57 1-119
+docs/api/admin/badge_controller.md
+  s_c7c294ddcc30bc::t_daba93cc4ce6bd 90-99
+  s_c7c294ddcc30bc::t_e23e7d10203c20 1-89
+lib/rice/admin/grants.ex
+  s_c7c294ddcc30bc::t_b5ad05a78ddc96 63-64,66-86
+docs/api/grain_transfer_controller.md
+  s_c7c294ddcc30bc::t_b484b25ee12594 1-93
+docs/api/admin/password_controller.md
+  s_c7c294ddcc30bc::t_b61afd165f0ae6 1-62
+docs/api/banner_controller.md
+  s_c7c294ddcc30bc::t_ceaea4b511b93b 1-31
+docs/api/app_controller.md
+  s_c7c294ddcc30bc::t_82e0c376b8e2e1 1-34
+docs/api/verification_code_controller.md
+  s_c7c294ddcc30bc::t_51ce76a063dc1d 1-67
+docs/api/admin/grain_controller.md
+  s_c7c294ddcc30bc::t_f0964834311a31 1-124
+docs/api/admin/post_controller.md
+  s_c7c294ddcc30bc::t_7d2f7ad4f9ec33 1-64
+docs/api/admin/admin_user_controller.md
+  s_c7c294ddcc30bc::t_f68fa4e8a3ef78 1-135
+lib/rice_web/api/admin/grain_controller.ex
+  s_c7c294ddcc30bc::t_e72fd04b702996 28-34
+docs/api/grain_grant_controller.md
+  s_c7c294ddcc30bc::t_1b103448abf26b 1-46
+docs/api/settings_controller.md
+  s_c7c294ddcc30bc::t_25cfb5119de97a 1-36
+docs/api/admin/session_controller.md
+  s_c7c294ddcc30bc::t_c73101dbb1ae49 1-109
+docs/api/registration_controller.md
+  s_c7c294ddcc30bc::t_63c3b2cf17fa85 1-101
+docs/api/password_controller.md
+  s_c7c294ddcc30bc::t_000c7c3912950b 1-48
+docs/api/proposal_comment_controller.md
+  s_c7c294ddcc30bc::t_1a1326c310b0d5 1-71
+test/rice_web/api/admin/grain_controller_test.exs
+  s_c7c294ddcc30bc::t_729648bd1110a4 97-135
+docs/api/announcement_controller.md
+  s_c7c294ddcc30bc::t_9fdd10d1122892 1-47
+docs/api/proposal_vote_controller.md
+  s_c7c294ddcc30bc::t_bac02a51949a80 1-60
+docs/api/proposal_controller.md
+  s_c7c294ddcc30bc::t_8deca189bfe6ea 1-112
+docs/api/admin/user_controller.md
+  s_c7c294ddcc30bc::t_a71df16f053f90 1-105
+docs/api/badge_controller.md
+  s_c7c294ddcc30bc::t_1201f18b0e61c1 1-55
+docs/api/admin/proposal_controller.md
+  s_c7c294ddcc30bc::t_755895a8544125 1-102
+docs/api/admin/template_controller.md
+  s_c7c294ddcc30bc::t_a4a0a6abf6b772 1-51
+docs/api/README.md
+  s_c7c294ddcc30bc::t_638e04a5cbe6c0 1-168
+docs/api/admin/catalog_controller.md
+  s_c7c294ddcc30bc::t_23fd4bd73e74cc 1-130
+docs/api/admin/settings_controller.md
+  s_c7c294ddcc30bc::t_e7fca5aaee2b95 1-61
+test/rice_web/api/admin/moderation_controller_test.exs
+  s_c7c294ddcc30bc::t_c2cd54f0c82008 304-329
+docs/api/session_controller.md
+  s_c7c294ddcc30bc::t_a7ae3bc4d0722c 1-71
+docs/api/attachment_controller.md
+  s_c7c294ddcc30bc::t_32909281c2dd09 1-102
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "d28cb60e15e371fa300576b4a487fdf75891d838",
+  "prompts": {},
+  "sessions": {
+    "s_c7c294ddcc30bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4902de79-d943-413e-b8b7-c5a851e32947",
+        "model": "claude-opus-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
