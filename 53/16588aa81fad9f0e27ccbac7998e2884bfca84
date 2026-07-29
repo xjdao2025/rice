@@ -1,0 +1,45 @@
+docs/api/admin/user_controller.md
+  s_c7c294ddcc30bc::t_b6f9695215a1ff 51-52
+docs/api/admin/badge_controller.md
+  s_c7c294ddcc30bc::t_b6f9695215a1ff 17-18,64-65
+lib/rice_web/api/admin/badge_json.ex
+  s_c7c294ddcc30bc::t_fb10335d3deae2 5,11
+lib/rice_web/api/admin/grain_json.ex
+  s_c7c294ddcc30bc::t_fb10335d3deae2 7,15
+test/rice_web/api/admin/user_controller_test.exs
+  s_c7c294ddcc30bc::t_7e5cb48d3f11e0 169-229
+docs/api/admin/proposal_controller.md
+  s_c7c294ddcc30bc::t_b6f9695215a1ff 45-46
+lib/rice/pagination.ex
+  s_c7c294ddcc30bc::t_8e8c7e38ca9f79 3-5,8,14-24,33-37,41-42,46,48-49,53-64,70-96,108,112-113
+  s_c7c294ddcc30bc::t_a35fa86705ea8a 151-165
+  s_c7c294ddcc30bc::t_529421f6b62e71 114
+test/rice/pagination_test.exs
+  s_c7c294ddcc30bc::t_ed57c6bf60c109 1-150
+lib/rice_web/api/admin/admin_user_json.ex
+  s_c7c294ddcc30bc::t_fb10335d3deae2 5
+docs/api/README.md
+  s_c7c294ddcc30bc::t_7459cb6d42dcbc 99-101,109-112,116-138,140
+lib/rice_web/api/admin/user_json.ex
+  s_c7c294ddcc30bc::t_fb10335d3deae2 9
+lib/rice_web/api/admin/proposal_json.ex
+  s_c7c294ddcc30bc::t_fb10335d3deae2 5
+docs/api/admin/grain_controller.md
+  s_c7c294ddcc30bc::t_b6f9695215a1ff 79-80,118-119
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "5316588aa81fad9f0e27ccbac7998e2884bfca84",
+  "prompts": {},
+  "sessions": {
+    "s_c7c294ddcc30bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4902de79-d943-413e-b8b7-c5a851e32947",
+        "model": "claude-opus-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
