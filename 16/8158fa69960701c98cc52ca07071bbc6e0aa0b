@@ -1,0 +1,34 @@
+config/runtime.exs
+  s_c7c294ddcc30bc::t_07acde3c9cc8de 58,65
+  s_c7c294ddcc30bc::t_c201efc675717e 59-64
+mix.exs
+  s_c7c294ddcc30bc::t_556162472781e6 49-51
+config/dev.exs
+  s_c7c294ddcc30bc::t_07acde3c9cc8de 13-22
+config/test.exs
+  s_c7c294ddcc30bc::t_07acde3c9cc8de 53-55
+lib/rice/cors.ex
+  s_c7c294ddcc30bc::t_187801ef32ffa1 1-37
+test/rice_web/cors_test.exs
+  s_c7c294ddcc30bc::t_ed08ca572e6368 1-82
+lib/rice_web/endpoint.ex
+  s_c7c294ddcc30bc::t_187801ef32ffa1 54-64,66-73
+mix.lock
+  s_c7c294ddcc30bc::t_93f6286b52dabe 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "168158fa69960701c98cc52ca07071bbc6e0aa0b",
+  "prompts": {},
+  "sessions": {
+    "s_c7c294ddcc30bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4902de79-d943-413e-b8b7-c5a851e32947",
+        "model": "claude-opus-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
