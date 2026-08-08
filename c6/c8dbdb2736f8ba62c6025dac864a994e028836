@@ -1,0 +1,71 @@
+lib/rice/import.ex
+  s_639c4a762a748a::t_980a7fc639e1da 17-56
+  s_639c4a762a748a::t_d40b198a4f5ec7 1-16,57-84
+lib/rice/import/admin_users.ex
+  s_639c4a762a748a::t_31fa1a1779543f 1-161
+test/rice_web/api/admin/moderation_controller_test.exs
+  s_639c4a762a748a::t_de8638f606cc51 234-261,263-273,275,279-308,310-360
+  s_639c4a762a748a::t_a0851e72dfca1c 262
+  s_639c4a762a748a::t_41ac4442135fe8 274
+  s_639c4a762a748a::t_716d9ab925d330 276-278
+  s_639c4a762a748a::t_67846eb6a484fc 309
+lib/rice/import/writer.ex
+  s_639c4a762a748a::t_fe81193adb045c 1-39
+lib/mix/tasks/rice.import.ex
+  s_639c4a762a748a::t_3cb7a4e64e9af5 29-34
+  s_639c4a762a748a::t_0274b9ec9bf2d9 64
+  s_639c4a762a748a::t_a05b8c810ec96c 14-15,18-27
+  s_639c4a762a748a::t_3e08ccd468b0dd 115
+  s_639c4a762a748a::t_65c41023b6adda 56
+  s_639c4a762a748a::t_603fee577857bb 79,82,90
+  s_639c4a762a748a::t_3110cdcd911b41 78,81,83,85-89,91-92,94-100
+  s_448695a5d036bc::t_fdea75c7a2458a 28
+test/rice/import_guard_test.exs
+  s_639c4a762a748a::t_505b651afb7d2d 1-46
+test/rice/import_admin_users_test.exs
+  s_639c4a762a748a::t_4b0467b3ce2061 1-185
+docs/backend-migration-plan.md
+  s_639c4a762a748a::t_b7f134a9073c89 1167-1207
+  s_639c4a762a748a::t_36e0b128c7394d 3-8
+  s_639c4a762a748a::t_d4593007edfde1 563
+  s_639c4a762a748a::t_1d6a282c0bcd46 627-635
+docs/api/admin/badge_controller.md
+  s_639c4a762a748a::t_a50f7bbb0f994e 5-6
+  s_639c4a762a748a::t_09b68c9b854f72 114-160,162,164
+lib/rice/import/content.ex
+  s_639c4a762a748a::t_a93e7c94a4e136 7-8,11,19-27
+  s_639c4a762a748a::t_eae06f722da707 49-50,58-60
+lib/rice_web/router.ex
+  s_639c4a762a748a::t_64c7d8679f04e2 176-177
+lib/rice/community.ex
+  s_639c4a762a748a::t_81ec371218bce3 119-167
+lib/rice_web/api/admin/badge_controller.ex
+  s_639c4a762a748a::t_ffe8973210f0aa 2,27-29,39-51,54-71
+  s_639c4a762a748a::t_6539335191b2be 52-53
+lib/rice/admin/admin_user.ex
+  s_639c4a762a748a::t_b41359581c08db 64-103
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "c6c8dbdb2736f8ba62c6025dac864a994e028836",
+  "prompts": {},
+  "sessions": {
+    "s_448695a5d036bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2a66dea1-2099-416a-bee2-5d54030fb07f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    },
+    "s_639c4a762a748a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "930b7a1a-34ec-482e-aabf-46e14d35035d",
+        "model": "claude-opus-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
