@@ -1,0 +1,67 @@
+lib/rice/import/grains.ex
+  s_639c4a762a748a::t_81ae084eef154b 1-43,50-108,115-129,135-147,149-152,155-157,167-169,173,175-184,191-210
+  s_639c4a762a748a::t_559d4c0756c5fe 148,153-154
+  s_639c4a762a748a::t_28fa8ea36c2ac1 158-160,170-172,174,185-190
+  s_639c4a762a748a::t_e201ab96ac7970 44-46,109-110,114,130-134,161-166
+  s_639c4a762a748a::t_937c7251a81f35 47-49,111-113
+lib/rice/import/governance.ex
+  s_639c4a762a748a::t_3e7affd54aaf18 1-68,90-93,113,118-192
+  s_639c4a762a748a::t_472f8d118b25ce 69-89,94-112,114-117
+lib/rice/import/community.ex
+  s_639c4a762a748a::t_238b13a983c3cb 81-82,86-87
+  s_639c4a762a748a::t_794e58a9489734 94
+  s_639c4a762a748a::t_65a155c4aec63a 1-54,57-62,65-80,83-85,88-93,95-103,106-109,112-115
+  s_639c4a762a748a::t_8a3edb701c9ac4 55-56,63-64,104-105,110-111
+lib/rice/import.ex
+  s_639c4a762a748a::t_5128a88daea951 80-89,94-102
+  s_639c4a762a748a::t_d0b2f89d80bd84 8,11-29
+lib/rice/import/writer.ex
+  s_639c4a762a748a::t_66323162570cc6 129,132-135
+  s_639c4a762a748a::t_1d829892d5b9f0 142-151
+  s_639c4a762a748a::t_12b27311d552c4 79-103
+  s_639c4a762a748a::t_bf0d193d4c37b9 3,5-6,9-41,55-76,78
+  s_639c4a762a748a::t_aae549e6a1abfb 107-113
+  s_639c4a762a748a::t_f6e9dc3ceb77c9 42-54
+  s_639c4a762a748a::t_6b52dccbd43474 77
+lib/rice/import/audit.ex
+  s_639c4a762a748a::t_18755ff561f28e 1-31,36-112
+  s_639c4a762a748a::t_e201ab96ac7970 32-35
+lib/rice/import/source.ex
+  s_639c4a762a748a::t_36be4aedea6a91 5-11,26-29,37-39
+  s_639c4a762a748a::t_f3fd19d5a81906 40-41
+lib/rice/import/accounts.ex
+  s_639c4a762a748a::t_74da718bfd4b5d 1-100
+test/support/fake_import_source.ex
+  s_639c4a762a748a::t_7d7200d18b3c0d 1-31,43-70
+  s_639c4a762a748a::t_042564c5a99f0f 32-42
+docs/backend-migration-plan.md
+  s_639c4a762a748a::t_525b056914a6b8 628,630-672
+  s_639c4a762a748a::t_0de944e7230199 5-6,8-9
+lib/rice/import/content.ex
+  s_639c4a762a748a::t_72e5c7e9e92c1c 48-49,51-62,65-67,73-115
+lib/mix/tasks/rice.import.ex
+  s_639c4a762a748a::t_889780d3fbf9a1 29,31-47
+lib/rice/accounts/user.ex
+  s_639c4a762a748a::t_dc3b9965a2ea7a 41-81
+test/rice/import_test.exs
+  s_639c4a762a748a::t_6ab78c5b83dcc7 1-120,123-125,127-313,322-324,331-381,394-430,438-461,463-490
+  s_639c4a762a748a::t_de569c5e75545d 462
+  s_639c4a762a748a::t_36ed2a164caf7f 121-122,126
+  s_639c4a762a748a::t_e201ab96ac7970 314-321,325-330,382-393,431-437
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "f867ed00ac4123ea89f2a32b67a235e4320c092d",
+  "prompts": {},
+  "sessions": {
+    "s_639c4a762a748a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "930b7a1a-34ec-482e-aabf-46e14d35035d",
+        "model": "claude-opus-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
