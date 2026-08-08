@@ -1,0 +1,36 @@
+test/rice/import_test.exs
+  s_639c4a762a748a::t_849b3d3eaa56fc 222-261
+config/dev.exs
+  s_639c4a762a748a::t_9b2f01e00c5c1d 4-12,16-29
+  s_639c4a762a748a::t_a3612c5e1e3b9b 13-15
+  s_639c4a762a748a::t_d8b3a84c5fd563 31-40
+  s_639c4a762a748a::t_a99bce7c76c83c 30
+lib/mix/tasks/rice.import.ex
+  s_639c4a762a748a::t_8b47bbd83cb857 116-118,121-125
+lib/rice/import/grains.ex
+  s_639c4a762a748a::t_482dafce2b8855 149-161,163-165,167-168,170-173,175-176,179,181,184-190,192-193,197,202-207
+  s_639c4a762a748a::t_67988c122d7062 52,54
+  s_639c4a762a748a::t_6222703e67d6d7 119
+  s_639c4a762a748a::t_f35e3a8f7b20c6 69-71,73-75,78
+lib/rice/import/admin_users.ex
+  s_639c4a762a748a::t_a48265f85e9160 109-111,114-120
+  s_639c4a762a748a::t_3b7dfacd2e6f48 36-42
+test/rice/import_admin_users_test.exs
+  s_639c4a762a748a::t_8db2c3af26b9ad 173-182
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "4d5ea3ef903099ee5d8c094f1730dd2db00775bf",
+  "prompts": {},
+  "sessions": {
+    "s_639c4a762a748a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "930b7a1a-34ec-482e-aabf-46e14d35035d",
+        "model": "claude-opus-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
