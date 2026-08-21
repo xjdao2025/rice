@@ -1,0 +1,29 @@
+lib/rice/application.ex
+  s_c7c294ddcc30bc::t_fa8e9901ad71f9 37-41,46-59,68
+  s_c7c294ddcc30bc::t_362bfad34a0bea 8-9
+test/rice/dao_jwks_test.exs
+  s_c7c294ddcc30bc::t_7f8e58918a6aae 1-86
+config/runtime.exs
+  s_c7c294ddcc30bc::t_9563cf1f72e1a8 80-83
+lib/rice/dao.ex
+  s_c7c294ddcc30bc::t_c1777a9018be88 137-154
+  s_c7c294ddcc30bc::t_f2448071ba8599 21-40
+  s_c7c294ddcc30bc::t_e1a902df646135 7-9
+  s_c7c294ddcc30bc::t_71fae5cb0518e9 101
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "c242827625e7c837cb029746aa853425e013901b",
+  "prompts": {},
+  "sessions": {
+    "s_c7c294ddcc30bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4902de79-d943-413e-b8b7-c5a851e32947",
+        "model": "claude-opus-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
