@@ -1,0 +1,50 @@
+priv/repo/migrations/20260811120000_add_wallet_address_to_semi_links.exs
+  s_639c4a762a748a::t_e6fd0f13bcff53 1-16
+lib/rice/bridge.ex
+  s_639c4a762a748a::t_7044c69b6425e7 12,15-16
+  s_639c4a762a748a::t_6da24f156b95e7 106,109-111,127-128
+  s_639c4a762a748a::t_a9e6ef08380b36 75,79,108,140,142,153,179
+  s_639c4a762a748a::t_6a79871c1d0e41 22,27-51
+  s_639c4a762a748a::t_189e3e68339872 17
+test/rice_web/api/user_controller_test.exs
+  s_639c4a762a748a::t_a11383e117768f 53-55
+  s_639c4a762a748a::t_388f71a7bdd924 22-52,56-66,68-72
+  s_639c4a762a748a::t_e4967f51967507 67
+config/runtime.exs
+  s_639c4a762a748a::t_468a631f982146 93-101
+lib/rice/accounts/user.ex
+  s_639c4a762a748a::t_0eb2a919c7c1ec 24-28
+lib/rice_web/controllers/semi_auth_controller.ex
+  s_639c4a762a748a::t_40f1b5c637c5c3 131-140,142
+lib/rice_web/api/user_json.ex
+  s_639c4a762a748a::t_b2002cc83d7c79 20-24
+config/test.exs
+  s_639c4a762a748a::t_d1687f13547021 56-59
+lib/rice/accounts/semi_link.ex
+  s_639c4a762a748a::t_2d18859b1b8232 11-13,20
+lib/rice/accounts.ex
+  s_639c4a762a748a::t_ca21fb5a630bf2 22-24,31-63,68-69,71-77,79-82
+  s_639c4a762a748a::t_7c88e926d364f4 83,455,461-477
+  s_639c4a762a748a::t_cd87c7b45cc44a 415
+  s_639c4a762a748a::t_446d7afbbe1e5c 64-67,70,78
+  s_639c4a762a748a::t_2c1e0652e50492 84
+  s_639c4a762a748a::t_4fb2f2bebe4748 478
+test/rice/bridge_test.exs
+  s_639c4a762a748a::t_29e8ab39ce35a2 1-143
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "5ecdebf71a991b023502b3091cc3b3c92e9f2b48",
+  "prompts": {},
+  "sessions": {
+    "s_639c4a762a748a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "930b7a1a-34ec-482e-aabf-46e14d35035d",
+        "model": "claude-opus-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
