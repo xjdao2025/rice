@@ -1,0 +1,21 @@
+lib/rice/dao.ex
+  s_c7c294ddcc30bc::t_556153c9db67f9 30-36
+config/runtime.exs
+  s_c7c294ddcc30bc::t_65e3eda028b34f 82-102
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "14b245b90fbae56d92cd0cf9bc44fe190a08f116",
+  "prompts": {},
+  "sessions": {
+    "s_c7c294ddcc30bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4902de79-d943-413e-b8b7-c5a851e32947",
+        "model": "claude-opus-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
