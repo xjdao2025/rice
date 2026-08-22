@@ -1,0 +1,30 @@
+lib/rice_web/api/auth.ex
+  s_c7c294ddcc30bc::t_573bebff203d41 15,22-41
+  s_c7c294ddcc30bc::t_49974457116504 42-44
+lib/rice/dao.ex
+  s_c7c294ddcc30bc::t_b096364831307a 162-288
+test/rice_web/api/legacy_jwt_auth_test.exs
+  s_c7c294ddcc30bc::t_8fda51b05867d2 69-71
+  s_c7c294ddcc30bc::t_0cd38773990ca3 1-68,72-97
+lib/rice/accounts.ex
+  s_c7c294ddcc30bc::t_59eba6166b6df3 95-109
+test/rice/dao_jwt_verify_test.exs
+  s_c7c294ddcc30bc::t_757d5445906b59 1-133,136,139-161
+  s_c7c294ddcc30bc::t_8111762b14a4cc 134-135,137-138
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "b0d3da515b6a750d297d8178ce21a274d82d6415",
+  "prompts": {},
+  "sessions": {
+    "s_c7c294ddcc30bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4902de79-d943-413e-b8b7-c5a851e32947",
+        "model": "claude-opus-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
