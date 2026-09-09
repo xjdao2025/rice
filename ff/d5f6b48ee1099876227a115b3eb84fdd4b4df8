@@ -1,0 +1,23 @@
+lib/rice_web/api/fallback_controller.ex
+  s_becf616275efd9::t_a73db227e02e22 51-57
+test/rice_web/api/attachment_controller_test.exs
+  s_becf616275efd9::t_296526f9775a1a 354-424
+lib/rice_web/api/attachment_controller.ex
+  s_becf616275efd9::t_43fe480982524d 11-12,34-49
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "ffd5f6b48ee1099876227a115b3eb84fdd4b4df8",
+  "prompts": {},
+  "sessions": {
+    "s_becf616275efd9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "175c61c7-874e-4cb5-b3fe-f0ca3447255e",
+        "model": "claude-opus-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
