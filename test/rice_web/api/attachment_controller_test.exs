@@ -351,5 +351,76 @@ defmodule RiceWeb.Api.AttachmentControllerTest do
              })
              |> json_response(401)
     end
+
+    test "kind=file 的 PDF 传得上去", %{conn: conn} do
+      {_admin, token} = admin_with_token()
+      expect(Rice.Files.StorageMock, :put, fn _key, "%PDF-1.4" -> :ok end)
+
+      assert %{"data" => data} =
+               conn
+               |> authed(token)
+               |> post(~p"/api/admin/attachments", %{
+                 kind: "file",
+                 file: %Plug.Upload{
+                   path: write_tmp("%PDF-1.4"),
+                   filename: "乡建DAO-截至20260831 财务收支 （公示）.pdf",
+                   content_type: "application/pdf"
+                 }
+               })
+               |> json_response(201)
+
+      assert data["kind"] == "file"
+      assert data["content_type"] == "application/pdf"
+      assert data["filename"] == "乡建DAO-截至20260831 财务收支 （公示）.pdf"
+    end
+
+    # 2026-09-08:生产上所有上传都在回 422。原因不是文件,是 rice 容器以 nobody
+    # 跑而 /opt/xjdao/data/rice-storage 属 root:root 0755 —— 读得到写不进。
+    # 落盘失败当时和 changeset 一起被兜成 422,响应里看不出区别,日志里也没有
+    # 任何东西,于是这个故障装成了"这个 PDF 不让传"。
+    #
+    # 落盘失败必须是 5xx,而且必须留下日志。
+    test "落盘失败是 500 而不是 422", %{conn: conn} do
+      {_admin, token} = admin_with_token()
+      expect(Rice.Files.StorageMock, :put, fn _key, _content -> {:error, :eacces} end)
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert %{"errors" => %{"detail" => detail}} =
+                   conn
+                   |> authed(token)
+                   |> post(~p"/api/admin/attachments", %{
+                     kind: "file",
+                     file: %Plug.Upload{
+                       path: write_tmp("%PDF-1.4"),
+                       filename: "a.pdf",
+                       content_type: "application/pdf"
+                     }
+                   })
+                   |> json_response(500)
+
+          assert detail =~ "存储"
+        end)
+
+      assert log =~ "附件落盘失败"
+      assert log =~ "eacces"
+    end
+
+    # 与上一条对照:客户端的错仍然是 422,两者不能再长得一样。
+    test "白名单外的类型仍然是 422", %{conn: conn} do
+      {_admin, token} = admin_with_token()
+
+      assert conn
+             |> authed(token)
+             |> post(~p"/api/admin/attachments", %{
+               kind: "file",
+               file: %Plug.Upload{
+                 path: write_tmp("#!/bin/sh"),
+                 filename: "x.sh",
+                 content_type: "application/x-sh"
+               }
+             })
+             |> json_response(422)
+    end
   end
 end

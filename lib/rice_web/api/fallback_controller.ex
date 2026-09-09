@@ -48,6 +48,13 @@ defmodule RiceWeb.Api.FallbackController do
     |> json(%{errors: %{detail: detail(reason)}})
   end
 
+  # 服务端自己的问题,别伪装成客户端错误 —— 422 会让调用方以为换个文件就好了。
+  def call(conn, {:error, :storage_unavailable}) do
+    conn
+    |> put_status(:internal_server_error)
+    |> json(%{errors: %{detail: "文件存储暂时不可用,请稍后再试或联系管理员"}})
+  end
+
   def call(conn, {:error, %Ecto.Changeset{} = changeset}) do
     conn
     |> put_status(:unprocessable_entity)
