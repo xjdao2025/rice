@@ -1,0 +1,22 @@
+lib/rice/import/embedded_files.ex
+  s_c7c294ddcc30bc::t_3fb3e78ea8a41b 32-33
+  s_c7c294ddcc30bc::t_8053ffd80fe646 35
+test/rice/import_embedded_files_test.exs
+  s_c7c294ddcc30bc::t_d0cff550f36cf2 144-161
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "2ced73e76a8d0b5264cd54b6deeb540d2c33853c",
+  "prompts": {},
+  "sessions": {
+    "s_c7c294ddcc30bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4902de79-d943-413e-b8b7-c5a851e32947",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
