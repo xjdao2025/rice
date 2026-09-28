@@ -76,6 +76,21 @@ defmodule Rice.Files do
   反过来,写库失败最多留下一个孤儿文件,由清理任务回收,不会让接口返回坏数据。
   """
   def create_attachment(content, attrs, user_id \\ nil) when is_binary(content) do
+    insert_with_content(content, attrs, user_id, fn changeset ->
+      changeset |> validate_size() |> validate_content_type()
+    end)
+  end
+
+  @doc """
+  和 `create_attachment/3` 一样,但**不走上传白名单和大小上限** —— 只给从 core
+  搬历史文件用。那些文件已经在线上被引用着(比如提案正文里嵌的 10MB mp4),
+  拒收的结果只会是页面上一个裂开的图,而不是更安全。不归属任何用户。
+  """
+  def create_legacy_attachment(content, attrs) when is_binary(content) do
+    insert_with_content(content, attrs, nil, & &1)
+  end
+
+  defp insert_with_content(content, attrs, user_id, validate) do
     id = Rice.Tsid.generate()
     key = storage_key(id)
 
@@ -88,8 +103,7 @@ defmodule Rice.Files do
           storage_key: key
         })
       )
-      |> validate_size()
-      |> validate_content_type()
+      |> validate.()
 
     with {:ok, _} <- Ecto.Changeset.apply_action(changeset, :insert),
          :ok <- Storage.put(key, content) do
