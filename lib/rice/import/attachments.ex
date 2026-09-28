@@ -69,7 +69,7 @@ defmodule Rice.Import.Attachments do
 
   # core 没有存 content type,只能从扩展名推。推不出来的按 octet-stream,
   # 由下载接口的 Content-Disposition 兜住。
-  defp content_type(path) do
+  def content_type(path) do
     case path |> Path.extname() |> String.downcase() do
       ".png" -> "image/png"
       ".jpg" -> "image/jpeg"
@@ -83,6 +83,8 @@ defmodule Rice.Import.Attachments do
       ".txt" -> "text/plain"
       ".doc" -> "application/msword"
       ".docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      ".mp4" -> "video/mp4"
+      ".mov" -> "video/quicktime"
       _ -> "application/octet-stream"
     end
   end
