@@ -29,9 +29,10 @@ defmodule Rice.Import.EmbeddedFiles do
   alias Rice.Files.Attachment
   alias Rice.Repo
 
-  # 主机名不写死:线上同时存在 http/https 两种写法,早期还有别的域名。
+  # 主机名不写死,而且可以没有:线上同时存在 http/https 两种写法,公告里还有
+  # 写成相对路径 `/api/v1/file/download?...` 的(在前端域名下渲染,一样落到 core)。
   # 认的是路径 + 32 位 guid,后面可能还挂着 `&autoDownload=false` 之类的参数。
-  @core_url ~r/https?:\/\/[^\/"'\s<>]+\/api\/v1\/file\/download\?fileId=([0-9a-f]{32})(?:&amp;|&)fileType=([12])(?:(?:&amp;|&)[A-Za-z]+=[^"'\s<>&]*)*/
+  @core_url ~r/(?:https?:\/\/[^\/"'\s<>]+)?\/api\/v1\/file\/download\?fileId=([0-9a-f]{32})(?:&amp;|&)fileType=([12])(?:(?:&amp;|&)[A-Za-z]+=[^"'\s<>&]*)*/
 
   # 正文附件挂在这几张表上
   @referrers [
