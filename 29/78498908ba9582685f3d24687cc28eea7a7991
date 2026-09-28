@@ -1,0 +1,32 @@
+test/rice/import_embedded_files_test.exs
+  s_c7c294ddcc30bc::t_72025f4e95b562 119-125,146-153
+  s_c7c294ddcc30bc::t_dc21ec3c16a2c3 1-118,126-145,154-216
+lib/rice/import/attachments.ex
+  s_c7c294ddcc30bc::t_a570a9365b8c49 72
+  s_c7c294ddcc30bc::t_4e327e91eeabf6 86-87
+lib/rice/import/embedded_files.ex
+  s_c7c294ddcc30bc::t_a70572086b484d 34
+  s_c7c294ddcc30bc::t_9fc4fa29cad49c 1-33,35-64,67,75-76,79-89,97-126,131-225
+  s_c7c294ddcc30bc::t_72025f4e95b562 90-96,127-130
+  s_c7c294ddcc30bc::t_22ce829464a189 65-66,68-74,77-78
+lib/rice/release.ex
+  s_c7c294ddcc30bc::t_9ab8f9686657d5 21-48
+lib/rice/files.ex
+  s_c7c294ddcc30bc::t_8f45183e3fbfd0 81-95,108
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "2978498908ba9582685f3d24687cc28eea7a7991",
+  "prompts": {},
+  "sessions": {
+    "s_c7c294ddcc30bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4902de79-d943-413e-b8b7-c5a851e32947",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
