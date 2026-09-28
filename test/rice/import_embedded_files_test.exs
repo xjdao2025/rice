@@ -141,6 +141,24 @@ defmodule Rice.Import.EmbeddedFilesTest do
     assert video.content_type == "video/mp4"
   end
 
+  test "相对路径的 core 地址也改写", %{source: source} do
+    core_file(source, "Picture", @g1, "120.png", "PNG")
+
+    old =
+      body_fixture(
+        ~s(<img src="/api/v1/file/download?fileId=#{@g1}&amp;fileType=1" />),
+        "text/html; charset=utf-8"
+      )
+
+    announcement = announcement_fixture(%{attachment_id: old.id})
+
+    assert %{files_copied: 1, missing: []} = EmbeddedFiles.run(source, @base, true)
+
+    {:ok, html} = Files.read(Repo.get!(Attachment, Repo.reload!(announcement).attachment_id))
+    assert html =~ ~s(<img src="#{@base}/api/attachments/)
+    refute html =~ "file/download"
+  end
+
   test "已经导入过的文件直接复用,不重复搬", %{source: source} do
     core_file(source, "Picture", @g1, "a.jpg", "x")
 
