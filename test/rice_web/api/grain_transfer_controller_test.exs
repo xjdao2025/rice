@@ -1,6 +1,109 @@
 defmodule RiceWeb.Api.GrainTransferControllerTest do
   use RiceWeb.ConnCase, async: true
 
+  describe "POST /api/grain_transfers/recipient" do
+    test "手机号预览只返回公开资料，核对后用 id 转账", %{conn: conn} do
+      {sender, token} = user_with_token()
+      {:ok, _} = Rice.Grains.grant(sender, 100)
+      avatar = attachment_fixture()
+
+      recipient =
+        user_fixture(%{phone: "13800001234", email: "private@example.com", nickname: "收款人"})
+        |> Ecto.Changeset.change(avatar_id: avatar.id)
+        |> Rice.Repo.update!()
+
+      count = Rice.Repo.aggregate(Rice.Grains.Transfer, :count)
+
+      assert %{"data" => data} =
+               conn
+               |> authed(token)
+               |> post(~p"/api/grain_transfers/recipient", %{to: " 13800001234 "})
+               |> json_response(200)
+
+      assert data["id"] == recipient.id
+      assert data["avatar"]["id"] == avatar.id
+      assert Map.keys(data) |> Enum.sort() == ~w(avatar bio did handle id nickname node_member)
+      assert Rice.Repo.get!(Rice.Accounts.User, sender.id).grain_balance == 100
+      assert Rice.Repo.get!(Rice.Accounts.User, recipient.id).grain_balance == 0
+      assert Rice.Repo.aggregate(Rice.Grains.Transfer, :count) == count
+
+      assert %{"data" => %{"to" => %{"id" => id}}} =
+               build_conn()
+               |> authed(token)
+               |> post(~p"/api/grain_transfers", %{to: data["id"], amount: 7})
+               |> json_response(201)
+
+      assert id == recipient.id
+      assert Rice.Repo.get!(Rice.Accounts.User, sender.id).grain_balance == 93
+      assert Rice.Repo.get!(Rice.Accounts.User, recipient.id).grain_balance == 7
+      assert Rice.Repo.aggregate(Rice.Grains.Transfer, :count) == count + 1
+      assert Rice.Grains.reconcile().ok?
+    end
+
+    test "未登录不能查手机号，匿名公开资料仍不识别手机号", %{conn: conn} do
+      user_fixture(%{phone: "13800001234"})
+
+      assert conn
+             |> post(~p"/api/grain_transfers/recipient", %{to: "13800001234"})
+             |> json_response(401)
+
+      assert build_conn() |> get(~p"/api/users/13800001234/profile") |> json_response(404)
+    end
+
+    test "不存在、非法、禁用或已注销的收款人不产生流水", %{conn: conn} do
+      {_sender, token} = user_with_token()
+
+      for field <- [:disabled_at, :deleted_at] do
+        user_fixture(%{phone: if(field == :disabled_at, do: "13800000001", else: "13800000002")})
+        |> Ecto.Changeset.change(%{field => DateTime.utc_now()})
+        |> Rice.Repo.update!()
+      end
+
+      for params <- [
+            %{},
+            %{to: ["13800001234"]},
+            %{to: "13800001234"},
+            %{to: "+8613800001234"},
+            %{to: "13800000001"},
+            %{to: "13800000002"}
+          ] do
+        assert conn
+               |> authed(token)
+               |> post(~p"/api/grain_transfers/recipient", params)
+               |> json_response(422)
+      end
+
+      assert Rice.Repo.aggregate(Rice.Grains.Transfer, :count) == 0
+    end
+
+    test "跨区同号的预览和实际转账都拒绝歧义，不改余额或流水", %{conn: conn} do
+      {sender, token} = user_with_token()
+      {:ok, _} = Rice.Grains.grant(sender, 100)
+
+      recipients =
+        for region <- ["86", "1"], do: user_fixture(%{phone: "13800001234", phone_region: region})
+
+      count = Rice.Repo.aggregate(Rice.Grains.Transfer, :count)
+
+      for path <- [~p"/api/grain_transfers/recipient", ~p"/api/grain_transfers"] do
+        assert %{"errors" => %{"to" => ["接收用户不存在"]}} =
+                 conn
+                 |> authed(token)
+                 |> post(path, %{to: "13800001234", amount: 10})
+                 |> json_response(422)
+      end
+
+      assert Rice.Repo.get!(Rice.Accounts.User, sender.id).grain_balance == 100
+
+      assert Enum.all?(
+               recipients,
+               &(Rice.Repo.get!(Rice.Accounts.User, &1.id).grain_balance == 0)
+             )
+
+      assert Rice.Repo.aggregate(Rice.Grains.Transfer, :count) == count
+    end
+  end
+
   describe "POST /api/grain_transfers" do
     setup do
       {sender, token} = user_with_token()

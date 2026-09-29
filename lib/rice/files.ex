@@ -6,9 +6,7 @@ defmodule Rice.Files do
   落盘路径只由 TSID 决定,**任何时候都不把用户提供的文件名拼进路径** ——
   原始文件名只在下载时的 `Content-Disposition` 里出现。
 
-  > 上传的 HTTP 端点不在本期。core 的 `/api/v1/file/upload` 是 `AllowAnonymous`,
-  > 任何人都能往服务器写文件;那个缺陷不会被照搬。`create_attachment/2` 这里
-  > 已经就绪(校验齐全、被回填任务使用),等期 3 的认证到位后再接上控制器。
+  上传需要认证；新增业务图片须由操作者上传，已有图片可继续引用。
   """
   import Ecto.Query
 
@@ -77,12 +75,12 @@ defmodule Rice.Files do
   顺序是刻意的 —— 先写库再落盘的话,落盘失败会留下一条指向不存在文件的记录;
   反过来,写库失败最多留下一个孤儿文件,由清理任务回收,不会让接口返回坏数据。
   """
-  def create_attachment(content, attrs) when is_binary(content) do
+  def create_attachment(content, attrs, user_id \\ nil) when is_binary(content) do
     id = Rice.Tsid.generate()
     key = storage_key(id)
 
     changeset =
-      %Attachment{id: id}
+      %Attachment{id: id, user_id: user_id}
       |> Attachment.changeset(
         Map.merge(attrs, %{
           byte_size: byte_size(content),
@@ -100,6 +98,57 @@ defmodule Rice.Files do
       {:error, %Ecto.Changeset{} = invalid} -> {:error, invalid}
       {:error, reason} -> {:error, {:storage, reason}}
     end
+  end
+
+  @doc "按提交顺序替换业务图片；省略字段保留，空数组移除，最多九张。"
+  def put_images(changeset, attrs, user_id) do
+    ids = Map.fetch(attrs, "attachment_ids")
+    ids = if ids == :error, do: Map.fetch(attrs, :attachment_ids), else: ids
+
+    case ids do
+      :error ->
+        changeset
+
+      {:ok, ids} ->
+        valid? =
+          is_list(ids) and length(ids) <= 9 and Enum.all?(ids, &Rice.Tsid.valid?/1) and
+            length(Enum.uniq(ids)) == length(ids)
+
+        if valid? do
+          data = Repo.preload(changeset.data, :image_links)
+          existing = Map.new(data.image_links, &{&1.attachment_id, &1})
+          new_ids = Enum.reject(ids, &Map.has_key?(existing, &1))
+
+          if owned_images?(new_ids, user_id) do
+            links =
+              ids
+              |> Enum.with_index()
+              |> Enum.map(fn {id, position} ->
+                link = Map.get(existing, id) || Ecto.build_assoc(data, :image_links)
+                Ecto.Changeset.change(link, attachment_id: id, position: position)
+              end)
+
+            Ecto.Changeset.put_assoc(%{changeset | data: data}, :image_links, links)
+          else
+            Ecto.Changeset.add_error(changeset, :attachment_ids, "最多选择9张本人上传或当前内容已有的有效图片，不能重复")
+          end
+        else
+          Ecto.Changeset.add_error(changeset, :attachment_ids, "最多选择9张本人上传或当前内容已有的有效图片，不能重复")
+        end
+    end
+  end
+
+  defp owned_images?([], _user_id), do: true
+
+  defp owned_images?(ids, user_id) do
+    Repo.aggregate(
+      from(a in Attachment,
+        where:
+          a.id in ^ids and a.user_id == ^user_id and a.kind == "image" and
+            not is_nil(a.storage_key)
+      ),
+      :count
+    ) == length(ids)
   end
 
   defp validate_size(changeset) do

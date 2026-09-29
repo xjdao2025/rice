@@ -7,9 +7,13 @@ defmodule Rice.Community.Node do
     field :name, :string
     field :description, :string, default: ""
     field :position, :integer, default: 0
+    field :grain_balance, :integer, default: 0
+    field :grain_frozen_balance, :integer, default: 0
 
     belongs_to :user, Rice.Accounts.User
     belongs_to :logo, Rice.Files.Attachment
+    has_many :memberships, Rice.Community.Membership
+    has_many :applications, Rice.Community.JoinApplication
 
     timestamps()
   end

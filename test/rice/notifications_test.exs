@@ -5,7 +5,7 @@ defmodule Rice.NotificationsTest do
   签名算错的表现是线上 400,通道选错的表现是"验证码永远收不到" —— 两种都不会
   在类型或编译期暴露,只能靠测试盯着。
   """
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias Rice.Notifications.{AliyunSms, Dispatcher}
 
@@ -99,10 +99,13 @@ defmodule Rice.NotificationsTest do
     end
 
     @tag :capture_log
-    test "没配置时退回日志实现,而不是报错" do
-      # 一个通道没配不该让另一个也用不了 —— 只配邮件的环境要能用邮箱注册
+    test "没配置时明确失败,不伪装已发送" do
+      previous = Application.get_env(:rice, Rice.Notifications.AliyunSms)
+      on_exit(fn -> Application.put_env(:rice, Rice.Notifications.AliyunSms, previous) end)
       Application.delete_env(:rice, Rice.Notifications.AliyunSms)
-      assert Dispatcher.send_sms("86", "13800000000", "验证码 123456") == :ok
+
+      assert Dispatcher.send_sms("86", "13800000000", "验证码 123456") ==
+               {:error, :channel_not_configured}
     end
   end
 end

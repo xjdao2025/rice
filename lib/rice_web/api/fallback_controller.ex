@@ -32,10 +32,38 @@ defmodule RiceWeb.Api.FallbackController do
     |> render(:"403")
   end
 
+  def call(conn, {:error, :conflict}) do
+    conn
+    |> put_status(:conflict)
+    |> json(%{errors: %{detail: "资源状态已经变化，请刷新后重试"}})
+  end
+
+  def call(conn, {:error, :capacity_full}) do
+    conn |> put_status(:conflict) |> json(%{errors: %{detail: "活动已满，暂无可用名额"}})
+  end
+
+  def call(conn, {:error, :missing_request_id}) do
+    conn
+    |> put_status(:unprocessable_entity)
+    |> json(%{errors: %{client_request_id: ["缺少有效请求标识"]}})
+  end
+
+  def call(conn, {:error, :insufficient_balance}) do
+    conn
+    |> put_status(:unprocessable_entity)
+    |> json(%{errors: %{amount: ["可用稻米不足"]}})
+  end
+
+  def call(conn, {:error, :grain_reservation_missing}) do
+    conn
+    |> put_status(:conflict)
+    |> json(%{errors: %{detail: "资金记录暂时无法处理，本次操作未生效"}})
+  end
+
   def call(conn, {:error, reason})
       when reason in [
              :invalid_ticket,
-             :missing_handle,
+             :invalid_username,
              :weak_password,
              :invalid_amount,
              :invalid_listed,
@@ -56,7 +84,7 @@ defmodule RiceWeb.Api.FallbackController do
   end
 
   defp detail(:invalid_ticket), do: "注册票据无效或已过期,请重新验证"
-  defp detail(:missing_handle), do: "缺少 handle"
+  defp detail(:invalid_username), do: "用户名须为 3–18 位字母、数字或连字符，首尾须为字母或数字"
   defp detail(:weak_password), do: "密码至少 8 位"
   defp detail(:invalid_amount), do: "金额必须是正整数"
   defp detail(:invalid_listed), do: "listed 必须是 true 或 false"

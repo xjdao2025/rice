@@ -25,7 +25,9 @@ config :rice, Oban,
     # core 用 Hangfire 每分钟跑一次 ProposalEndJob
     {Oban.Plugins.Cron,
      crontab: [
-       {"* * * * *", Rice.Workers.CloseProposals}
+       {"* * * * *", Rice.Workers.CloseProposals},
+       {"* * * * *", Rice.Workers.ExpireTasks},
+       {"* * * * *", Rice.Workers.StartEvents}
      ]}
   ]
 

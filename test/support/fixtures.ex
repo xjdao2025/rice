@@ -4,6 +4,7 @@ defmodule Rice.Fixtures do
   一个带默认值的 map merge 就够读了。
   """
   alias Rice.Repo
+  import Ecto.Query
 
   def user_fixture(attrs \\ %{}) do
     n = System.unique_integer([:positive])
@@ -25,6 +26,44 @@ defmodule Rice.Fixtures do
     user = user_fixture(attrs)
     {:ok, token} = Rice.Accounts.issue_token(user)
     {user, token}
+  end
+
+  def task_publisher_fixture(attrs \\ %{}) do
+    publisher =
+      attrs
+      |> user_fixture()
+      |> Ecto.Changeset.change(can_publish_tasks: true)
+      |> Repo.update!()
+
+    node_fixture(%{user_id: publisher.id})
+    publisher
+  end
+
+  def funded_node_fixture(publisher, amount) do
+    node = Repo.get_by!(Rice.Community.Node, user_id: publisher.id)
+    {:ok, _} = Rice.Grains.grant(publisher, amount)
+    {:ok, _} = Rice.Grains.fund_node(publisher, node, amount, "fixture-fund")
+    Repo.get!(Rice.Community.Node, node.id)
+  end
+
+  def task_fixture(creator, attrs \\ %{}) do
+    n = System.unique_integer([:positive])
+
+    attrs =
+      Enum.into(attrs, %{
+        title: "任务#{n}",
+        description: "完成任务#{n}的交付说明",
+        organizer_contact: "社区服务台"
+      })
+
+    node_id =
+      attrs[:node_id] ||
+        (Repo.one(from n in Rice.Community.Node, where: n.user_id == ^creator.id, limit: 1) ||
+           node_fixture(%{user_id: creator.id})).id
+
+    %Rice.Tasks.Task{creator_id: creator.id, node_id: node_id}
+    |> Rice.Tasks.Task.create_changeset(attrs)
+    |> Repo.insert!()
   end
 
   def authed(conn, token), do: Plug.Conn.put_req_header(conn, "authorization", "Bearer " <> token)

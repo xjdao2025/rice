@@ -15,7 +15,25 @@ defmodule RiceWeb.SemiAuthController do
 
   alias Rice.SemiOAuth
 
-  def login(conn, _params) do
+  def options(conn, _params) do
+    mock? = Rice.Notifications.impl() == Rice.Notifications.Log
+
+    channels =
+      Enum.filter(~w(sms email), &(mock? or Rice.Notifications.Dispatcher.available?(&1)))
+
+    conn
+    |> put_resp_header("cache-control", "no-store")
+    |> json(%{
+      semi_enabled: SemiOAuth.configured?(),
+      verification_mode: if(mock?, do: "log", else: "live"),
+      registration_channels: channels,
+      handle_domain: Application.fetch_env!(:rice, :pds)[:handle_domain]
+    })
+  end
+
+  def login(conn, params) do
+    conn = put_session(conn, :semi_return_to, return_to(params["returnTo"]))
+
     if SemiOAuth.configured?() do
       verifier = SemiOAuth.gen_code_verifier()
       state = SemiOAuth.gen_state()
@@ -26,20 +44,13 @@ defmodule RiceWeb.SemiAuthController do
       |> put_session(:semi_oauth_state, state)
       |> redirect(external: SemiOAuth.authorize_url(state, challenge))
     else
-      conn
-      |> put_flash(:error, "Semi OAuth 未配置（缺少 SEMI_CLIENT_ID / SEMI_CLIENT_SECRET）")
-      |> redirect(to: ~p"/")
+      login_error(conn, "Semi 登录暂未开放，请使用账号密码登录。")
     end
   end
 
   # Semi returned an error instead of a code (e.g. user denied consent).
-  def callback(conn, %{"error" => error} = params) do
-    detail = params["error_description"] || ""
-
-    conn
-    |> reset_pkce()
-    |> put_flash(:error, "授权失败: #{error} #{detail}")
-    |> redirect(to: ~p"/")
+  def callback(conn, %{"error" => error}) do
+    login_error(conn, if(error == "access_denied", do: "已取消 Semi 授权。", else: "Semi 授权失败，请重试。"))
   end
 
   def callback(conn, %{"code" => code, "state" => state}) do
@@ -48,16 +59,10 @@ defmodule RiceWeb.SemiAuthController do
 
     cond do
       is_nil(expected_state) or is_nil(verifier) ->
-        conn
-        |> reset_pkce()
-        |> put_flash(:error, "会话已过期，请重新发起登录")
-        |> redirect(to: ~p"/")
+        login_error(conn, "会话已过期，请重新发起登录。")
 
       not secure_compare(state, expected_state) ->
-        conn
-        |> reset_pkce()
-        |> put_flash(:error, "state 不匹配，已阻止（可能的 CSRF）")
-        |> redirect(to: ~p"/")
+        login_error(conn, "登录校验失败，请重新发起登录。")
 
       true ->
         complete_login(conn, code, verifier)
@@ -65,10 +70,7 @@ defmodule RiceWeb.SemiAuthController do
   end
 
   def callback(conn, _params) do
-    conn
-    |> reset_pkce()
-    |> put_flash(:error, "无效的回调参数")
-    |> redirect(to: ~p"/")
+    login_error(conn, "无效的登录回调，请重新发起登录。")
   end
 
   def logout(conn, _params) do
@@ -87,18 +89,16 @@ defmodule RiceWeb.SemiAuthController do
       # redirect there so the user lands logged in. rice's own session is also
       # set (a debug view at rice.together.li/), but the destination is the app.
       ticket = Rice.Handoff.put(handoff_payload(atproto))
+      target = handoff_url(conn, %{ticket: ticket})
 
       conn
       |> reset_pkce()
       |> put_session(:semi_user, Map.take(user, semi_display_keys()))
       |> put_session(:atproto, %{"did" => atproto.did, "handle" => atproto.handle})
-      |> redirect(external: handoff_target() <> "?ticket=" <> ticket)
+      |> redirect(external: target)
     else
-      {:error, reason} ->
-        conn
-        |> reset_pkce()
-        |> put_flash(:error, "登录失败: #{describe(reason)}")
-        |> redirect(to: ~p"/")
+      {:error, _reason} ->
+        login_error(conn, "Semi 登录暂时失败，请稍后重试。")
     end
   end
 
@@ -146,6 +146,24 @@ defmodule RiceWeb.SemiAuthController do
   defp handoff_target, do: Application.fetch_env!(:rice, :handoff)[:target_url]
   defp handoff_origin, do: Application.fetch_env!(:rice, :handoff)[:allowed_origin]
 
+  defp handoff_url(conn, params) do
+    query =
+      URI.encode_query(Map.put(params, :returnTo, return_to(get_session(conn, :semi_return_to))))
+
+    handoff_target() <> "?" <> query
+  end
+
+  defp login_error(conn, message) do
+    target = handoff_url(conn, %{error: message})
+    conn |> reset_pkce() |> redirect(external: target)
+  end
+
+  defp return_to(value) when is_binary(value) do
+    if Regex.match?(~r{^/(?!/)(?!login(?:[/?#]|$))[^\\\x00-\x20]*$}, value), do: value, else: "/"
+  end
+
+  defp return_to(_), do: "/"
+
   defp semi_display_keys,
     do: ~w(sub handle wallet_address phone_verified email_verified scopes_granted)
 
@@ -153,27 +171,8 @@ defmodule RiceWeb.SemiAuthController do
     conn
     |> delete_session(:semi_pkce_verifier)
     |> delete_session(:semi_oauth_state)
+    |> delete_session(:semi_return_to)
   end
-
-  defp describe({:token_endpoint, status, body}),
-    do: "令牌交换返回 #{status} (#{message_of(body)})"
-
-  defp describe({:userinfo, status, body}),
-    do: "获取用户信息返回 #{status} (#{message_of(body)})"
-
-  defp describe({:transport, _reason}), do: "无法连接到 Semi 服务器"
-
-  # Bridge (PDS) failures.
-  defp describe({:provision, reason}), do: "创建 AT Protocol 账号失败: #{describe(reason)}"
-  defp describe({:login, reason}), do: "登录 AT Protocol 账号失败: #{describe(reason)}"
-  defp describe({:pds, _method, status, msg}), do: "PDS 返回 #{status} (#{msg})"
-  defp describe({:persist, _changeset}), do: "保存账号映射失败"
-  defp describe(:decrypt_failed), do: "凭据解密失败"
-  defp describe(other), do: inspect(other)
-
-  defp message_of(%{"error_description" => d}) when is_binary(d), do: d
-  defp message_of(%{"error" => e}) when is_binary(e), do: e
-  defp message_of(_), do: ""
 
   # Constant-time-ish comparison for the state token.
   defp secure_compare(a, b) when is_binary(a) and is_binary(b) do

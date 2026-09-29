@@ -28,7 +28,8 @@ defmodule Rice.SemiOAuth do
     cfg = config()
 
     is_binary(cfg[:client_id]) and cfg[:client_id] != "" and
-      is_binary(cfg[:client_secret]) and cfg[:client_secret] != ""
+      is_binary(cfg[:client_secret]) and cfg[:client_secret] != "" and
+      byte_size(Application.get_env(:rice, Rice.Vault, [])[:key] || "") == 32
   end
 
   # ── PKCE ────────────────────────────────────────────────────────────────
@@ -101,9 +102,9 @@ defmodule Rice.SemiOAuth do
   end
 
   defp post_token(cfg, body) do
-    case Req.post(trim(cfg[:issuer]) <> "/oauth/token",
-           json: body,
-           receive_timeout: 15_000
+    case Req.post(
+           trim(cfg[:issuer]) <> "/oauth/token",
+           [json: body, receive_timeout: 15_000] ++ Keyword.take(cfg, [:plug])
          ) do
       {:ok, %{status: 200, body: %{"access_token" => _} = tokens}} ->
         {:ok, tokens}
@@ -126,9 +127,9 @@ defmodule Rice.SemiOAuth do
   def fetch_userinfo(access_token) do
     cfg = config()
 
-    case Req.get(trim(cfg[:issuer]) <> "/oauth/userinfo",
-           auth: {:bearer, access_token},
-           receive_timeout: 15_000
+    case Req.get(
+           trim(cfg[:issuer]) <> "/oauth/userinfo",
+           [auth: {:bearer, access_token}, receive_timeout: 15_000] ++ Keyword.take(cfg, [:plug])
          ) do
       {:ok, %{status: 200, body: %{"sub" => _} = user}} ->
         {:ok, user}

@@ -1,6 +1,95 @@
 defmodule RiceWeb.Api.UserControllerTest do
   use RiceWeb.ConnCase, async: true
 
+  describe "GET /api/users/search" do
+    test "匿名按公开昵称或 handle 搜索，不返回私有字段", %{conn: conn} do
+      avatar = attachment_fixture()
+
+      user =
+        user_fixture(%{
+          nickname: "青禾木匠",
+          handle: "carpenter.test",
+          email: "private-needle@example.com",
+          phone: "13999887766"
+        })
+        |> Ecto.Changeset.change(avatar_id: avatar.id, bio: "喜欢修理木器")
+        |> Rice.Repo.update!()
+
+      user_fixture(%{nickname: "溪边散步"})
+
+      for q <- ["  青禾  ", "CARPENTER"] do
+        assert %{"data" => [data], "meta" => %{"next_cursor" => nil}} =
+                 conn |> get(~p"/api/users/search", %{q: q}) |> json_response(200)
+
+        assert data["id"] == user.id
+        assert data["avatar"]["id"] == avatar.id
+        assert data["bio"] == "喜欢修理木器"
+
+        assert Map.keys(data) |> Enum.sort() ==
+                 ~w(avatar bio did handle id nickname node_member)
+      end
+
+      for q <- ["private-needle", "13999887766"] do
+        assert %{"data" => []} =
+                 conn |> get(~p"/api/users/search", %{q: q}) |> json_response(200)
+      end
+    end
+
+    test "不列出已注销或停用账号", %{conn: conn} do
+      active = user_fixture(%{nickname: "同名成员"})
+
+      for field <- [:deleted_at, :disabled_at] do
+        user_fixture(%{nickname: "同名成员"})
+        |> Ecto.Changeset.change(%{field => DateTime.utc_now()})
+        |> Rice.Repo.update!()
+      end
+
+      assert %{"data" => [%{"id" => id}]} =
+               conn |> get(~p"/api/users/search", %{q: "同名"}) |> json_response(200)
+
+      assert id == active.id
+    end
+
+    test "关键词里的 SQL 通配符按原文匹配", %{conn: conn} do
+      user = user_fixture(%{nickname: "木匠%_\\甲"})
+      user_fixture(%{nickname: "木匠普通甲"})
+
+      for q <- ["%", "_", "\\", "%_\\"] do
+        assert %{"data" => [%{"id" => id}]} =
+                 conn |> get(~p"/api/users/search", %{q: q}) |> json_response(200)
+
+        assert id == user.id
+      end
+    end
+
+    test "游标分批读取，不重复或遗漏", %{conn: conn} do
+      expected = for _ <- 1..3, do: user_fixture(%{nickname: "分页成员"}).id
+      [newest, middle, oldest] = Enum.sort(expected, :desc)
+
+      assert %{"data" => first, "meta" => %{"next_cursor" => cursor}} =
+               conn
+               |> get(~p"/api/users/search", %{q: "分页", limit: 2})
+               |> json_response(200)
+
+      assert Enum.map(first, & &1["id"]) == [newest, middle]
+      assert cursor == middle
+
+      assert %{"data" => [%{"id" => ^oldest}], "meta" => %{"next_cursor" => nil}} =
+               conn
+               |> get(~p"/api/users/search", %{q: "分页", limit: 2, before: cursor})
+               |> json_response(200)
+    end
+
+    test "空白、过长或非文本关键词不列出整个用户目录", %{conn: conn} do
+      user_fixture()
+
+      for params <- [%{}, %{q: "  "}, %{q: String.duplicate("字", 257)}, %{q: ["用户"]}] do
+        assert %{"data" => [], "meta" => %{"next_cursor" => nil}} =
+                 conn |> get(~p"/api/users/search", params) |> json_response(200)
+      end
+    end
+  end
+
   describe "GET /api/users/me" do
     test "返回完整档案(含私有字段)", %{conn: conn} do
       {user, token} =
@@ -16,6 +105,7 @@ defmodule RiceWeb.Api.UserControllerTest do
       assert data["email"] == "a@example.com"
       assert data["phone"] == "13800000000"
       assert data["grain_balance"] == 0
+      assert data["grain_frozen_balance"] == 0
       assert data["node_member"] == false
     end
 

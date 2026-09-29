@@ -21,6 +21,7 @@ defmodule RiceWeb.Api.Admin.UserJSON do
       avatar: AttachmentJSON.embed(user.avatar),
       grain_balance: user.grain_balance,
       node_member: user.node_member,
+      can_publish_tasks: user.can_publish_tasks,
       email: user.email,
       phone: user.phone,
       phone_region: user.phone_region,

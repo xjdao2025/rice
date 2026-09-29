@@ -18,12 +18,16 @@ defmodule RiceWeb.Api.AttachmentController do
 
     with {:ok, content} <- File.read(upload.path),
          {:ok, attachment} <-
-           Files.create_attachment(content, %{
-             kind: kind,
-             # 只取 basename:客户端可以在 filename 里塞路径
-             filename: Path.basename(upload.filename || "unnamed"),
-             content_type: upload.content_type
-           }) do
+           Files.create_attachment(
+             content,
+             %{
+               kind: kind,
+               # 只取 basename:客户端可以在 filename 里塞路径
+               filename: Path.basename(upload.filename || "unnamed"),
+               content_type: upload.content_type
+             },
+             if(conn.assigns[:current_user], do: conn.assigns.current_user.id)
+           ) do
       conn
       |> put_status(:created)
       |> put_view(json: RiceWeb.Api.AttachmentJSON)

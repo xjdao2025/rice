@@ -17,13 +17,18 @@ defmodule RiceWeb.Api.Admin.UserController do
 
   def update(conn, %{"id" => id} = params) do
     with {:ok, user} <- Users.fetch_user(id),
-         {:ok, user} <- Users.update_user(user, Map.take(params, ~w(disabled node_member))) do
+         {:ok, user} <-
+           Users.update_user(user, Map.take(params, ~w(disabled node_member can_publish_tasks))) do
       render(conn, :show, user: user)
     else
       {:error, :no_changes} ->
         conn
         |> put_status(:unprocessable_entity)
-        |> json(%{errors: %{detail: "没有可改的字段(只接受 disabled / node_member)"}})
+        |> json(%{
+          errors: %{
+            detail: "没有可改的字段(只接受 disabled / node_member / can_publish_tasks)"
+          }
+        })
 
       other ->
         other

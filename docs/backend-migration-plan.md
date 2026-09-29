@@ -1242,7 +1242,7 @@ core 没有这个入口,漏了谁只能重建一枚同名勋章,而那会把先�
 
 写入是一条带 `ON CONFLICT DO NOTHING` 的 `INSERT`,所以"已持有"和"两个运营
 同时点提交"走的是同一条路 —— 唯一索引说了算,不靠先查后写那个会漏的窗口。
-返回 `{awarded, already_held}`。文档见 `docs/api/admin/badge_controller.md`。
+返回 `{awarded, already_held}`。实现见 `lib/rice_web/api/admin/badge_controller.ex`。
 
 ### 期 0–5 剩余
 

@@ -14,6 +14,20 @@ defmodule RiceWeb.Api.GrainTransferController do
     render(conn, :index, page: page, viewer: conn.assigns.current_user)
   end
 
+  def recipient(conn, params) do
+    case Grains.resolve_recipient(params["to"]) do
+      {:ok, user} ->
+        user = Rice.Repo.preload(user, :avatar)
+        json(conn, %{data: RiceWeb.Api.UserJSON.public(user)})
+
+      {:error, :recipient_not_found} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{errors: %{to: ["接收用户不存在"]}})
+
+      {:error, :recipient_disabled} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{errors: %{to: ["接收用户已被禁用"]}})
+    end
+  end
+
   def create(conn, params) do
     kind = if params["kind"] == "reward", do: "reward", else: "gift"
 

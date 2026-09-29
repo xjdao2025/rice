@@ -102,14 +102,65 @@ defmodule Rice.AccountsTest do
     end
 
     # core 完全没有发码频率限制,同一个号码可以被无限轰炸
-    test "60 秒内不能重复发" do
-      expect(Rice.NotificationsMock, :send_sms, fn _, _, _ -> :ok end)
+    test "60 秒内跨用途、已消费仍不能重复发,期满可重发" do
+      expect(Rice.NotificationsMock, :send_sms, 2, fn _, _, _ -> :ok end)
       target = Accounts.phone_target("86", "13800000000")
 
-      assert {:ok, _} = Accounts.send_verification_code("sms", target, "register")
+      assert {:ok, record} = Accounts.send_verification_code("sms", target, "register")
+      assert Accounts.verification_retry_after("sms", target) in 59..60
 
       assert {:error, :too_many_requests} =
                Accounts.send_verification_code("sms", target, "register")
+
+      record = Repo.update!(change(record, consumed_at: DateTime.utc_now()))
+
+      assert {:error, :too_many_requests} =
+               Accounts.send_verification_code("sms", target, "reset_password")
+
+      Repo.update!(change(record, inserted_at: DateTime.add(DateTime.utc_now(), -61, :second)))
+      assert Accounts.verification_retry_after("sms", target) == 0
+      assert {:ok, _} = Accounts.send_verification_code("sms", target, "reset_password")
+    end
+
+    test "独立连接并发请求同一号码只发送一次" do
+      supervisor = start_supervised!(Task.Supervisor)
+
+      target =
+        "86-#{System.unique_integer([:positive]) |> Integer.to_string() |> String.pad_leading(12, "0")}"
+
+      parent = self()
+      expect(Rice.NotificationsMock, :send_sms, fn _, _, _ -> :ok end)
+
+      try do
+        workers =
+          for purpose <- ["register", "reset_password"] do
+            task =
+              Task.Supervisor.async_nolink(supervisor, fn ->
+                Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
+                  send(parent, {:ready, self()})
+
+                  receive do
+                    :run -> Accounts.send_verification_code("sms", target, purpose)
+                  after
+                    5_000 -> raise "concurrency test barrier timed out"
+                  end
+                end)
+              end)
+
+            allow(Rice.NotificationsMock, parent, task.pid)
+            task
+          end
+
+        for _ <- workers, do: assert_receive({:ready, _}, 5_000)
+        Enum.each(workers, &send(&1.pid, :run))
+        results = Enum.map(workers, &Task.await(&1, 10_000))
+        assert Enum.count(results, &match?({:ok, _}, &1)) == 1
+        assert Enum.count(results, &(&1 == {:error, :too_many_requests})) == 1
+      after
+        Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
+          Repo.delete_all(from c in VerificationCode, where: c.target == ^target)
+        end)
+      end
     end
 
     test "不同号码互不影响" do
@@ -160,7 +211,8 @@ defmodule Rice.AccountsTest do
             "",
             "13800000000"
           ] do
-        assert {:error, :invalid_target} = Accounts.send_verification_code("sms", bad, "register"),
+        assert {:error, :invalid_target} =
+                 Accounts.send_verification_code("sms", bad, "register"),
                "不该接受 sms target #{inspect(bad)}"
       end
 
@@ -370,9 +422,14 @@ defmodule Rice.AccountsTest do
          }}
       end)
 
+      expect(Rice.PDSMock, :put_profile, fn "acc", "did:plc:alice", %{"displayName" => "小禾"} ->
+        {:ok, %{}}
+      end)
+
       assert {:ok, %{user: user, token: token, pds_session: session}} =
                Accounts.register(%{
                  handle: "alice.web5.xjdao.test",
+                 nickname: "小禾",
                  password: "hunter2hunter2",
                  phone: "13800000000",
                  phone_region: "86"
@@ -380,7 +437,7 @@ defmodule Rice.AccountsTest do
 
       assert user.did == "did:plc:alice"
       assert user.phone == "13800000000"
-      assert user.nickname == "alice"
+      assert user.nickname == "小禾"
       assert session["accessJwt"] == "acc"
       assert Accounts.user_by_token(token).id == user.id
     end
@@ -454,7 +511,26 @@ defmodule Rice.AccountsTest do
     # 账号不存在和密码错误必须不可区分,否则就是一个账号枚举接口。
     # 用户不存在时也走一次 PDS,让两条路径的耗时特征接近。
     test "账号不存在时同样是 invalid_credentials,并且也打了一次 PDS" do
-      expect(Rice.PDSMock, :create_session, fn "nobody", "pw" -> {:error, :whatever} end)
+      expect(Rice.PDSMock, :create_session, fn "nobody", "pw" ->
+        {:error, {:pds, "createSession", 401, "AuthenticationRequired"}}
+      end)
+
+      assert {:error, :invalid_credentials} = Accounts.login("nobody", "pw")
+    end
+
+    test "PDS 网络或服务故障不会误报凭据错误", %{user: user} do
+      for failure <- [
+            {:error, {:transport, :timeout}},
+            {:error, {:pds, "createSession", 503, "Unavailable"}}
+          ],
+          identifier <- [user.handle, "nobody"] do
+        expect(Rice.PDSMock, :create_session, fn ^identifier, "pw" -> failure end)
+        assert {:error, :login_unavailable} = Accounts.login(identifier, "pw")
+      end
+    end
+
+    test "PDS 有账号但本地已不存在也不能签发令牌" do
+      expect(Rice.PDSMock, :create_session, fn "nobody", "pw" -> {:ok, %{}} end)
       assert {:error, :invalid_credentials} = Accounts.login("nobody", "pw")
     end
 
@@ -465,7 +541,11 @@ defmodule Rice.AccountsTest do
 
     test "软删的账号视为不存在", %{user: user} do
       {:ok, _} = Accounts.delete_user(user)
-      expect(Rice.PDSMock, :create_session, fn _, _ -> {:error, :whatever} end)
+
+      expect(Rice.PDSMock, :create_session, fn _, _ ->
+        {:error, {:pds, "createSession", 401, "AuthenticationRequired"}}
+      end)
+
       assert {:error, :invalid_credentials} = Accounts.login("alice.web5.xjdao.test", "pw")
     end
   end

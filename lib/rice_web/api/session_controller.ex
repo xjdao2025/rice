@@ -13,18 +13,27 @@ defmodule RiceWeb.Api.SessionController do
         conn |> put_view(json: RiceWeb.Api.SessionJSON) |> render(:show, result)
 
       {:error, :account_disabled} ->
-        conn |> put_status(:forbidden) |> json(%{errors: %{detail: "该账号已被禁用"}})
+        conn
+        |> put_status(:forbidden)
+        |> json(%{error: "AccountDisabled", errors: %{detail: "该账号已被禁用"}})
 
       {:error, :invalid_credentials} ->
         # 不区分"账号不存在"和"密码错误" —— 区分了就等于一个账号枚举接口
-        conn |> put_status(:unauthorized) |> json(%{errors: %{detail: "账号或密码错误"}})
+        conn
+        |> put_status(:unauthorized)
+        |> json(%{error: "InvalidCredentials", errors: %{detail: "账号或密码错误"}})
+
+      {:error, :login_unavailable} ->
+        conn
+        |> put_status(:service_unavailable)
+        |> json(%{error: "LoginUnavailable", errors: %{detail: "登录服务暂时不可用，请稍后重试。"}})
     end
   end
 
   def create(conn, _params) do
     conn
     |> put_status(:unprocessable_entity)
-    |> json(%{errors: %{detail: "缺少 identifier 或 password"}})
+    |> json(%{error: "InvalidLoginRequest", errors: %{detail: "请输入账号和密码。"}})
   end
 
   def delete(conn, _params) do

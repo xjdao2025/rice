@@ -5,10 +5,11 @@ defmodule Rice.Accounts do
   密码不在这里 —— PDS 是密码权威,登录就是 `com.atproto.server.createSession`。
   """
   import Ecto.Query
+  require Logger
 
   alias Ecto.Multi
   alias Rice.Accounts.{ApiToken, SemiLink, User, VerificationCode}
-  alias Rice.{Notifications, Repo}
+  alias Rice.{Notifications, Pagination, Repo}
 
   defp pds, do: Rice.PDS.Api.impl()
 
@@ -142,6 +143,24 @@ defmodule Rice.Accounts do
 
   def get_public_user(_), do: nil
 
+  @doc "按昵称或 handle 搜索公开档案；不查询联系方式，也不列出停用或已注销账号。"
+  def search_public_users(params) do
+    q = params["q"]
+    q = if is_binary(q), do: String.trim(q), else: ""
+
+    if String.length(q) in 1..256 do
+      pattern = "%" <> String.replace(q, ["\\", "%", "_"], &"\\#{&1}") <> "%"
+
+      from(u in enabled_users(),
+        where: ilike(u.nickname, ^pattern) or ilike(u.handle, ^pattern),
+        preload: [:avatar]
+      )
+      |> Pagination.paginate(Repo, Pagination.params(Map.take(params, ["limit", "before"])))
+    else
+      %{entries: [], next_cursor: nil}
+    end
+  end
+
   @doc """
   后台按运营输入的任意写法找人:rice id / DID / handle / 邮箱 / 手机号。
 
@@ -195,12 +214,29 @@ defmodule Rice.Accounts do
   """
   def send_verification_code(channel, target, purpose) do
     with :ok <- validate_code_request(channel, target, purpose),
-         :ok <- check_resend_interval(channel, target, purpose) do
-      code = VerificationCode.generate_code()
+         code = VerificationCode.generate_code(),
+         {:ok, record} <-
+           Repo.transaction(fn ->
+             # 同一联系方式的检查与占位必须原子完成,切换用途也不能绕过。
+             Repo.query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
+               "verification:#{channel}:#{String.downcase(target)}"
+             ])
 
-      with {:ok, record} <- Repo.insert(VerificationCode.build(channel, target, purpose, code)),
-           :ok <- deliver(channel, target, code) do
-        {:ok, record}
+             if verification_retry_after(channel, target) > 0,
+               do: Repo.rollback(:too_many_requests)
+
+             case Repo.insert(VerificationCode.build(channel, target, purpose, code)) do
+               {:ok, record} -> record
+               {:error, reason} -> Repo.rollback(reason)
+             end
+           end) do
+      case deliver(channel, target, code) do
+        :ok ->
+          {:ok, record}
+
+        {:error, _} = error ->
+          Repo.delete(record)
+          error
       end
     end
   end
@@ -224,19 +260,25 @@ defmodule Rice.Accounts do
 
   defp valid_target?(_, _), do: false
 
-  defp check_resend_interval(channel, target, purpose) do
-    cutoff =
-      DateTime.add(DateTime.utc_now(), -VerificationCode.resend_interval_seconds(), :second)
-
-    recent =
-      Repo.exists?(
+  @doc "同一联系方式距离下次允许发码的秒数,包括已消费的验证码。"
+  def verification_retry_after(channel, target) do
+    sent_at =
+      Repo.one(
         from c in VerificationCode,
           where:
-            c.channel == ^channel and c.target == ^target and c.purpose == ^purpose and
-              c.inserted_at > ^cutoff
+            c.channel == ^channel and fragment("lower(?)", c.target) == ^String.downcase(target),
+          select: max(c.inserted_at)
       )
 
-    if recent, do: {:error, :too_many_requests}, else: :ok
+    if sent_at do
+      remaining =
+        DateTime.add(sent_at, VerificationCode.resend_interval_seconds(), :second)
+        |> DateTime.diff(DateTime.utc_now(), :millisecond)
+
+      max(0, ceil(remaining / 1_000))
+    else
+      0
+    end
   end
 
   defp deliver("sms", target, code) do
@@ -366,6 +408,15 @@ defmodule Rice.Accounts do
 
       case Repo.insert(User.registration_changeset(%User{}, user_attrs)) do
         {:ok, user} ->
+          # PDS 公开资料使用同一昵称;资料写入失败不让已创建的账号卡在注册页。
+          case pds().put_profile(session["accessJwt"], user.did, %{"displayName" => user.nickname}) do
+            {:ok, _} ->
+              :ok
+
+            {:error, _} ->
+              Logger.warning("registration: initial profile write failed for #{user.did}")
+          end
+
           {:ok, token} = issue_token(user)
           {:ok, %{user: user, token: token, pds_session: session}}
 
@@ -415,8 +466,7 @@ defmodule Rice.Accounts do
     case get_user_by_identifier(identifier) do
       nil ->
         # 用户不存在时也走一次 PDS,避免用响应时间区分"账号不存在"和"密码错"
-        pds().create_session(identifier, password)
-        {:error, :invalid_credentials}
+        pds().create_session(identifier, password) |> login_failure()
 
       user ->
         cond do
@@ -429,12 +479,19 @@ defmodule Rice.Accounts do
                 {:ok, token} = issue_token(user)
                 {:ok, %{user: put_semi_wallet(user), token: token, pds_session: session}}
 
-              {:error, _} ->
-                {:error, :invalid_credentials}
+              {:error, _} = error ->
+                login_failure(error)
             end
         end
     end
   end
+
+  # 错误凭据与上游不可用分开；不存在的本地账号也走同一错误分类。
+  defp login_failure({:error, {:pds, _, status, _}}) when status in [400, 401],
+    do: {:error, :invalid_credentials}
+
+  defp login_failure({:ok, _session}), do: {:error, :invalid_credentials}
+  defp login_failure(_), do: {:error, :login_unavailable}
 
   # ── 令牌 ────────────────────────────────────────────────────────────────
 

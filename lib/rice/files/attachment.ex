@@ -18,6 +18,7 @@ defmodule Rice.Files.Attachment do
     field :byte_size, :integer
     field :checksum, :string
     field :storage_key, :string
+    belongs_to :user, Rice.Accounts.User
 
     timestamps()
   end
@@ -36,6 +37,7 @@ defmodule Rice.Files.Attachment do
     |> validate_required([:kind, :filename])
     |> validate_inclusion(:kind, @kinds)
     |> unique_constraint(:legacy_id)
+    |> foreign_key_constraint(:user_id)
   end
 
   @doc """

@@ -47,6 +47,8 @@ defmodule RiceWeb.Router do
     get "/login", SemiAuthController, :login
     get "/callback", SemiAuthController, :callback
     get "/logout", SemiAuthController, :logout
+    get "/auth/semi/login", SemiAuthController, :login
+    get "/auth/semi/callback", SemiAuthController, :callback
   end
 
   # One-time session-handoff redemption for the front-end (cross-origin JSON,
@@ -55,6 +57,8 @@ defmodule RiceWeb.Router do
     pipe_through :api
 
     get "/session/:ticket", SemiAuthController, :session
+    get "/auth/semi/session/:ticket", SemiAuthController, :session
+    get "/auth/semi/options", SemiAuthController, :options
   end
 
   # 从 xiangjiandao-core 迁过来的业务接口。REST + HTTP 状态码,不套
@@ -71,6 +75,7 @@ defmodule RiceWeb.Router do
 
     # 期 2:附件读取(公开)。上传在下面的认证段里。
     get "/attachments/:id", AttachmentController, :show
+    get "/v1/file/download", LegacyAttachmentController, :show
 
     # 期 3:注册 / 登录。这几个必须匿名可用。
     post "/verification_codes", VerificationCodeController, :create
@@ -85,12 +90,22 @@ defmodule RiceWeb.Router do
     # 某人的勋章墙。:user_id 认 "me" / rice id / DID / handle。
     get "/users/:user_id/badges", BadgeController, :index
     get "/nodes/members", NodeController, :members
+    get "/nodes/:node_id/members", NodeController, :members
+    get "/nodes/:id", NodeController, :show
+    get "/users/search", UserController, :search
+    get "/users/:identifier/profile", UserController, :profile
+    get "/events", EventController, :index
+    get "/events/:id", EventController, :show
     get "/grain_grants", GrainGrantController, :index
 
     # 期 5:提案。列表和详情公开可读,写操作在下面的认证段。
     get "/proposals", ProposalController, :index
     get "/proposals/:id", ProposalController, :show
     get "/proposals/:proposal_id/comments", ProposalCommentController, :index
+
+    # Task V1。列表与详情公开可读，状态动作必须登录。
+    get "/tasks", TaskController, :index
+    get "/tasks/:id", TaskController, :show
   end
 
   # ── 管理端 ────────────────────────────────────────────────────────────
@@ -216,6 +231,7 @@ defmodule RiceWeb.Router do
 
     # 期 4:稻米。明细只能看自己的,转账当然要登录。
     get "/grain_transfers", GrainTransferController, :index
+    post "/grain_transfers/recipient", GrainTransferController, :recipient
     post "/grain_transfers", GrainTransferController, :create
 
     # 期 5:提案的写操作
@@ -225,6 +241,46 @@ defmodule RiceWeb.Router do
     post "/proposals/:proposal_id/vote", ProposalVoteController, :create
     post "/proposals/:proposal_id/comments", ProposalCommentController, :create
     delete "/proposals/:proposal_id/comments/:id", ProposalCommentController, :delete
+
+    get "/wallet", WalletController, :show
+    get "/notifications", InboxController, :index
+    post "/notifications/read", InboxController, :read
+    post "/nodes/:node_id/applications", NodeController, :apply
+    patch "/nodes/:node_id/members/:user_id", NodeController, :update_member
+    get "/nodes/:node_id/wallet", NodeWalletController, :show
+    post "/nodes/:node_id/fund", NodeWalletController, :fund
+    post "/nodes/:node_id/applications/:application_id/approve", NodeController, :approve
+    post "/nodes/:node_id/applications/:application_id/reject", NodeController, :reject
+    post "/events", EventController, :create
+    patch "/events/:event_id", EventController, :update
+    post "/events/:event_id/publish", EventController, :publish
+    post "/events/:event_id/cancel", EventController, :cancel
+    post "/events/:event_id/finish", EventController, :finish
+    post "/events/:event_id/applications", EventController, :apply
+    post "/events/:event_id/applications/:application_id/approve", EventController, :approve
+    post "/events/:event_id/applications/:application_id/reject", EventController, :reject
+    post "/events/:event_id/applications/:application_id/remove", EventController, :remove
+    post "/events/:event_id/applications/:application_id/withdraw", EventController, :withdraw
+    post "/tasks", TaskController, :create
+    patch "/tasks/:task_id", TaskController, :update
+    post "/tasks/:task_id/publish", TaskController, :publish
+    post "/tasks/:task_id/cancel", TaskController, :cancel
+    post "/tasks/:task_id/applications", TaskController, :apply
+    post "/tasks/:task_id/applications/:application_id/appoint", TaskController, :appoint
+
+    post "/tasks/:task_id/applications/:application_id/reject",
+         TaskController,
+         :reject_application
+
+    post "/tasks/:task_id/submissions", TaskController, :submit
+    post "/tasks/:task_id/submissions/:submission_id/approve", TaskController, :approve
+
+    post "/tasks/:task_id/submissions/:submission_id/request_changes",
+         TaskController,
+         :request_changes
+
+    get "/task_notifications", TaskController, :notifications
+    post "/task_notifications/read", TaskController, :read_notifications
 
     # core 的 /file/upload 是匿名的;这里必须登录
     post "/attachments", AttachmentController, :create

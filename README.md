@@ -9,54 +9,53 @@ Now you can visit [`localhost:4000`](http://localhost:4000) from your browser.
 
 Ready to run in production? Please [check our deployment guides](https://phoenix.hexdocs.pm/deployment.html).
 
-## Login with Semi (OAuth 2.0 / OIDC)
+## Registration and Semi login
 
-Rice is a confidential OAuth client for **Semi** (`https://api.semi.im`,
-Authorization Code + PKCE, S256). It performs the code→token exchange and the
-userinfo lookup server-side — the browser never sees the client secret or the
-Semi tokens.
+The existing registration flow verifies SMS/email, creates a PDS account, and returns
+both Rice and PDS sessions.
+Registration accepts a `username` prefix (3–18 letters, digits or hyphens, beginning
+and ending with a letter or digit); the server appends `PDS_HANDLE_DOMAIN` and
+initializes the nickname from that prefix. The routes and request handling are in
+[`router.ex`](lib/rice_web/router.ex) and
+[`registration_controller.ex`](lib/rice_web/api/registration_controller.ex).
 
-- `Rice.SemiOAuth` (`lib/rice/semi_oauth.ex`) — transport: authorize URL,
-  token exchange, userinfo, refresh. Endpoints resolve under the issuer.
-- `RiceWeb.SemiAuthController` (`lib/rice_web/controllers/semi_auth_controller.ex`)
-  — routes `GET /login`, `GET /callback`, `GET /logout`. PKCE `state` /
-  `code_verifier` live in the signed Phoenix session; only the userinfo
-  claims are kept after login (the long-lived Semi access token is not
-  persisted in the browser cookie).
+Production defaults to `RICE_VERIFICATION_MODE=live`:
+unconfigured delivery channels fail explicitly. `log` is an opt-in isolated-test mode;
+it does not send real messages. SMS uses `ALIYUN_SMS_ACCESS_KEY_ID`,
+`ALIYUN_SMS_ACCESS_KEY_SECRET`, `ALIYUN_SMS_SIGN_NAME`, `ALIYUN_SMS_TEMPLATE_CODE`.
+Email uses `SMTP_RELAY`, `SMTP_PORT` (STARTTLS, default 587), `SMTP_USERNAME`,
+`SMTP_PASSWORD`, and `SMTP_SENDER_ADDRESS`.
 
-### Config (env vars, read in `config/runtime.exs`)
+Semi reuses Authorization Code + PKCE, the existing PDS bridge, and one-time handoff
+tickets. No new login framework or runtime fake-success fallback is introduced.
 
-| Var | Required | Default |
-|-----|----------|---------|
-| `SEMI_CLIENT_ID` | yes | — |
-| `SEMI_CLIENT_SECRET` | yes | — |
-| `SEMI_REDIRECT_URI` | no | `https://rice.together.li/callback` |
-| `SEMI_ISSUER` | no | `https://api.semi.im` |
+| Variable | Meaning |
+| --- | --- |
+| `SEMI_CLIENT_ID`, `SEMI_CLIENT_SECRET` | Semi OAuth app credentials; server only |
+| `SEMI_REDIRECT_URI` | Registered callback, e.g. `https://<host>/auth/semi/callback` |
+| `SEMI_FRONTEND_URL` | Consent page origin, default `https://www.semi.im` |
+| `SEMI_ISSUER` | Token/userinfo origin, default `https://api.semi.im` |
+| `HANDOFF_URL` | Frontend `https://<host>/semi-callback` |
+| `HANDOFF_ALLOWED_ORIGIN` | Frontend origin |
+| `RICE_LINK_ENC_KEY` | Base64-encoded 32-byte encryption key; keep the original key with existing `semi_links` |
+| `PDS_BASE_URL`, `PDS_PUBLIC_URL`, `PDS_HANDLE_DOMAIN`, `PDS_EMAIL_DOMAIN` | Internal PDS endpoint, public endpoint, handle and provisioning email domains |
 
-The `redirect_uri` must exactly match the one registered on the Semi OAuth
-app. Scopes requested: `openid profile wallet`.
+`GET /auth/semi/options` exposes availability flags and handle domain, never secrets.
+The app uses `/auth/semi/login`, `/auth/semi/callback`, `/auth/semi/session/:ticket`;
+the legacy `/login`, `/callback`, `/session/:ticket` routes remain available.
+`returnTo` is restricted to an in-app path and survives authorization. Failed callbacks
+return to the frontend with an error; no half-complete session is installed.
 
-Run locally against the live Semi provider:
+Run the focused protocol tests with `mix test test/rice_web/semi_auth_controller_test.exs
+test/rice_web/api/registration_controller_test.exs test/rice/notifications_test.exs
+test/rice/bridge_test.exs`. Req.Test replaces Semi HTTP and Mox replaces external PDS
+and message delivery only inside tests. Real-provider validation follows deployment
+configuration; test success is not proof that a real SMS/email was delivered.
 
-```sh
-SEMI_CLIENT_ID=semi_xxx SEMI_CLIENT_SECRET=yyy mix phx.server
-# then open http://localhost:4000 — note the registered redirect_uri points at
-# rice.together.li, so the full round-trip only completes on the deployed host.
-```
+## API source
 
-In production the two secrets come from the `secret/xjdao` Nomad Variable
-(`semi_client_id` / `semi_client_secret`), injected by
-`xjdao-deploy/nomad/rice.nomad.hcl`. Deploy with `ginger deploy -c rice.yml`
-from `xjdao-deploy/ginger/`.
-
-> This is the OAuth half of a planned **identity bridge**: a later step will
-> have rice mint or create an AT Protocol PDS session from the Semi identity
-> and hand it to the frontend. See the deploy repo notes for the design.
-
-## Learn more
-
-* Official website: https://www.phoenixframework.org/
-* Guides: https://phoenix.hexdocs.pm/overview.html
-* Docs: https://phoenix.hexdocs.pm
-* Forum: https://elixirforum.com/c/phoenix-forum
-* Source: https://github.com/phoenixframework/phoenix
+[`router.ex`](lib/rice_web/router.ex) lists the HTTP endpoints. Controllers in
+[`lib/rice_web/api`](lib/rice_web/api), their JSON modules, and matching
+[`test/rice_web`](test/rice_web) files define request, response, and permission
+behavior. Shared authentication is in [`auth.ex`](lib/rice_web/api/auth.ex);
+error responses are in [`fallback_controller.ex`](lib/rice_web/api/fallback_controller.ex).

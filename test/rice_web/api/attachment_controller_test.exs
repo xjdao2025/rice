@@ -125,6 +125,41 @@ defmodule RiceWeb.Api.AttachmentControllerTest do
   end
 
   describe "POST /api/attachments 的认证" do
+    test "multipart允许20MiB文件，业务仍拒绝超过上限的文件" do
+      {_user, token} = user_with_token()
+      size = Rice.Files.max_byte_size()
+
+      expect(Rice.Files.StorageMock, :put, fn _key, content ->
+        assert byte_size(content) == size
+        :ok
+      end)
+
+      assert %{"data" => %{"byte_size" => ^size}} =
+               multipart_upload(token, size) |> json_response(201)
+
+      assert multipart_upload(token, size + 1) |> json_response(422)
+    end
+
+    test "请求解析器仍拒绝超过21MiB的multipart和超过默认限额的JSON或表单" do
+      {_user, token} = user_with_token()
+
+      assert_error_sent 413, fn ->
+        multipart_upload(token, 21 * 1024 * 1024 + 1)
+      end
+
+      for {content_type, body} <- [
+            {"application/json", Jason.encode!(%{body: :binary.copy("x", 9 * 1024 * 1024)})},
+            {"application/x-www-form-urlencoded", "body=" <> :binary.copy("x", 9 * 1024 * 1024)}
+          ] do
+        assert_error_sent 413, fn ->
+          build_conn()
+          |> authed(token)
+          |> put_req_header("content-type", content_type)
+          |> post("/api/attachments", body)
+        end
+      end
+    end
+
     # core 的 /api/v1/file/upload 是 AllowAnonymous —— 任何人都能往服务器写文件。
     # 这条防线要一直立着。
     test "未认证时 401,不是 404 也不是 201", %{conn: conn} do
@@ -238,6 +273,19 @@ defmodule RiceWeb.Api.AttachmentControllerTest do
         assert status == 401, "#{route.verb} #{route.path} 未认证时返回了 #{status}"
       end
     end
+  end
+
+  defp multipart_upload(token, size) do
+    boundary = "rice-upload-boundary"
+
+    body =
+      "--#{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"image.png\"\r\nContent-Type: image/png\r\n\r\n" <>
+        :binary.copy("x", size) <> "\r\n--#{boundary}--\r\n"
+
+    build_conn()
+    |> authed(token)
+    |> put_req_header("content-type", "multipart/form-data; boundary=#{boundary}")
+    |> post("/api/attachments", body)
   end
 
   # 管理端要传应用图标、轮播图、勋章图、公告正文,但它手上只有管理端令牌 ——

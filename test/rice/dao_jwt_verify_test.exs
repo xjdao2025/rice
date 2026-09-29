@@ -134,6 +134,7 @@ defmodule Rice.DaoJwtVerifyTest do
       [header, payload, _sig] = String.split(sign(key, "k1", %{}), ".")
       {:ok, json} = Base.url_decode64(payload, padding: false)
       claims = json |> Jason.decode!() |> Map.delete("exp")
+
       # 要重新签一遍，否则会先被签名检查挡下来 —— 这里验的是 exp 缺失本身
       input = header <> "." <> b64(Jason.encode!(claims))
 

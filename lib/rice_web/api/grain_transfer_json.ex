@@ -23,6 +23,8 @@ defmodule RiceWeb.Api.GrainTransferJSON do
       subject_uri: transfer.subject_uri,
       from: party(transfer.from_user),
       to: party(transfer.to_user),
+      from_node: node_party(transfer.from_node),
+      to_node: node_party(transfer.to_node),
       # 相对当前用户的方向:收到是正,付出是负。
       # core 是靠给每笔转账写两行带符号的记录来表达这件事的。
       direction: direction(transfer, viewer),
@@ -33,6 +35,9 @@ defmodule RiceWeb.Api.GrainTransferJSON do
   defp party(%Ecto.Association.NotLoaded{}), do: nil
   defp party(nil), do: nil
   defp party(user), do: UserJSON.public(user)
+
+  defp node_party(%Rice.Community.Node{} = node), do: %{id: node.id, name: node.name}
+  defp node_party(_), do: nil
 
   defp direction(_transfer, nil), do: nil
   defp direction(%{to_user_id: id}, %{id: id}), do: "in"

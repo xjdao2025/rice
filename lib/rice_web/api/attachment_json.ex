@@ -16,8 +16,6 @@ defmodule RiceWeb.Api.AttachmentJSON do
       filename: a.filename,
       content_type: a.content_type,
       byte_size: a.byte_size,
-      # 期 2 上线附件读取后,这个 URL 才真正可用;在那之前前端仍走 core 的
-      # /api/v1/file/download。见 docs/backend-migration-plan.md §9。
       url: "/api/attachments/#{a.id}"
     }
   end

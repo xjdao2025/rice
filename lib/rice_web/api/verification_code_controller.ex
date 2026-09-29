@@ -13,10 +13,19 @@ defmodule RiceWeb.Api.VerificationCodeController do
 
     case Accounts.send_verification_code(channel, target, purpose) do
       {:ok, _record} ->
-        send_resp(conn, :no_content, "")
+        conn
+        |> put_resp_header(
+          "retry-after",
+          to_string(Accounts.verification_retry_after(channel, target))
+        )
+        |> send_resp(:no_content, "")
 
       {:error, :too_many_requests} ->
         conn
+        |> put_resp_header(
+          "retry-after",
+          to_string(Accounts.verification_retry_after(channel, target))
+        )
         |> put_status(:too_many_requests)
         |> json(%{errors: %{detail: "发送太频繁,请稍后再试"}})
 
@@ -24,6 +33,11 @@ defmodule RiceWeb.Api.VerificationCodeController do
         conn
         |> put_status(:unprocessable_entity)
         |> json(%{errors: %{detail: "请求参数不合法"}})
+
+      {:error, :channel_not_configured} ->
+        conn
+        |> put_status(:service_unavailable)
+        |> json(%{errors: %{detail: "该验证码通道暂未开放，请选择其他方式或稍后再试。"}})
 
       {:error, _} ->
         conn |> put_status(:bad_gateway) |> json(%{errors: %{detail: "验证码发送失败"}})

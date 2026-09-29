@@ -6,6 +6,22 @@ defmodule RiceWeb.Api.UserController do
 
   action_fallback RiceWeb.Api.FallbackController
 
+  def search(conn, params) do
+    page = Accounts.search_public_users(params)
+
+    json(conn, %{
+      data: Enum.map(page.entries, &RiceWeb.Api.UserJSON.public/1),
+      meta: Rice.Pagination.meta(page)
+    })
+  end
+
+  def profile(conn, %{"identifier" => identifier}) do
+    case Accounts.get_public_user(identifier) do
+      nil -> {:error, :not_found}
+      user -> json(conn, %{data: RiceWeb.Api.UserJSON.public(user)})
+    end
+  end
+
   def me(conn, _params) do
     render(conn, :show, user: conn.assigns.current_user)
   end

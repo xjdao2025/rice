@@ -4,8 +4,8 @@ defmodule Rice.Admin.Users do
 
   core 有 9 个接口做这件事(user/page、node-user/page、search、search-by-name、
   unbound-node-user-search、enable、disable、set-node-user、cancel-node-user)。
-  前 5 个是同一个列表的不同过滤,后 4 个是同一行的两个布尔位 —— 这里是
-  一个 `GET /users` 加一个 `PATCH /users/:id`。
+  前 5 个是同一个列表的不同过滤,后 4 个是同一行的两个布尔位。Task V1
+  又在同一个 PATCH 增加 `can_publish_tasks`，不另造权限接口。
   """
   import Ecto.Query
 
@@ -62,7 +62,7 @@ defmodule Rice.Admin.Users do
   end
 
   @doc """
-  改用户的两个管理位:`disabled` 和 `node_member`。
+  改用户的管理位:`disabled`、`node_member` 和 `can_publish_tasks`。
 
   停用会**同时撤销该用户的全部令牌** —— core 只改标记,手上的 JWT
   还能用满 30 天,等于"禁用"要等一个月才生效。
@@ -74,6 +74,7 @@ defmodule Rice.Admin.Users do
       %{}
       |> put_disabled(attrs["disabled"], user)
       |> put_node_member(attrs["node_member"])
+      |> put_task_publisher(attrs["can_publish_tasks"])
 
     if changes == %{} do
       {:error, :no_changes}
@@ -99,6 +100,11 @@ defmodule Rice.Admin.Users do
     do: Map.put(changes, :node_member, value)
 
   defp put_node_member(changes, _), do: changes
+
+  defp put_task_publisher(changes, value) when is_boolean(value),
+    do: Map.put(changes, :can_publish_tasks, value)
+
+  defp put_task_publisher(changes, _), do: changes
 
   defp maybe_revoke(multi, %{disabled_at: %DateTime{}}) do
     Ecto.Multi.run(multi, :revoke, fn _repo, %{user: user} ->

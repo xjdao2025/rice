@@ -17,7 +17,9 @@ defmodule Rice.Accounts.User do
     field :nickname, :string, default: ""
     field :bio, :string, default: ""
     field :grain_balance, :integer, default: 0
+    field :grain_frozen_balance, :integer, default: 0
     field :node_member, :boolean, default: false
+    field :can_publish_tasks, :boolean, default: false
     field :disabled_at, :utc_datetime_usec
     field :deleted_at, :utc_datetime_usec
 
@@ -66,7 +68,9 @@ defmodule Rice.Accounts.User do
       :bio,
       :avatar_id,
       :grain_balance,
+      :grain_frozen_balance,
       :node_member,
+      :can_publish_tasks,
       :disabled_at,
       :deleted_at,
       :inserted_at,
@@ -78,6 +82,7 @@ defmodule Rice.Accounts.User do
     |> validate_length(:nickname, max: 64)
     |> validate_length(:bio, max: 512)
     |> validate_number(:grain_balance, greater_than_or_equal_to: 0)
+    |> validate_number(:grain_frozen_balance, greater_than_or_equal_to: 0)
     |> normalize_contacts()
     |> validate_contacts()
     |> unique_constraints()

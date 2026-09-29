@@ -141,9 +141,12 @@ if config_env() == :prod do
   config :rice, :storage_root, System.get_env("STORAGE_ROOT") || "/srv/rice/storage"
 
   # 验证码外发。注册 / 找回密码 / 改绑 / 注销都靠它。
-  # 两个通道各自独立:哪个没配全,`Rice.Notifications.Dispatcher` 就把那一个
-  # 退回日志实现,并打一条 warning —— 不会因为少配一个通道就让另一个也用不了。
-  config :rice, :notifications, Rice.Notifications.Dispatcher
+  # 日志模拟必须显式启用；真实通道未配置不能伪装成发送成功。
+  case System.get_env("RICE_VERIFICATION_MODE", "live") do
+    "live" -> config :rice, :notifications, Rice.Notifications.Dispatcher
+    "log" -> config :rice, :notifications, Rice.Notifications.Log
+    _ -> raise "RICE_VERIFICATION_MODE must be live or log"
+  end
 
   config :rice, Rice.Notifications.AliyunSms,
     access_key_id: System.get_env("ALIYUN_SMS_ACCESS_KEY_ID"),
@@ -156,7 +159,7 @@ if config_env() == :prod do
     sender_name: System.get_env("SMTP_SENDER_NAME") || "乡建DAO",
     sender_address: System.get_env("SMTP_SENDER_ADDRESS") || "no-reply@xjdao.xyz"
 
-  if smtp_relay = System.get_env("SMTP_RELAY") do
+  if (smtp_relay = System.get_env("SMTP_RELAY")) not in [nil, ""] do
     config :rice, Rice.Mailer,
       adapter: Swoosh.Adapters.SMTP,
       relay: smtp_relay,

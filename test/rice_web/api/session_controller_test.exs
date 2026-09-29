@@ -57,7 +57,7 @@ defmodule RiceWeb.Api.SessionControllerTest do
     test "密码错误返回 401", %{conn: conn, user: user} do
       expect(Rice.PDSMock, :create_session, fn _, _ -> {:error, {:pds, "x", 401, "bad"}} end)
 
-      assert %{"errors" => %{"detail" => detail}} =
+      assert %{"error" => "InvalidCredentials", "errors" => %{"detail" => detail}} =
                conn
                |> post(~p"/api/session", %{identifier: user.handle, password: "wrong"})
                |> json_response(401)
@@ -67,7 +67,9 @@ defmodule RiceWeb.Api.SessionControllerTest do
 
     # 两条路径的响应必须一模一样,否则就是个账号枚举接口
     test "账号不存在时的响应与密码错误完全一致", %{conn: conn, user: user} do
-      expect(Rice.PDSMock, :create_session, 2, fn _, _ -> {:error, :nope} end)
+      expect(Rice.PDSMock, :create_session, 2, fn _, _ ->
+        {:error, {:pds, "createSession", 401, "AuthenticationRequired"}}
+      end)
 
       wrong_pw =
         conn
@@ -80,6 +82,20 @@ defmodule RiceWeb.Api.SessionControllerTest do
         |> json_response(401)
 
       assert wrong_pw == no_user
+    end
+
+    test "PDS 不可用返回 503 和明确错误码，且不暴露账号是否存在", %{conn: conn, user: user} do
+      expect(Rice.PDSMock, :create_session, 2, fn _, _ -> {:error, {:transport, :timeout}} end)
+
+      for identifier <- [user.handle, "nobody.test"] do
+        assert %{
+                 "error" => "LoginUnavailable",
+                 "errors" => %{"detail" => "登录服务暂时不可用，请稍后重试。"}
+               } =
+                 conn
+                 |> post(~p"/api/session", %{identifier: identifier, password: "pw"})
+                 |> json_response(503)
+      end
     end
 
     test "被禁用的账号返回 403", %{conn: conn, user: user} do
