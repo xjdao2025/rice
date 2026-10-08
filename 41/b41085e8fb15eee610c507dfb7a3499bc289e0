@@ -1,0 +1,23 @@
+docs/tasks.md
+  s_8c80ad8d2af680::t_b0a0699aa073e2 18-19,21,25-27
+  s_8c80ad8d2af680::t_13af5677da6efe 49-53,57-69
+  s_8c80ad8d2af680::t_96e3ca7d8d8f56 98,102-106,109,111
+  s_8c80ad8d2af680::t_6f644f29b0363c 118
+  s_8c80ad8d2af680::t_18ad6cf5002f20 84-86
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "41b41085e8fb15eee610c507dfb7a3499bc289e0",
+  "prompts": {},
+  "sessions": {
+    "s_8c80ad8d2af680": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1cacbb5-9264-4c9e-8d1e-0245a530ded4",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
