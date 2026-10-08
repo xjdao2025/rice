@@ -1,6 +1,25 @@
 defmodule RiceWeb.Api.GrainTransferControllerTest do
   use RiceWeb.ConnCase, async: true
 
+  # 网络超时后用同一个标识重试:只扣一次;标识被挪去发别的内容就是冲突
+  test "带 client_request_id 重试只记一笔,内容不同报 409" do
+    {sender, token} = user_with_token()
+    {:ok, _} = Rice.Grains.grant(sender, 100)
+    recipient = user_fixture()
+    send = fn body -> build_conn() |> authed(token) |> post(~p"/api/grain_transfers", body) end
+    body = %{to: recipient.id, amount: 30, client_request_id: "gift-1"}
+
+    first = send.(body) |> json_response(201)
+    again = send.(body) |> json_response(201)
+    assert again["data"]["id"] == first["data"]["id"]
+    assert Rice.Repo.get!(Rice.Accounts.User, sender.id).grain_balance == 70
+
+    assert send.(%{body | amount: 31}) |> response(409)
+    assert send.(%{body | client_request_id: "gift-2"}) |> json_response(201)
+    assert Rice.Repo.get!(Rice.Accounts.User, sender.id).grain_balance == 40
+    assert Rice.Grains.reconcile().ok?
+  end
+
   describe "POST /api/grain_transfers/recipient" do
     test "手机号预览只返回公开资料，核对后用 id 转账", %{conn: conn} do
       {sender, token} = user_with_token()

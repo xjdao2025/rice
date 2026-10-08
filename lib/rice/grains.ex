@@ -23,8 +23,11 @@ defmodule Rice.Grains do
   @doc """
   转账。`kind` 是 `reward` 或 `gift`。
 
+  带 `request_id` 时可以安全重试:同一付款人的同一个标识只记一笔,内容一致就
+  返回原来那笔,不一致返回 `:conflict`。
+
   返回 `{:ok, transfer}`,或 `{:error, :insufficient_balance | :recipient_not_found |
-  :recipient_disabled | changeset}`。
+  :recipient_disabled | :conflict | changeset}`。
   """
   def transfer(%User{} = from, to_identifier, amount, opts \\ []) do
     kind = Keyword.get(opts, :kind, "gift")
@@ -39,28 +42,37 @@ defmodule Rice.Grains do
         to_user_id: to.id,
         amount: amount,
         memo: Keyword.get(opts, :memo, "") || "",
-        subject_uri: subject_uri
+        subject_uri: subject_uri,
+        request_id: Keyword.get(opts, :request_id)
       }
 
-      changeset = Transfer.changeset(%Transfer{}, attrs)
+      Repo.transaction(fn ->
+        # 锁住付款人:同一个 request_id 的并发重试在这里排队,第二个一定看得到第一笔
+        lock_business_accounts(Repo, [from.id, to.id])
 
-      Multi.new()
-      |> Multi.run(:accounts, fn repo, _ ->
-        ids = [from.id, to.id]
+        case attrs.request_id &&
+               Repo.get_by(Transfer, from_user_id: from.id, request_id: attrs.request_id) do
+          nil ->
+            with {:ok, transfer} <- Repo.insert(Transfer.changeset(%Transfer{}, attrs)),
+                 {:ok, _} <- debit(Repo, from.id, amount),
+                 {:ok, _} <- credit(Repo, to.id, amount) do
+              transfer
+            else
+              {:error, reason} -> Repo.rollback(reason)
+            end
 
-        {:ok,
-         repo.all(from u in User, where: u.id in ^ids, order_by: [asc: u.id], lock: "FOR UPDATE")}
+          %Transfer{to_user_id: to_id, amount: ^amount, kind: ^kind, subject_uri: ^subject_uri} =
+              existing
+          when to_id == to.id ->
+            existing
+
+          _ ->
+            Repo.rollback(:conflict)
+        end
       end)
-      |> Multi.insert(:transfer, changeset)
-      |> Multi.run(:debit, fn repo, _ -> debit(repo, from.id, amount) end)
-      |> Multi.run(:credit, fn repo, _ -> credit(repo, to.id, amount) end)
-      |> Repo.transaction()
       |> case do
-        # 预加载双方 —— 渲染层要用,而且这里刚写完就取,不会有额外一轮查询的惊喜
-        {:ok, %{transfer: transfer}} -> {:ok, Repo.preload(transfer, [:from_user, :to_user])}
-        {:error, :debit, reason, _} -> {:error, reason}
-        {:error, _step, %Ecto.Changeset{} = changeset, _} -> {:error, changeset}
-        {:error, _step, reason, _} -> {:error, reason}
+        {:ok, transfer} -> {:ok, Repo.preload(transfer, [:from_user, :to_user])}
+        error -> error
       end
     end
   end

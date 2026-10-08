@@ -18,6 +18,7 @@ defmodule Rice.Grains.Transfer do
     field :amount, :integer
     field :memo, :string, default: ""
     field :subject_uri, :string
+    field :request_id, :string
 
     belongs_to :from_user, Rice.Accounts.User
     belongs_to :to_user, Rice.Accounts.User
@@ -38,6 +39,7 @@ defmodule Rice.Grains.Transfer do
       :amount,
       :memo,
       :subject_uri,
+      :request_id,
       :legacy_id
     ])
     |> validate_required([:kind, :amount])
@@ -45,6 +47,8 @@ defmodule Rice.Grains.Transfer do
     |> validate_number(:amount, greater_than: 0)
     |> validate_length(:memo, max: 256)
     |> validate_length(:subject_uri, max: 512)
+    |> validate_length(:request_id, max: 128)
+    |> unique_constraint(:request_id, name: :grain_transfers_request_id)
     |> validate_not_self()
     |> validate_from_matches_kind()
     |> validate_account(:to_user_id, :to_node_id)

@@ -35,7 +35,8 @@ defmodule RiceWeb.Api.GrainTransferController do
       opts = [
         kind: kind,
         memo: params["memo"],
-        subject_uri: params["subject_uri"]
+        subject_uri: params["subject_uri"],
+        request_id: params["client_request_id"]
       ]
 
       case Grains.transfer(conn.assigns.current_user, params["to"], amount, opts) do
@@ -61,8 +62,8 @@ defmodule RiceWeb.Api.GrainTransferController do
           |> put_status(:unprocessable_entity)
           |> json(%{errors: %{subject_uri: ["赞赏帖子与接收人不匹配"]}})
 
-        {:error, %Ecto.Changeset{} = changeset} ->
-          {:error, changeset}
+        error ->
+          error
       end
     end
   end
