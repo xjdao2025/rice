@@ -134,6 +134,23 @@ defmodule RiceWeb.Api.Admin.SessionControllerTest do
     end
   end
 
+  # 公开发码接口要是肯发 admin_login,不知道密码也能让管理员的手机响
+  test "公开的发码接口不代发管理端验证码" do
+    admin_fixture(%{phone: "13900000001", phone_region: "86"})
+
+    for purpose <- Rice.Admin.code_purposes() do
+      assert build_conn()
+             |> post(~p"/api/verification_codes", %{
+               channel: "sms",
+               purpose: purpose,
+               phone: "13900000001"
+             })
+             |> json_response(422)
+    end
+
+    refute Rice.Repo.get_by(VerificationCode, target: "86-13900000001")
+  end
+
   # `challenge` 密码对了 202、错了 401 —— 这是一个可以无限次问的"密码对不对"。
   # 验证码那边一直有 5 次上限,密码这边原先一次都没数。
   describe "密码试错有上限" do
@@ -155,6 +172,27 @@ defmodule RiceWeb.Api.Admin.SessionControllerTest do
              |> post(~p"/api/admin/session/challenge", %{
                phone: "13900000001",
                password: "admin-password"
+             })
+             |> json_response(429)
+    end
+
+    # 第二步要是不数,带着错验证码反复试密码就能绕开锁定:
+    # 密码对时验证码会被试满报 429,密码错时一直是 401
+    test "第二步试错也计数,锁住后正确的密码加验证码也换不到令牌", %{conn: conn} do
+      admin_fixture(%{phone: "13900000001", phone_region: "86", password: "admin-password"})
+      code = seed_code("86-13900000001", "admin_login")
+
+      for _ <- 1..@max do
+        build_conn()
+        |> post(~p"/api/admin/session", %{phone: "13900000001", password: "猜错的", code: code})
+        |> json_response(401)
+      end
+
+      assert conn
+             |> post(~p"/api/admin/session", %{
+               phone: "13900000001",
+               password: "admin-password",
+               code: code
              })
              |> json_response(429)
     end

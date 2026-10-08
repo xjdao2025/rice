@@ -6,6 +6,11 @@ defmodule RiceWeb.Api.VerificationCodeController do
 
   action_fallback RiceWeb.Api.FallbackController
 
+  # 管理端的码只能由管理端验过密码或登录态之后自己发,公开接口不代发
+  @admin_purposes Rice.Admin.code_purposes()
+
+  def create(conn, %{"purpose" => purpose}) when purpose in @admin_purposes, do: invalid(conn)
+
   def create(conn, params) do
     channel = params["channel"]
     purpose = params["purpose"]
@@ -30,9 +35,7 @@ defmodule RiceWeb.Api.VerificationCodeController do
         |> json(%{errors: %{detail: "发送太频繁,请稍后再试"}})
 
       {:error, reason} when reason in [:invalid_channel, :invalid_purpose, :invalid_target] ->
-        conn
-        |> put_status(:unprocessable_entity)
-        |> json(%{errors: %{detail: "请求参数不合法"}})
+        invalid(conn)
 
       {:error, :channel_not_configured} ->
         conn
@@ -43,6 +46,9 @@ defmodule RiceWeb.Api.VerificationCodeController do
         conn |> put_status(:bad_gateway) |> json(%{errors: %{detail: "验证码发送失败"}})
     end
   end
+
+  defp invalid(conn),
+    do: conn |> put_status(:unprocessable_entity) |> json(%{errors: %{detail: "请求参数不合法"}})
 
   defp target_for("sms", params),
     do: Accounts.phone_target(params["phone_region"] || "86", params["phone"] || "")

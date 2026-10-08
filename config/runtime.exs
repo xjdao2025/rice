@@ -67,20 +67,8 @@ config :rice, :handoff,
   target_url: System.get_env("HANDOFF_URL") || "https://together.li/semi-callback",
   allowed_origin: System.get_env("HANDOFF_ALLOWED_ORIGIN") || "https://together.li"
 
-# xiangjiandao DAO backend integration: rice provisions t_user rows and signs
-# the "daoJwt" the social-app uses for DAO API calls, replacing the DAO
-# backend's own login-token issuance for Semi users. Enabled only when
-# DAO_MYSQL_PASSWORD is set (see Rice.Dao / Rice.Application.dao_children).
+# 老 daoJwt 的验签钥匙(读侧兜底,2026-12-31 删)。见 Rice.Dao。
 config :rice, :dao,
-  mysql_host: System.get_env("DAO_MYSQL_HOST") || "127.0.0.1",
-  mysql_port: String.to_integer(System.get_env("DAO_MYSQL_PORT") || "3306"),
-  mysql_user: System.get_env("DAO_MYSQL_USER") || "xiangjiandao",
-  mysql_password: System.get_env("DAO_MYSQL_PASSWORD"),
-  mysql_database: System.get_env("DAO_MYSQL_DATABASE") || "xiangjiandao",
-  # 签名用的 JWKS 原文（JSON 数组）。2026-08-21 之前是每次去共享 Redis 读
-  # `netcorepal:jwtsettings`；core 停机后那把钥匙没有写入者也不进备份，
-  # 于是搬进 secret/xjdao。详见 Rice.Dao 的模块文档。
-  #
   # ⚠️ **必须走 base64，不能直接放 JSON。** Nomad 的 env 模板用 go-envparse
   # 解析 `KEY=VALUE`，它会把值里的双引号**吃掉** —— 实测注入进来的是
   # `[{PrivateKey:MII...}]`，引号全没了，于是 Jason 在第 2 个字符就报错。
@@ -99,12 +87,7 @@ config :rice, :dao,
        _ ->
          # 本地/测试直接给 JSON 原文即可
          System.get_env("DAO_JWKS")
-     end),
-  # Mirror the DAO backend's Jwt__* env (issuer/audience are not validated
-  # by the .NET side, kept identical for fidelity; 43200 min = 30 days).
-  jwt_issuer: System.get_env("DAO_JWT_ISSUER") || "xiangjiandao",
-  jwt_audience: System.get_env("DAO_JWT_AUDIENCE") || "account",
-  jwt_exp_minutes: String.to_integer(System.get_env("DAO_JWT_EXP_MINUTES") || "43200")
+     end)
 
 # Key for encrypting stored account passwords at rest (32 raw bytes,
 # base64-encoded in RICE_LINK_ENC_KEY). Left nil when unset so non-bridge

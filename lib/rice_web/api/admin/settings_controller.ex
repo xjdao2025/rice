@@ -9,9 +9,15 @@ defmodule RiceWeb.Api.Admin.SettingsController do
 
   def show(conn, _params), do: render(conn, :show, site: Rice.Settings.get_site())
 
+  # 提案配置运营也能改;金库公示只给 role=admin(管理端菜单同样只对 admin 开放)
   def update(conn, params) do
-    attrs =
-      Map.take(params, ~w(fund_scale issued_grain_scale proposal_approval_votes document_ids))
+    fields =
+      case conn.assigns.current_admin.role do
+        "admin" -> ~w(fund_scale issued_grain_scale proposal_approval_votes document_ids)
+        _ -> ~w(proposal_approval_votes)
+      end
+
+    attrs = Map.take(params, fields)
 
     with {:ok, site} <- Rice.Settings.update_site(attrs) do
       render(conn, :show, site: site)

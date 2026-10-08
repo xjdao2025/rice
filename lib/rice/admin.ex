@@ -93,28 +93,33 @@ defmodule Rice.Admin do
   202/401 正好是一个可以无限问的"密码对不对"。
   """
   def start_login(region, phone, password) do
+    with {:ok, _admin} <- check_password(region, phone, password) do
+      Rice.Accounts.send_verification_code(
+        "sms",
+        Rice.Accounts.phone_target(region, phone),
+        @code_purpose
+      )
+    end
+  end
+
+  # 两步登录都要过这一关 —— 第二步要是不数失败次数,带着错验证码反复试密码
+  # 就绕开了锁定。
+  defp check_password(region, phone, password) do
     now = DateTime.utc_now()
     attempt = get_login_attempt(region, phone)
+    admin = get_admin_by_phone(region, phone)
 
     cond do
       LoginAttempt.locked?(attempt, now) ->
         {:error, :too_many_attempts}
 
+      AdminUser.valid_password?(admin || %AdminUser{}, password) and enabled?(admin) ->
+        clear_login_attempts(region, phone)
+        {:ok, admin}
+
       true ->
-        admin = get_admin_by_phone(region, phone)
-
-        if AdminUser.valid_password?(admin || %AdminUser{}, password) and enabled?(admin) do
-          clear_login_attempts(region, phone)
-
-          Rice.Accounts.send_verification_code(
-            "sms",
-            Rice.Accounts.phone_target(region, phone),
-            @code_purpose
-          )
-        else
-          record_login_failure(region, phone, attempt, now)
-          {:error, :invalid_credentials}
-        end
+        record_login_failure(region, phone, attempt, now)
+        {:error, :invalid_credentials}
     end
   end
 
@@ -157,17 +162,13 @@ defmodule Rice.Admin do
 
   @doc "第二步:密码 + 验证码换令牌。密码要再验一次 —— 只有验证码不够。"
   def login(region, phone, password, code) do
-    admin = get_admin_by_phone(region, phone)
     target = Rice.Accounts.phone_target(region, phone)
 
-    with true <- AdminUser.valid_password?(admin || %AdminUser{}, password) and enabled?(admin),
+    with {:ok, admin} <- check_password(region, phone, password),
          :ok <- Rice.Accounts.verify_code("sms", target, @code_purpose, code),
          {:ok, token} <- issue_token(admin) do
       Repo.update!(Ecto.Changeset.change(admin, last_login_at: DateTime.utc_now()))
       {:ok, Repo.preload(admin, :avatar), token}
-    else
-      false -> {:error, :invalid_credentials}
-      other -> other
     end
   end
 

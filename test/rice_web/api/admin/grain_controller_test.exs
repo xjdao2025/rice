@@ -27,6 +27,23 @@ defmodule RiceWeb.Api.Admin.GrainControllerTest do
     code
   end
 
+  test "运营发不了稻米,连验证码都要不到", %{conn: conn} do
+    {_op, op_token} = admin_with_token(%{role: "operator"})
+    user = user_fixture()
+
+    assert conn
+           |> authed(op_token)
+           |> post(~p"/api/admin/grain_grants/challenge")
+           |> response(403)
+
+    assert build_conn()
+           |> authed(op_token)
+           |> post(~p"/api/admin/grain_grants", %{to: [user.id], amount: 100, code: "000000"})
+           |> response(403)
+
+    assert Rice.Repo.reload!(user).grain_balance == 0
+  end
+
   describe "发放" do
     test "收款人可以用邮箱 / handle / DID / id", %{conn: conn, token: token, code: code} do
       a = user_fixture(%{email: "a@example.com"})

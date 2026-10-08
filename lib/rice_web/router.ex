@@ -131,13 +131,19 @@ defmodule RiceWeb.Router do
     patch "/me", AdminUserController, :update_me
   end
 
-  # 仅 role=admin
+  # 仅 role=admin:管理员账号、发稻米(运营的管理端菜单里本来就没有这两项)
   scope "/api/admin", RiceWeb.Api.Admin do
     pipe_through [:admin_api, :admin_authenticated, :admin_only]
 
     get "/admin_users", AdminUserController, :index
     post "/admin_users", AdminUserController, :create
     delete "/admin_users/:id", AdminUserController, :delete
+
+    # 发放动的是钱,要管理员自己手机上的验证码 —— core 也是这个要求。
+    # single / batch 合成一个:收款人永远是数组。
+    post "/grain_grants/challenge", GrainController, :challenge
+    post "/grain_grants", GrainController, :create
+    post "/nodes/:node_id/grain_grants", GrainController, :create_node
   end
 
   # 运营内容:四种资源同构,共用 CatalogController,资源类型走 assigns 传 ——
@@ -174,12 +180,7 @@ defmodule RiceWeb.Router do
     patch "/users/:id", UserController, :update
     get "/users/:user_id/grain_transfers", GrainController, :transfers
 
-    # single / batch 合成一个 —— 收款人永远是数组。
-    # 发放动的是钱,要管理员自己手机上的验证码 —— core 也是这个要求。
     get "/grain_grants", GrainController, :index
-    post "/grain_grants/challenge", GrainController, :challenge
-    post "/grain_grants", GrainController, :create
-    post "/nodes/:node_id/grain_grants", GrainController, :create_node
 
     get "/proposals", ProposalController, :index
     get "/proposals/:id", ProposalController, :show

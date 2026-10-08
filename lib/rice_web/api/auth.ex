@@ -36,8 +36,7 @@ defmodule RiceWeb.Api.Auth do
   # 等于**全员静默登出**。切换后一整天只有 5 个人(共 2028 个)拿到过 rice 令牌。
   # 认这张老票让人不必被迫重登。
   #
-  # ⚠️ 这是**过渡代码**:daoJwt 有效期 30 天,最迟 2026-09-20 全部过期,
-  # 到时候连同 `Rice.Dao` 一起删。它也**不可撤销** —— 禁用用户在老票过期前
+  # ⚠️ 这是**过渡代码**,2026-12-31 连同 `Rice.Dao` 一起删。它也**不可撤销** —— 禁用用户在老票过期前
   # 只能靠这里的 `disabled_at` 检查拦住(见 `get_user_by_legacy_id/1`)。
   defp user_for(token) do
     case Accounts.user_by_token(token) do

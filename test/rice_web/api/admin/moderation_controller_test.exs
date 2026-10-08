@@ -433,6 +433,23 @@ defmodule RiceWeb.Api.Admin.ModerationControllerTest do
       assert Enum.map(data["documents"], & &1["filename"]) == ["乙.pdf", "甲.pdf"]
     end
 
+    # 提案配置运营能改;金库公示在管理端只对 admin 开放,服务端也一样
+    test "运营只改得了提案票数,金库字段原样不动", %{conn: conn} do
+      {_op, op_token} = admin_with_token(%{role: "operator"})
+
+      assert %{"data" => data} =
+               conn
+               |> authed(op_token)
+               |> patch(~p"/api/admin/settings", %{
+                 fund_scale: 999,
+                 proposal_approval_votes: 7
+               })
+               |> json_response(200)
+
+      assert data["proposal_approval_votes"] == 7
+      refute data["fund_scale"] == 999
+    end
+
     test "负数 422", %{conn: conn, token: token} do
       assert conn
              |> authed(token)

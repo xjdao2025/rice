@@ -126,14 +126,6 @@ defmodule RiceWeb.SemiAuthController do
       "refreshJwt" => atproto.refresh_jwt
     }
 
-    # DAO backend token ("Bearer <jwt>") — present unless DAO integration is
-    # disabled or failed; the app's DAO features (任务/商品/发帖) need it.
-    payload =
-      case Map.get(atproto, :dao_jwt) do
-        nil -> payload
-        dao_jwt -> Map.put(payload, "daoJwt", dao_jwt)
-      end
-
     # rice 自己的 API 令牌。C 端搬到 rice 之后,`/api/*`(提案、评论、稻米、
     # 个人档案)认的是这个,不是上面那两个。缺了它 Semi 用户能登录但一进
     # 业务页面就是 401 —— 所以这一项才是现在最要紧的。
