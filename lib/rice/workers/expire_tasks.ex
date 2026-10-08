@@ -4,9 +4,6 @@ defmodule Rice.Workers.ExpireTasks do
 
   @impl true
   def perform(_job) do
-    case Rice.Tasks.check_due_tasks() do
-      {:ok, _} -> :ok
-      {:error, reason} -> {:error, reason}
-    end
+    with {:ok, _} <- Rice.Tasks.check_due_tasks(), do: :ok
   end
 end

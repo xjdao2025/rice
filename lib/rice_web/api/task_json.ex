@@ -23,13 +23,8 @@ defmodule RiceWeb.Api.TaskJSON do
     past_submissions = Enum.reject(all_submissions, &(&1.round == task.round))
     events = loaded(task.events)
     appointed = Rice.Tasks.appointed_applications(task)
-
-    assignees =
-      if task.capacity == 1 do
-        if task.assignee, do: [public_user(task.assignee)], else: []
-      else
-        Enum.map(appointed, &public_user(&1.user))
-      end
+    assignees = Enum.map(appointed, &public_user(&1.user))
+    own = current_user && Enum.find(applications, &(&1.user_id == current_user.id))
 
     %{
       id: task.id,
@@ -44,6 +39,7 @@ defmodule RiceWeb.Api.TaskJSON do
       requirement: task.requirement,
       node: RiceWeb.Api.NodeJSON.embed(task.node),
       execution_deadline: task.execution_deadline,
+      # 单人任务指派后不算"招满",只看申请截止
       application_closed:
         past?(task.application_deadline) or
           (task.capacity > 1 and length(appointed) >= task.capacity),
@@ -67,14 +63,15 @@ defmodule RiceWeb.Api.TaskJSON do
       reward_amount: task.reward_amount,
       reward_status: task.reward_status,
       application_count: length(applications),
-      my_application_status: my_application_status(task, applications, current_user),
-      my_application: my_application(task, applications, current_user, detail?),
+      my_application_status: own && application_status(own, task),
+      my_application: own && application(own, task, detail?),
       allowed_actions: allowed_actions(task, applications, submissions, current_user),
       applications: visible_applications(task, applications, current_user, detail?),
       past_applications:
-        visible_past_applications(task, past_applications, current_user, detail?),
+        visible_past(task, past_applications, current_user, detail?, &application/2),
       submissions: visible_submissions(task, submissions, current_user, detail?),
-      past_submissions: visible_past_submissions(task, past_submissions, current_user, detail?),
+      past_submissions:
+        visible_past(task, past_submissions, current_user, detail?, &submission/2),
       events: if(detail?, do: visible_events(task, events, current_user), else: nil),
       published_at: published_at(task, events),
       inserted_at: task.inserted_at,
@@ -87,13 +84,13 @@ defmodule RiceWeb.Api.TaskJSON do
 
   defp visible_applications(_task, _applications, _user, _detail?), do: nil
 
-  defp visible_past_applications(task, applications, %User{id: user_id} = user, true) do
-    applications
-    |> Enum.filter(&(Rice.Tasks.can_manage?(task, user) || &1.user_id == user_id))
-    |> Enum.map(&application(&1, task))
+  # 往期的申请和成果:管理员看全部,其他人只看自己的
+  defp visible_past(task, items, %User{id: user_id} = user, true, render) do
+    manager? = Rice.Tasks.can_manage?(task, user)
+    for item <- items, manager? or item.user_id == user_id, do: render.(item, task)
   end
 
-  defp visible_past_applications(_task, _applications, _user, _detail?), do: nil
+  defp visible_past(_task, _items, _user, _detail?, _render), do: nil
 
   defp visible_submissions(task, submissions, %User{id: user_id} = user, true) do
     cond do
@@ -109,14 +106,6 @@ defmodule RiceWeb.Api.TaskJSON do
   end
 
   defp visible_submissions(_task, _submissions, _user, _detail?), do: nil
-
-  defp visible_past_submissions(task, submissions, %User{id: user_id} = user, true) do
-    submissions
-    |> Enum.filter(&(Rice.Tasks.can_manage?(task, user) || &1.user_id == user_id))
-    |> Enum.map(&submission(&1, task))
-  end
-
-  defp visible_past_submissions(_task, _submissions, _user, _detail?), do: nil
 
   defp application(%Application{} = application, task, detail? \\ true) do
     %{
@@ -145,15 +134,6 @@ defmodule RiceWeb.Api.TaskJSON do
       user: public_user(submission.user),
       inserted_at: submission.inserted_at
     }
-  end
-
-  defp my_application(_task, _applications, nil, _detail?), do: nil
-
-  defp my_application(task, applications, user, detail?) do
-    case Enum.find(applications, &(&1.user_id == user.id)) do
-      nil -> nil
-      own -> application(own, task, detail?)
-    end
   end
 
   defp visible_events(task, events, user) do
@@ -202,13 +182,11 @@ defmodule RiceWeb.Api.TaskJSON do
       Rice.Tasks.accepting_applications?(task) and manager? and
         Enum.any?(applications, &(is_nil(&1.rejected_at) and is_nil(&1.appointed_at)))
 
-    can_review_results? =
-      manager? and
-        ((task.capacity == 1 and task.status == "under_review") or
-           (task.capacity > 1 and task.status in ~w(in_progress overdue under_review) and
-              Enum.any?(submissions, &(is_nil(&1.review_reason) and is_nil(&1.final_status)))))
-
     running? = manager? and task.status in ~w(in_progress overdue under_review)
+
+    can_review_results? =
+      running? and
+        Enum.any?(submissions, &(is_nil(&1.review_reason) and is_nil(&1.final_status)))
 
     []
     |> maybe_add(task.status == "draft" and manager?, "publish")
@@ -253,15 +231,6 @@ defmodule RiceWeb.Api.TaskJSON do
   defp maybe_add(actions, true, action), do: [action | actions]
   defp maybe_add(actions, false, _action), do: actions
 
-  defp my_application_status(_task, _applications, nil), do: nil
-
-  defp my_application_status(task, applications, %User{id: user_id}) do
-    case Enum.find(applications, &(&1.user_id == user_id)) do
-      nil -> nil
-      application -> application_status(application, task)
-    end
-  end
-
   # `status` 保持老前端认得的粗粒度取值;细粒度的在 `state`(Rice.Tasks.ApplicationState)。
   defp application_status(%Application{final_status: status}, _task) when not is_nil(status),
     do: status
@@ -273,9 +242,8 @@ defmodule RiceWeb.Api.TaskJSON do
        do: if(past?(deadline), do: "expired", else: "pending")
 
   # 多人任务申请截止后、定时任务还没把 pending 迁成 not_selected 之前,先按截止算
-  defp application_status(%Application{status: "pending"}, %{capacity: capacity} = task)
-       when capacity > 1,
-       do: if(Rice.Tasks.accepting_applications?(task), do: "pending", else: "not_selected")
+  defp application_status(%Application{status: "pending"}, task),
+    do: if(Rice.Tasks.accepting_applications?(task), do: "pending", else: "not_selected")
 
   defp application_status(%Application{status: status}, _task),
     do: Rice.Tasks.ApplicationState.legacy(status)

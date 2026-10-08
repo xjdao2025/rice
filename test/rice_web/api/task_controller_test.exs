@@ -93,6 +93,62 @@ defmodule RiceWeb.Api.TaskControllerTest do
              Rice.Repo.get!(Rice.Accounts.User, person.id)
   end
 
+  # 个人出资的任务没有节点:申请、指派、交付、验收、编辑都不能去读节点
+  test "个人出资的任务走完整流程,奖励从发布者自己的稻米发出" do
+    {person, token} = user_with_token()
+    Rice.Repo.update!(Ecto.Changeset.change(person, can_publish_tasks: true))
+    Rice.Grains.grant(person, 50)
+    {worker, worker_token} = user_with_token()
+    as = fn t -> build_conn() |> authed(t) end
+
+    id =
+      as.(token)
+      |> post(~p"/api/tasks", %{
+        title: "帮忙搬书",
+        description: "个人发起",
+        organizer_contact: "我的电话",
+        reward_amount: 20,
+        client_request_id: "personal-flow"
+      })
+      |> json_response(201)
+      |> get_in(["data", "id"])
+
+    application_id =
+      as.(worker_token)
+      |> post(~p"/api/tasks/#{id}/applications", %{contact: "电话"})
+      |> json_response(201)
+      |> get_in(["data", "my_application", "id"])
+
+    as.(token)
+    |> post(~p"/api/tasks/#{id}/applications/#{application_id}/appoint")
+    |> json_response(200)
+
+    as.(token)
+    |> patch(~p"/api/tasks/#{id}", %{description: "改一下说明"})
+    |> json_response(200)
+
+    submission_id =
+      as.(worker_token)
+      |> post(~p"/api/tasks/#{id}/submissions", %{body: "搬完了"})
+      |> json_response(201)
+      |> get_in(["data", "submissions"])
+      |> hd()
+      |> Map.fetch!("id")
+
+    done =
+      as.(token)
+      |> post(~p"/api/tasks/#{id}/submissions/#{submission_id}/approve")
+      |> json_response(200)
+
+    assert done["data"]["status"] == "completed"
+
+    assert %{grain_balance: 30, grain_frozen_balance: 0} =
+             Rice.Repo.get!(Rice.Accounts.User, person.id)
+
+    assert Rice.Repo.get!(Rice.Accounts.User, worker.id).grain_balance == 20
+    assert Rice.Grains.reconcile().ok?
+  end
+
   test "多人任务公开承作人及每人奖励，个人仅能查看自己的申请和成果" do
     publisher = task_publisher_fixture()
     {:ok, publisher_token} = Rice.Accounts.issue_token(publisher)

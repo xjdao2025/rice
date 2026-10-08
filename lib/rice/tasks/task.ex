@@ -1,5 +1,5 @@
 defmodule Rice.Tasks.Task do
-  @moduledoc "任务主体；新奖励由社区账户冻结，旧任务保留原个人出资账户。"
+  @moduledoc "任务主体；奖励由所属节点的账户冻结，个人发布的任务(没有节点)由发布者本人出资。"
   use Rice.Schema
 
   @statuses ~w(draft open in_progress overdue under_review completed expired cancelled)

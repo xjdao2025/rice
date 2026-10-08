@@ -24,9 +24,7 @@ defmodule RiceWeb.Api.TaskController do
 
     with true <- is_binary(key) and byte_size(key) in 1..128,
          {:ok, task} <- Tasks.create_task(conn.assigns.current_user, params) do
-      conn
-      |> put_status(:created)
-      |> render(:show, task: task, current_user: conn.assigns.current_user)
+      render_created(conn, task)
     else
       false -> {:error, :missing_request_id}
       error -> error
@@ -39,11 +37,8 @@ defmodule RiceWeb.Api.TaskController do
   def apply(conn, %{"task_id" => task_id} = params) do
     with {:ok, task} <- Tasks.fetch_task(task_id, conn.assigns.current_user),
          {:ok, _application} <- Tasks.apply(conn.assigns.current_user, task, params),
-         {:ok, task} <- Tasks.fetch_task(task.id, conn.assigns.current_user) do
-      conn
-      |> put_status(:created)
-      |> render(:show, task: task, current_user: conn.assigns.current_user)
-    end
+         {:ok, task} <- Tasks.fetch_task(task.id, conn.assigns.current_user),
+         do: render_created(conn, task)
   end
 
   def publish(conn, %{"task_id" => task_id}), do: change(conn, task_id, &Tasks.publish_draft/2)
@@ -60,11 +55,8 @@ defmodule RiceWeb.Api.TaskController do
 
   def submit(conn, %{"task_id" => task_id} = params) do
     with {:ok, task} <- Tasks.fetch_task(task_id, conn.assigns.current_user),
-         {:ok, task} <- Tasks.submit_result(conn.assigns.current_user, task, params) do
-      conn
-      |> put_status(:created)
-      |> render(:show, task: task, current_user: conn.assigns.current_user)
-    end
+         {:ok, task} <- Tasks.submit_result(conn.assigns.current_user, task, params),
+         do: render_created(conn, task)
   end
 
   def reject_application(conn, %{"task_id" => task_id, "application_id" => application_id}),
@@ -90,5 +82,11 @@ defmodule RiceWeb.Api.TaskController do
     with {:ok, task} <- Tasks.fetch_task(task_id, user),
          {:ok, task} <- action.(user, task),
          do: render(conn, :show, task: task, current_user: user)
+  end
+
+  defp render_created(conn, task) do
+    conn
+    |> put_status(:created)
+    |> render(:show, task: task, current_user: conn.assigns.current_user)
   end
 end

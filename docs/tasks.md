@@ -35,16 +35,8 @@ pending ──指派──▶ appointed ──提交──▶ under_review ─�
 
 `draft → open → in_progress → under_review → completed`,另有 `overdue`、`expired`、`cancelled`。
 
-| | 单人(`capacity = 1`) | 多人(`capacity > 1`) |
-| --- | --- | --- |
-| 承接人 | `tasks.assignee_id` | 没有,`assignee_id` 恒为空(有约束) |
-| 任务状态 | 被指派的那一个申请的状态,同名对应 | 所有已指派申请状态的**汇总** |
-| 同步方式 | 每次任务状态变化,在同一事务内同步那一个申请 | 个人状态独立流转,任务状态随后聚合 |
-
-单人对应:`open ↔ pending`、`in_progress ↔ appointed`、`overdue`、`under_review`、`completed` 同名;
-取消/过期时所有 `pending` 申请变 `cancelled` / `expired`;指派时其余申请变 `not_selected`。
-
-多人汇总规则(`aggregate_multi_status`),**最差者优先**:
+**单人任务就是 `capacity = 1` 的多人任务**,走同一套代码:申请各自迁移,任务状态随后汇总
+(`aggregate_status`),**最差者优先**:
 
 1. 没有人占着名额(都被撤销了)→ 回到 `open`,之后按申请截止由定时任务过期退款;
 2. 全部占名额的人都 `completed`,**并且**(名额已满 **或** 申请已截止)→ `completed`;
@@ -52,9 +44,24 @@ pending ──指派──▶ appointed ──提交──▶ under_review ─�
 4. 否则有人 `under_review` → `under_review`;
 5. 否则 → `in_progress`。
 
+招募阶段取消 / 过期时,所有 `pending` 申请变 `cancelled` / `expired`;名额满或申请截止时其余申请变
+`not_selected`。
+
+单人任务为了接口和历史记录不变,保留了几处差别(代码里都有注释):
+
+| | 单人(`capacity = 1`) | 多人(`capacity > 1`) |
+| --- | --- | --- |
+| 承接人 | 指派时写进 `tasks.assignee_id` / `appointed_at` / `appointment_reason`(约束要求) | `assignee_id` 恒为空(有约束) |
+| 个人状态 `my_status` | 就是任务状态 | 自己申请的状态 |
+| 招募 | 只在 `open` 时;重复指派、重复验收返回 409 | 进行中名额没满也招;重复指派、验收是幂等的 |
+| 超期 | 指派时不判,由定时任务记(交付时还没记就先补记),事件带说明并提醒;退回修改回到超期不再提醒 | 每次汇总都追平,任务变成 `overdue` 时提醒 |
+| 验收通过的事件 | 带发放说明(单人任务的事件说明对承接人可见) | 不带 |
+| 撤销指派 | 没有,用提前结束 | 有 |
+| 奖励账本 | `rice://tasks/<id>`,不分名额 | `rice://tasks/<id>/slots/<n>` |
+
 因此任务状态不能用来判断某个人能做什么,个人动作一律看自己的申请状态(`my_status`)。
-`appointed` / `overdue` 以交付截止时间实时判断,落库的 `overdue` 由定时任务
-(`check_due_tasks`)和编辑任务时追平。定时任务只在多人任务还有事可做时才处理它
+`my_status` 的 `appointed` / `overdue` 以交付截止时间实时判断,落库的 `overdue` 由定时任务
+(`check_due_tasks`)、各个动作和编辑任务时追平。定时任务只在进行中的任务还有事可做时才处理它
 (申请截止后仍有 `pending`、或承作人都结束了该收尾、或交付截止后还有人没记成超期),
 已经处理过的不会每分钟重新加锁。
 
@@ -78,7 +85,7 @@ pending ──指派──▶ appointed ──提交──▶ under_review ─�
 | --- | --- |
 | `task_applications` | 每个申请人一行:`status`、`appointed_at`、`appointment_reason`、`reward_slot`(1..capacity,`(task_id, round, reward_slot)` 唯一)、`rejected_at` |
 | `task_submissions` | 每人每轮的交付成果,各自审核 |
-| `grain_receipts` | 每个名额一条冻结/结算/退款记录,`subject_uri` 形如 `rice://tasks/<id>/slots/<n>` |
+| `grain_receipts` | 每个名额一条冻结/结算/退款记录,`subject_uri` 形如 `rice://tasks/<id>/slots/<n>`(单人任务是 `rice://tasks/<id>`) |
 | `tasks` | `capacity`、汇总状态;单人任务另有 `assignee_id` |
 
 ## 谁能发任务
@@ -91,8 +98,8 @@ pending ──指派──▶ appointed ──提交──▶ under_review ─�
 
 ## 奖励
 
-- `reward_amount` 是**每人**的奖励。发布时从**节点账户**(`funding_node_id`)一次性冻结
-  `reward_amount × capacity`,不是发布者个人余额。节点余额不足,发布返回 422。
+- `reward_amount` 是**每人**的奖励。发布时从出资方一次性冻结 `reward_amount × capacity`:
+  节点任务从**节点账户**(`funding_node_id`),个人任务从发布者本人的余额。余额不足,发布返回 422。
 - 每个名额在指派时分配 `reward_slot`(取 1..capacity 里最小的空号);该人验收通过时只结算他那一份。
   撤销指派不动账,只是把号让出来。
 - 任务整体完成或提前结束时,没有结算的名额按份退回节点。

@@ -1025,7 +1025,7 @@ defmodule Rice.TasksTest do
     assert {:error, :conflict} = Tasks.update_task(publisher, completed, %{reward_amount: 0})
     assert Repo.get!(Rice.Tasks.Task, task.id).status == "completed"
     assert Repo.get!(Rice.Tasks.Task, task.id).round == 1
-    assert Repo.get!(Rice.Tasks.Submission, old_submission.id).final_status == nil
+    assert Repo.get!(Rice.Tasks.Submission, old_submission.id).final_status == "approved"
     assert Repo.get!(Rice.Tasks.Application, old_application.id).final_status == nil
     assert Repo.aggregate(Rice.Grains.Receipt, :count) == 2
 

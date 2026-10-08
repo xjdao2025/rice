@@ -115,8 +115,9 @@ defmodule Rice.Grains do
   def lock_business_accounts(repo, accounts) do
     accounts = accounts |> Enum.reject(&is_nil/1) |> Enum.map(&account/1)
 
-    for schema <- [User, Node] do
-      ids = for {^schema, id} <- accounts, do: id
+    for schema <- [User, Node],
+        ids = for({^schema, id} <- accounts, do: id),
+        ids != [] do
       repo.all(from a in schema, where: a.id in ^ids, order_by: [asc: a.id], lock: "FOR UPDATE")
     end
   end
