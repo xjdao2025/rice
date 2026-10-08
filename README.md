@@ -59,3 +59,8 @@ configuration; test success is not proof that a real SMS/email was delivered.
 [`test/rice_web`](test/rice_web) files define request, response, and permission
 behavior. Shared authentication is in [`auth.ex`](lib/rice_web/api/auth.ex);
 error responses are in [`fallback_controller.ex`](lib/rice_web/api/fallback_controller.ex).
+
+## Tasks
+
+Task and application state machines, multi-assignee rewards and edit rules:
+[`docs/tasks.md`](docs/tasks.md).
