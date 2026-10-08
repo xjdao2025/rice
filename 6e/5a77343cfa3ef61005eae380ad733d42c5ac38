@@ -1,0 +1,23 @@
+lib/rice/tasks.ex
+  s_8c80ad8d2af680::t_f3c1e1971e4170 1384-1387
+test/rice/task_application_state_test.exs
+  s_8c80ad8d2af680::t_f3c1e1971e4170 181-199
+docs/tasks.md
+  s_8c80ad8d2af680::t_18741107622fa5 119-121
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6e5a77343cfa3ef61005eae380ad733d42c5ac38",
+  "prompts": {},
+  "sessions": {
+    "s_8c80ad8d2af680": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1cacbb5-9264-4c9e-8d1e-0245a530ded4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
