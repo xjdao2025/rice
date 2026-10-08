@@ -1381,7 +1381,10 @@ defmodule Rice.Tasks do
         true -> "in_progress"
       end
 
-    {next, Enum.to_list(1..task.capacity) -- Enum.map(appointed, & &1.reward_slot)}
+    # 迁移给已有的单人申请补了 1 号,但部署时旧版本在迁移之后、新版本起来之前还可能
+    # 指派单人任务,那一行没有编号。单人任务只有 1 号,按 1 号算;否则验收时会把刚结算
+    # 的那笔当成没用上的名额去退款,整笔验收冲突回滚
+    {next, Enum.to_list(1..task.capacity) -- Enum.map(appointed, &(&1.reward_slot || 1))}
   end
 
   # 任务整体完成时退回没用上的名额,奖励记为已结算

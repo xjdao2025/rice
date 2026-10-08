@@ -178,6 +178,25 @@ defmodule Rice.TaskApplicationStateTest do
     assert node_balance(publisher) == {10, 0}
   end
 
+  # 部署窗口里旧版本指派的单人申请没有名额编号:验收不能因此把结算过的那笔再退一次
+  test "单人任务:没有名额编号的指派也能正常验收结算" do
+    publisher = task_publisher_fixture()
+    funded_node_fixture(publisher, 50)
+    worker = user_fixture()
+    task = new_task(publisher, %{reward_amount: 20})
+    a = apply!(worker, task)
+    {:ok, task} = Tasks.appoint(publisher, task, a.id)
+    Repo.update_all(from(x in Application, where: x.id == ^a.id), set: [reward_slot: nil])
+
+    {:ok, task} = Tasks.submit_result(worker, task, %{body: "成果"})
+
+    assert {:ok, %{status: "completed"}} =
+             Tasks.approve_result(publisher, task, hd(task.submissions).id)
+
+    assert Repo.get!(Rice.Accounts.User, worker.id).grain_balance == 20
+    assert Rice.Grains.reconcile().ok?
+  end
+
   test "单人任务:定时任务记超期后申请 overdue,延期恢复后回到 appointed" do
     publisher = task_publisher_fixture()
     worker = user_fixture()
