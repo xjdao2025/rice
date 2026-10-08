@@ -1,0 +1,182 @@
+lib/rice/files/storage/local.ex
+  s_8c80ad8d2af680::t_a5652d667fd74e 31
+lib/rice/grains/receipt.ex
+  s_8c80ad8d2af680::t_a5652d667fd74e 17
+lib/rice/pds/api.ex
+  s_8c80ad8d2af680::t_cab2debb2cb80f 20
+lib/rice/accounts/api_token.ex
+  s_8c80ad8d2af680::t_78191354d68e17 25,41
+lib/rice/admin/grants.ex
+  s_8c80ad8d2af680::t_e3d9002b83963f 188
+  s_8c80ad8d2af680::t_78191354d68e17 30-36,49-50,85-94
+.dialyzer_ignore.exs
+  s_8c80ad8d2af680::t_3bb412d4aa7c18 1-6
+mix.exs
+  s_8c80ad8d2af680::t_ce2b1ac3cf593f 14,81-82
+  s_8c80ad8d2af680::t_9e557156e8d679 15-20
+lib/rice/accounts.ex
+  s_8c80ad8d2af680::t_57a38ad9526c91 213,215
+  s_8c80ad8d2af680::t_78191354d68e17 14-24,32,35,39,52-53,86,105,112,119,132,154,197,214,270,335,375,390,436,463-465,532-534,565,572,607,626,634,648-649,661-662,672-673,713,719,730-733,751-753
+  s_8c80ad8d2af680::t_e3d9002b83963f 169
+lib/rice/community/badge.ex
+  s_8c80ad8d2af680::t_a5652d667fd74e 18
+lib/rice/community/join_application.ex
+  s_8c80ad8d2af680::t_a5652d667fd74e 16,27
+lib/rice/grains/transfer.ex
+  s_8c80ad8d2af680::t_a5652d667fd74e 31
+lib/rice/tasks/task.ex
+  s_8c80ad8d2af680::t_3f463dbe83414c 40,75,83,110,112
+lib/rice/tasks/application_state.ex
+  s_8c80ad8d2af680::t_3f463dbe83414c 27,29,31,35,41,45
+lib/rice/files/storage.ex
+  s_8c80ad8d2af680::t_a5652d667fd74e 14,17,19,21
+lib/rice/tasks/submission.ex
+  s_8c80ad8d2af680::t_3f463dbe83414c 17,26
+lib/rice/tasks/event.ex
+  s_8c80ad8d2af680::t_3f463dbe83414c 18
+lib/rice/handoff.ex
+  s_8c80ad8d2af680::t_cab2debb2cb80f 18,22,30
+lib/rice/admin/catalog.ex
+  s_8c80ad8d2af680::t_8fcffec10eca03 20,29,36,42,53,62
+  s_8c80ad8d2af680::t_78191354d68e17 19,21,52,73-74
+lib/rice/community/badge_award.ex
+  s_8c80ad8d2af680::t_a5652d667fd74e 20
+lib/rice/community.ex
+  s_8c80ad8d2af680::t_57a38ad9526c91 319
+  s_8c80ad8d2af680::t_e3d9002b83963f 292,400
+  s_8c80ad8d2af680::t_a5652d667fd74e 11,28,31,43,55-57,81,92,160-161,199-201,249,268,303,316-318,320-321,353-358,423,431
+  s_8c80ad8d2af680::t_26b908dc12a7d7 82-83
+lib/rice/community/membership.ex
+  s_8c80ad8d2af680::t_a5652d667fd74e 12
+lib/rice/governance.ex
+  s_8c80ad8d2af680::t_e3d9002b83963f 18,35,203,245
+  s_8c80ad8d2af680::t_a5652d667fd74e 83,97,102-103,117-118,141-143,196,221,229-230,270,275-276,287-288
+  s_8c80ad8d2af680::t_de744f75667cbf 212-213,302-305
+lib/rice/repo.ex
+  s_8c80ad8d2af680::t_cab2debb2cb80f 12,20,24,29-31,37
+lib/rice/accounts/user.ex
+  s_8c80ad8d2af680::t_78191354d68e17 37,50,60
+lib/rice/admin.ex
+  s_8c80ad8d2af680::t_c4fdae5595ef3d 192-193
+  s_8c80ad8d2af680::t_5b92d208910703 75-76
+  s_8c80ad8d2af680::t_78191354d68e17 23,39,50-52,96,167-171,173,185,194,221,228,235,288,302
+  s_8c80ad8d2af680::t_8fcffec10eca03 97,172,236,251,274-275,289
+  s_8c80ad8d2af680::t_e3d9002b83963f 29
+lib/rice/rate_limit.ex
+  s_8c80ad8d2af680::t_cab2debb2cb80f 13,17
+lib/rice/admin/users.ex
+  s_8c80ad8d2af680::t_5b92d208910703 59-60
+  s_8c80ad8d2af680::t_e3d9002b83963f 22
+  s_8c80ad8d2af680::t_78191354d68e17 50
+lib/rice/events/application.ex
+  s_8c80ad8d2af680::t_8f18ea831477d8 18
+AGENTS.md
+  s_8c80ad8d2af680::t_2c415e19784a4c 6
+lib/rice/settings/site.ex
+  s_8c80ad8d2af680::t_8f18ea831477d8 17
+lib/rice/files.ex
+  s_8c80ad8d2af680::t_a5652d667fd74e 32,34,39,43,55,66-67,94
+lib/rice/semi_oauth.ex
+  s_8c80ad8d2af680::t_cab2debb2cb80f 24,36,40,46,54,81-83,120-122
+lib/rice/tasks/application.ex
+  s_8c80ad8d2af680::t_3f463dbe83414c 22
+lib/rice/release.ex
+  s_8c80ad8d2af680::t_cab2debb2cb80f 8,17
+lib/rice/notifications/aliyun_sms.ex
+  s_8c80ad8d2af680::t_cab2debb2cb80f 47,90
+  s_8c80ad8d2af680::t_0c574a8c408207 45-46
+lib/rice/tasks/notification.ex
+  s_8c80ad8d2af680::t_3f463dbe83414c 19
+lib/rice/admin/admin_token.ex
+  s_8c80ad8d2af680::t_78191354d68e17 24,39
+lib/rice/community/node.ex
+  s_8c80ad8d2af680::t_a5652d667fd74e 21
+lib/rice/schema.ex
+  s_8c80ad8d2af680::t_3bb412d4aa7c18 8,31-32,37,42
+lib/rice/admin/posts.ex
+  s_8c80ad8d2af680::t_78191354d68e17 13,17,21
+lib/rice/content.ex
+  s_8c80ad8d2af680::t_e3d9002b83963f 42
+  s_8c80ad8d2af680::t_8f18ea831477d8 16,24,52
+lib/rice/admin/admin_user.ex
+  s_8c80ad8d2af680::t_78191354d68e17 50,66,74,99,109,129
+lib/rice/files/attachment.ex
+  s_8c80ad8d2af680::t_a5652d667fd74e 26,51
+lib/rice/content/app.ex
+  s_8c80ad8d2af680::t_8f18ea831477d8 17
+lib/rice/governance/comment.ex
+  s_8c80ad8d2af680::t_a5652d667fd74e 16
+lib/rice/accounts/verification_code.ex
+  s_8c80ad8d2af680::t_78191354d68e17 31,42,50,54,63,65,67,69,71,73
+lib/rice/settings.ex
+  s_8c80ad8d2af680::t_8f18ea831477d8 12,25
+.gitignore
+  s_8c80ad8d2af680::t_581e091c92b667 39-41
+lib/rice/notifications.ex
+  s_8c80ad8d2af680::t_cab2debb2cb80f 12,15,17
+lib/rice/dao.ex
+  s_8c80ad8d2af680::t_cab2debb2cb80f 33-50
+lib/rice/events/event.ex
+  s_8c80ad8d2af680::t_8f18ea831477d8 28,75
+lib/rice/inbox.ex
+  s_8c80ad8d2af680::t_8f18ea831477d8 4,6-14,28,31,103
+lib/rice/notifications/dispatcher.ex
+  s_8c80ad8d2af680::t_cab2debb2cb80f 26,32
+lib/rice/content/banner.ex
+  s_8c80ad8d2af680::t_8f18ea831477d8 15
+lib/rice/content/announcement.ex
+  s_8c80ad8d2af680::t_8f18ea831477d8 15
+lib/rice/events.ex
+  s_8c80ad8d2af680::t_a0d81c78c2b97e 651,663-668
+  s_8c80ad8d2af680::t_8f18ea831477d8 10-11,103,116,180-187,309,332-333,393-394,398-399,403-404,408-409,452-453,474-481,536-537,548-549,552,578,727,738
+  s_8c80ad8d2af680::t_e3d9002b83963f 12
+  s_8c80ad8d2af680::t_d13fcda6a83b46 669
+lib/rice/bridge.ex
+  s_8c80ad8d2af680::t_cab2debb2cb80f 18-27
+lib/rice/tasks.ex
+  s_8c80ad8d2af680::t_3f463dbe83414c 16-18,51,67-74,100,114,126,137,146,166,249-250,519-522,559,575-577,640-641,648-649,718-719,759,815,850-851,886-887,916-918,975,1610-1611
+  s_8c80ad8d2af680::t_e3d9002b83963f 33
+lib/rice/settings/document.ex
+  s_8c80ad8d2af680::t_8f18ea831477d8 19
+lib/rice/grains.ex
+  s_8c80ad8d2af680::t_57a38ad9526c91 33-34
+  s_8c80ad8d2af680::t_a5652d667fd74e 36-45,86-87,107,126,128,132,134-135,141,261-270,315-321,417-418,443,516,523-528
+  s_8c80ad8d2af680::t_5854c1749f8beb 108-109,127,133
+  s_8c80ad8d2af680::t_e3d9002b83963f 499,509
+  s_8c80ad8d2af680::t_f7b3ba801adf2d 23-25
+lib/rice/accounts/semi_link.ex
+  s_8c80ad8d2af680::t_78191354d68e17 20
+  s_8c80ad8d2af680::t_581e091c92b667 6
+  s_8c80ad8d2af680::t_d781a43dc297be 7
+lib/rice/pagination.ex
+  s_8c80ad8d2af680::t_ee15d339c96da6 31-39,76
+  s_8c80ad8d2af680::t_f08dcc9fac892d 68,197,200
+  s_8c80ad8d2af680::t_06e29979936376 199
+lib/rice/governance/vote.ex
+  s_8c80ad8d2af680::t_a5652d667fd74e 21,33
+lib/rice/cors.ex
+  s_8c80ad8d2af680::t_cab2debb2cb80f 24,34
+lib/rice/governance/proposal.ex
+  s_8c80ad8d2af680::t_a5652d667fd74e 31,54,76
+lib/rice/admin/login_attempt.ex
+  s_8c80ad8d2af680::t_1d058dfa1595f5 32-33
+  s_8c80ad8d2af680::t_78191354d68e17 43,51,59,61
+mix.lock
+  s_8c80ad8d2af680::t_5e38ebba29978a 6,10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7f95dc5d9a4bb7b22775cfb7521d29f894d21f86",
+  "prompts": {},
+  "sessions": {
+    "s_8c80ad8d2af680": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1cacbb5-9264-4c9e-8d1e-0245a530ded4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
