@@ -393,6 +393,14 @@ defmodule Rice.Grains do
 
   def resolve_recipient(_), do: {:error, :recipient_not_found}
 
+  @doc "是不是按手机号 / 邮箱找人 —— 这类查询等于问\"这个号是谁\",调用方要限流。"
+  def contact_identifier?(identifier) when is_binary(identifier) do
+    identifier = String.trim(identifier)
+    String.contains?(identifier, "@") or Regex.match?(~r/^\d{5,20}$/, identifier)
+  end
+
+  def contact_identifier?(_), do: false
+
   # 不同于 `Accounts.find_user/1`:停用的人也要找出来(好报 recipient_disabled)。
   # 邮箱大小写不敏感;手机号只比号码本身,不含区号 —— 界面上没地方填区号。
   defp find_by_contact(identifier) do

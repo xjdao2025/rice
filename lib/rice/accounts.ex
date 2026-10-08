@@ -282,6 +282,10 @@ defmodule Rice.Accounts do
     end
   end
 
+  # 大陆手机号只有一种写法:1 开头的 11 位。带 86 / 0086 前缀的写法短信网关照样能发到
+  # 同一部手机,不拦的话换个写法就绕过了每个号码的发送上限
+  defp valid_target?("sms", "86-" <> phone), do: Regex.match?(~r/^1\d{10}$/, phone)
+
   defp valid_target?("sms", target) when is_binary(target),
     do: Regex.match?(~r/^\d{1,8}-\d{5,20}$/, target)
 

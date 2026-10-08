@@ -33,6 +33,12 @@ defmodule RiceWeb.Api.GrainTransferControllerTest do
 
       for _ <- 1..30, do: assert(lookup.() |> json_response(422))
       assert lookup.() |> json_response(429)
+
+      # 转账接口回"用户不存在"还是"稻米不足"也能拿来查号,同一个限额管住它
+      assert build_conn()
+             |> authed(token)
+             |> post(~p"/api/grain_transfers", %{to: "13800009998", amount: 1})
+             |> json_response(429)
     end
 
     test "手机号预览只返回公开资料，核对后用 id 转账", %{conn: conn} do

@@ -108,20 +108,21 @@ defmodule Rice.Governance do
   删自己的提案(软删)。别人的返回 :forbidden 而不是假装成功。
   有人投过票就不能删了 —— 否则作者看势头不对删掉,这次表决就没有结果。
   """
-  def delete_proposal(%User{id: user_id}, %Proposal{} = proposal) do
-    cond do
-      proposal.user_id != user_id ->
-        {:error, :forbidden}
+  def delete_proposal(%User{id: user_id}, %Proposal{user_id: user_id} = proposal) do
+    # "没人投过票"和删除放在同一条语句里:先查后删的话,中间进来的一票会跟着提案一起消失
+    unvoted =
+      from p in Proposal,
+        where:
+          p.id == ^proposal.id and is_nil(p.deleted_at) and
+            p.agree_count + p.oppose_count == 0
 
-      proposal.agree_count + proposal.oppose_count > 0 ->
-        {:error, :conflict}
-
-      true ->
-        proposal
-        |> Ecto.Changeset.change(deleted_at: DateTime.utc_now())
-        |> Repo.update()
+    case Repo.update_all(unvoted, set: [deleted_at: DateTime.utc_now()]) do
+      {1, _} -> {:ok, proposal}
+      {0, _} -> {:error, :conflict}
     end
   end
+
+  def delete_proposal(%User{}, %Proposal{}), do: {:error, :forbidden}
 
   # ── 投票 ────────────────────────────────────────────────────────────────
 

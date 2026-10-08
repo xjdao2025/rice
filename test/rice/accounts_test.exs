@@ -118,7 +118,7 @@ defmodule Rice.AccountsTest do
       supervisor = start_supervised!(Task.Supervisor)
 
       target =
-        "86-#{System.unique_integer([:positive]) |> Integer.to_string() |> String.pad_leading(12, "0")}"
+        "86-1#{System.unique_integer([:positive]) |> Integer.to_string() |> String.pad_leading(10, "0")}"
 
       parent = self()
       expect(Rice.NotificationsMock, :send_sms, fn _, _, _ -> :ok end)

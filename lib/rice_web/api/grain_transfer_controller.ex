@@ -14,9 +14,8 @@ defmodule RiceWeb.Api.GrainTransferController do
     render(conn, :index, page: page, viewer: conn.assigns.current_user)
   end
 
-  # 可以拿手机号 / 邮箱查人,等于一个"这个号是谁"的查询口 —— 按用户限流
   def recipient(conn, params) do
-    with :ok <- Rice.RateLimit.hit({:recipient, conn.assigns.current_user.id}, 30, 3600),
+    with :ok <- limit_contact_lookup(conn, params["to"]),
          {:ok, user} <- Grains.resolve_recipient(params["to"]) do
       json(conn, %{data: RiceWeb.Api.UserJSON.public(Rice.Repo.preload(user, :avatar))})
     end
@@ -31,6 +30,7 @@ defmodule RiceWeb.Api.GrainTransferController do
     ]
 
     with {:ok, amount} <- fetch_amount(params["amount"]),
+         :ok <- limit_contact_lookup(conn, params["to"]),
          {:ok, transfer} <- Grains.transfer(conn.assigns.current_user, params["to"], amount, opts) do
       conn
       |> put_status(:created)
@@ -43,6 +43,14 @@ defmodule RiceWeb.Api.GrainTransferController do
       error ->
         error
     end
+  end
+
+  # 拿手机号 / 邮箱找人等于问"这个号是谁"。转账接口也能这么问 —— 回"用户不存在"
+  # 还是"稻米不足"就是答案 —— 所以两个接口共用一个按用户的限额
+  defp limit_contact_lookup(conn, to) do
+    if Grains.contact_identifier?(to),
+      do: Rice.RateLimit.hit({:recipient, conn.assigns.current_user.id}, 30, 3600),
+      else: :ok
   end
 
   # 金额必须是正整数。字符串数字也收 —— 前端 JSON 里偶尔会传成字符串。

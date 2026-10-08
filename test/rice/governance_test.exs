@@ -120,6 +120,15 @@ defmodule Rice.GovernanceTest do
       assert reload(p).status == "passed"
     end
 
+    # 作者手里的提案是投票前读的:那一票已经落库,删除就要失败
+    test "作者拿着旧数据删提案,中间进来的一票不会跟着消失", %{author: author} do
+      p = proposal_fixture(author)
+      {:ok, _} = Governance.vote(node_member_fixture(), p, "agree")
+
+      assert {:error, :conflict} = Governance.delete_proposal(author, p)
+      assert %{agree_count: 1, deleted_at: nil} = reload(p)
+    end
+
     # 投票前读到的提案还是 open,结票却先一步落了库:这一票不能计数后又不算进结果
     test "结票之后到达的票整张回滚", %{author: author} do
       p = proposal_fixture(author)

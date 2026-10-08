@@ -53,6 +53,19 @@ defmodule RiceWeb.Api.RegistrationControllerTest do
       refute Rice.Repo.get_by(VerificationCode, target: "86-13900000001")
     end
 
+    # 同一个号带上 86 / 0086 前缀,短信照样发到同一部手机 —— 不拦就绕过了每号上限
+    test "大陆号码只认 1 开头的 11 位", %{conn: conn} do
+      for phone <- ["8613800138000", "008613800138000", "1380013800"] do
+        assert conn
+               |> post(~p"/api/verification_codes", %{
+                 channel: "sms",
+                 phone: phone,
+                 purpose: "register"
+               })
+               |> json_response(422)
+      end
+    end
+
     # 短信按条计费:同一号码每天封顶
     test "同一号码当天发满就是 429,不再发短信", %{conn: conn} do
       earlier = DateTime.add(DateTime.utc_now(), -120, :second)
