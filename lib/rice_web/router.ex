@@ -131,7 +131,8 @@ defmodule RiceWeb.Router do
     patch "/me", AdminUserController, :update_me
   end
 
-  # 仅 role=admin:管理员账号、发稻米(运营的管理端菜单里本来就没有这两项)
+  # 仅 role=admin:管理员账号、发稻米、勋章、批量模板 —— 与 core 的 AdminOnly 一致,
+  # 运营的管理端菜单里本来也没有这几项
   scope "/api/admin", RiceWeb.Api.Admin do
     pipe_through [:admin_api, :admin_authenticated, :admin_only]
 
@@ -144,6 +145,16 @@ defmodule RiceWeb.Router do
     post "/grain_grants/challenge", GrainController, :challenge
     post "/grain_grants", GrainController, :create
     post "/nodes/:node_id/grain_grants", GrainController, :create_node
+    get "/grain_grants", GrainController, :index
+
+    get "/badges", BadgeController, :index
+    post "/badges", BadgeController, :create
+    get "/badges/:badge_id/holders", BadgeController, :holders
+    # 给已有勋章补发持有人。core 没有这个入口 —— 建完就加不了人
+    post "/badges/:badge_id/holders", BadgeController, :award
+
+    # 批量发放的 Excel 模板
+    get "/templates", TemplateController, :index
   end
 
   # 运营内容:四种资源同构,共用 CatalogController,资源类型走 assigns 传 ——
@@ -180,25 +191,14 @@ defmodule RiceWeb.Router do
     patch "/users/:id", UserController, :update
     get "/users/:user_id/grain_transfers", GrainController, :transfers
 
-    get "/grain_grants", GrainController, :index
-
     get "/proposals", ProposalController, :index
     get "/proposals/:id", ProposalController, :show
     patch "/proposals/:id", ProposalController, :update
     delete "/proposals/:proposal_id/comments/:id", ProposalController, :delete_comment
 
-    get "/badges", BadgeController, :index
-    post "/badges", BadgeController, :create
-    get "/badges/:badge_id/holders", BadgeController, :holders
-    # 给已有勋章补发持有人。core 没有这个入口 —— 建完就加不了人
-    post "/badges/:badge_id/holders", BadgeController, :award
-
     # core 的 detail + modify-foundation-info + modify-proposal-config
     get "/settings", SettingsController, :show
     patch "/settings", SettingsController, :update
-
-    # 批量操作的 Excel 模板
-    get "/templates", TemplateController, :index
 
     # 贴文不在 rice 库里,这里只是把下架请求转给 post 服务 ——
     # uri 放 body 不放路径:AT URI 里有斜杠。

@@ -334,17 +334,21 @@ defmodule RiceWeb.Api.Admin.ModerationControllerTest do
     end
 
     # C 端令牌调不了管理端 —— 两套令牌互相换不过去
-    # 发勋章是内容运营,不是管理员管理 —— operator 应该能做
-    test "运营也能补发", %{conn: _conn} do
+    # core 里勋章是 AdminOnly,管理端菜单也只对 admin 显示
+    test "运营发不了勋章", %{conn: _conn} do
       badge = badge_fixture()
       user = user_fixture(%{handle: "op-target.web5.xjdao.test"})
       {_admin, token} = admin_with_token(%{role: "operator"})
 
-      assert %{"data" => %{"awarded" => 1}} =
-               build_conn()
-               |> authed(token)
-               |> post(~p"/api/admin/badges/#{badge.id}/holders", %{to: [user.handle]})
-               |> json_response(201)
+      assert build_conn()
+             |> authed(token)
+             |> post(~p"/api/admin/badges/#{badge.id}/holders", %{to: [user.handle]})
+             |> response(403)
+
+      assert build_conn()
+             |> authed(token)
+             |> post(~p"/api/admin/badges", %{name: "x"})
+             |> response(403)
     end
   end
 
