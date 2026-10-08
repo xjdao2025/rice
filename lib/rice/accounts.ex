@@ -211,7 +211,7 @@ defmodule Rice.Accounts do
   发一个验证码。
 
   带频率限制 —— core 完全没有这层,同一个手机号可以被无限次轰炸。
-  同一联系方式 60 秒一条、每天封顶;同一通道全站每小时封顶。
+  同一联系方式 60 秒一条、每天封顶。
   """
   def send_verification_code(channel, target, purpose) do
     with :ok <- validate_code_request(channel, target, purpose),
@@ -262,22 +262,14 @@ defmodule Rice.Accounts do
   defp valid_target?(_, _), do: false
 
   defp over_quota?(channel, target) do
-    now = DateTime.utc_now()
-    sent = from c in VerificationCode, where: c.channel == ^channel
-
     Repo.aggregate(
-      from(c in sent,
+      from(c in VerificationCode,
         where:
-          fragment("lower(?)", c.target) == ^String.downcase(target) and
-            c.inserted_at > ^DateTime.add(now, -1, :day)
+          c.channel == ^channel and fragment("lower(?)", c.target) == ^String.downcase(target) and
+            c.inserted_at > ^DateTime.add(DateTime.utc_now(), -1, :day)
       ),
       :count
-    ) >= VerificationCode.daily_per_target() or
-      Repo.aggregate(
-        from(c in sent, where: c.inserted_at > ^DateTime.add(now, -1, :hour)),
-        :count
-      ) >=
-        VerificationCode.hourly_per_channel()
+    ) >= VerificationCode.daily_per_target()
   end
 
   @doc "同一联系方式距离下次允许发码的秒数,包括已消费的验证码。"
@@ -693,19 +685,5 @@ defmodule Rice.Accounts do
     |> Multi.update(:user, Ecto.Changeset.change(user, deleted_at: DateTime.utc_now()))
     |> Multi.delete_all(:tokens, from(t in ApiToken, where: t.user_id == ^user.id))
     |> Repo.transaction()
-  end
-
-  @doc "清掉过期的令牌和验证码 —— Oban 定时任务调用。"
-  def prune_expired do
-    now = DateTime.utc_now()
-    {tokens, _} = Repo.delete_all(from t in ApiToken, where: t.expires_at < ^now)
-
-    {codes, _} =
-      Repo.delete_all(
-        from c in VerificationCode,
-          where: c.expires_at < ^DateTime.add(now, -24 * 3600, :second)
-      )
-
-    %{tokens: tokens, codes: codes}
   end
 end

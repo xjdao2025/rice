@@ -356,20 +356,6 @@ defmodule Rice.AccountsTest do
       assert Accounts.user_by_token(t1) == nil
       assert Accounts.user_by_token(t2) == nil
     end
-
-    test "prune_expired 只删过期的" do
-      {_u1, live} = user_with_token()
-      {u2, _} = user_with_token()
-      {:ok, _} = Accounts.issue_token(u2)
-
-      Rice.Repo.update_all(
-        Ecto.Query.from(t in ApiToken, where: t.user_id == ^u2.id),
-        set: [expires_at: DateTime.add(DateTime.utc_now(), -1, :second)]
-      )
-
-      assert %{tokens: 2} = Accounts.prune_expired()
-      assert Accounts.user_by_token(live)
-    end
   end
 
   describe "register/1" do

@@ -27,8 +27,7 @@ config :rice, Oban,
      crontab: [
        {"* * * * *", Rice.Workers.CloseProposals},
        {"* * * * *", Rice.Workers.ExpireTasks},
-       {"* * * * *", Rice.Workers.StartEvents},
-       {"17 * * * *", Rice.Workers.PruneExpired}
+       {"* * * * *", Rice.Workers.StartEvents}
      ]}
   ]
 
