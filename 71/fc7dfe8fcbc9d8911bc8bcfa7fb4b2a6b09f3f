@@ -1,0 +1,41 @@
+test/rice/import_embedded_files_test.exs
+  s_c7c294ddcc30bc::t_72025f4e95b562 119-125,146-153
+  s_c7c294ddcc30bc::t_dc21ec3c16a2c3 1-118,126-145,154-216
+lib/rice/import/attachments.ex
+  s_c7c294ddcc30bc::t_a570a9365b8c49 72
+  s_c7c294ddcc30bc::t_4e327e91eeabf6 86-87
+lib/rice/import/embedded_files.ex
+  s_c7c294ddcc30bc::t_a70572086b484d 34
+  s_c7c294ddcc30bc::t_9fc4fa29cad49c 1-33,35-64,67,75-76,79-89,97-126,131-225
+  s_c7c294ddcc30bc::t_72025f4e95b562 90-96,127-130
+  s_c7c294ddcc30bc::t_22ce829464a189 65-66,68-74,77-78
+lib/rice/release.ex
+  s_c7c294ddcc30bc::t_9ab8f9686657d5 21-48
+lib/rice/files.ex
+  s_c7c294ddcc30bc::t_8f45183e3fbfd0 80-84,86,88-89,91-92,106
+  s_37f5fb78382031::t_377242f2611da2 79,85,87,90,93
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "71fc7dfe8fcbc9d8911bc8bcfa7fb4b2a6b09f3f",
+  "prompts": {},
+  "sessions": {
+    "s_37f5fb78382031": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b9391134-193d-4359-80ac-aacd965858bc",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    },
+    "s_c7c294ddcc30bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4902de79-d943-413e-b8b7-c5a851e32947",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}

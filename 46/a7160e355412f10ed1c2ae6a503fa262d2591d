@@ -1,0 +1,19 @@
+priv/repo/migrations/20260901000000_add_business_schema.exs
+  s_8c80ad8d2af680::t_2fa76ea8df4120 1-420
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "46a7160e355412f10ed1c2ae6a503fa262d2591d",
+  "prompts": {},
+  "sessions": {
+    "s_8c80ad8d2af680": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1cacbb5-9264-4c9e-8d1e-0245a530ded4",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
