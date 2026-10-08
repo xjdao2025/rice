@@ -1,0 +1,104 @@
+lib/rice_web/api/user_controller.ex
+  s_8c80ad8d2af680::t_18945da39171ba 19-20,36-43,49,55,66-67,69-75
+  s_8c80ad8d2af680::t_2bc1cc05686157 50-54
+  s_8c80ad8d2af680::t_535dae84e9f568 76
+lib/rice_web/api/grain_transfer_json.ex
+  s_8c80ad8d2af680::t_828fe4189dae9b 29-30
+lib/rice_web/api/proposal_comment_json.ex
+  s_8c80ad8d2af680::t_828fe4189dae9b 15
+lib/rice_web/api/node_json.ex
+  s_8c80ad8d2af680::t_2bc1cc05686157 60-63
+  s_8c80ad8d2af680::t_828fe4189dae9b 33
+lib/rice_web/api/badge_controller.ex
+  s_8c80ad8d2af680::t_bc592cefa8edba 26
+lib/rice/content.ex
+  s_8c80ad8d2af680::t_44c48da93a061b 49
+lib/rice/admin/users.ex
+  s_8c80ad8d2af680::t_44c48da93a061b 49
+lib/rice/events.ex
+  s_8c80ad8d2af680::t_b429da2553f416 468,577,631-637,639-649
+  s_8c80ad8d2af680::t_cef9a38eb0916a 238
+  s_8c80ad8d2af680::t_2bc1cc05686157 664-665
+lib/rice_web/api/fallback_controller.ex
+  s_8c80ad8d2af680::t_2bc1cc05686157 25
+  s_8c80ad8d2af680::t_96503cf2b0bca9 14-24,26-45,47,50-52
+lib/rice_web/api/admin/catalog_json.ex
+  s_8c80ad8d2af680::t_667dc36ccc4b9b 1,6,13-14,21,25,31-33,38,41-42,44
+lib/rice_web/api/announcement_json.ex
+  s_8c80ad8d2af680::t_667dc36ccc4b9b 13
+lib/rice/files.ex
+  s_8c80ad8d2af680::t_822895321e8a33 37,74-75,91-109
+lib/rice/community.ex
+  s_8c80ad8d2af680::t_e0389192cf8e3e 83
+  s_8c80ad8d2af680::t_87eab91095a0bc 180,222,226-228,284
+  s_8c80ad8d2af680::t_a32c5b5a41104f 299,328-331
+lib/rice_web/api/password_controller.ex
+  s_8c80ad8d2af680::t_2358abcac6396e 33-37
+lib/rice_web/api/app_json.ex
+  s_8c80ad8d2af680::t_667dc36ccc4b9b 6
+test/rice/files_storage_test.exs
+  s_8c80ad8d2af680::t_dd9372c3ac60cf 45
+lib/rice/accounts.ex
+  s_8c80ad8d2af680::t_a32c5b5a41104f 182-210
+  s_8c80ad8d2af680::t_dddbdf30bf6da2 436-451,453-455,501-505,507-508,510-512
+  s_8c80ad8d2af680::t_44c48da93a061b 527
+lib/rice/grains.ex
+  s_8c80ad8d2af680::t_7efe58f5588c79 56,67,82,261-271,348-358,384,395,465-469,471-472,474-475,477-478,481,484-485
+lib/rice/admin/grants.ex
+  s_8c80ad8d2af680::t_099f3296ac0438 41
+  s_8c80ad8d2af680::t_8455cf5d02c06b 31-35,175
+  s_8c80ad8d2af680::t_873cb3079dd2ff 39
+lib/rice_web/api/banner_json.ex
+  s_8c80ad8d2af680::t_667dc36ccc4b9b 6
+lib/rice_web/api/admin/password_controller.ex
+  s_8c80ad8d2af680::t_d25e0c3ba71ea6 15,27-30
+lib/rice_web/api/admin/admin_user_controller.ex
+  s_8c80ad8d2af680::t_bc592cefa8edba 18
+lib/rice_web/api/grain_transfer_controller.ex
+  s_8c80ad8d2af680::t_9cafa1f239e636 26-44
+  s_8c80ad8d2af680::t_dabee71a13bbc2 19-21
+lib/rice/admin.ex
+  s_8c80ad8d2af680::t_dddbdf30bf6da2 40,42-43
+  s_8c80ad8d2af680::t_44c48da93a061b 73,170
+lib/rice_web/api/admin/proposal_json.ex
+  s_8c80ad8d2af680::t_828fe4189dae9b 2,9-10,13,15-18
+lib/rice_web/api/admin/grain_controller.ex
+  s_8c80ad8d2af680::t_3d7a22b9808c35 58,64-85,89-91,93-94,96-100,102-103,105,107-108
+lib/rice/repo.ex
+  s_8c80ad8d2af680::t_0ce621dc3707fc 6-7,13-32,35-44
+  s_8c80ad8d2af680::t_ab1ce426d8a079 33-34
+lib/rice_web/api/node_controller.ex
+  s_8c80ad8d2af680::t_00aded4ceb79ba 39-40,45-46,48-49,52-53,57
+lib/rice/governance.ex
+  s_8c80ad8d2af680::t_e0389192cf8e3e 94,104,202,231,250-251,258
+  s_8c80ad8d2af680::t_2bc1cc05686157 206-209
+lib/rice_web/api/verification_code_controller.ex
+  s_8c80ad8d2af680::t_2bc1cc05686157 43-47
+  s_8c80ad8d2af680::t_00aded4ceb79ba 21,25,42
+  s_8c80ad8d2af680::t_bab043bf005e5a 48-49
+lib/rice_web/api/registration_controller.ex
+  s_8c80ad8d2af680::t_2bba51eb071d28 23-25
+  s_8c80ad8d2af680::t_2358abcac6396e 64-66
+lib/rice/admin/catalog.ex
+  s_8c80ad8d2af680::t_44c48da93a061b 34,43,50
+lib/rice_web/api/proposal_json.ex
+  s_8c80ad8d2af680::t_828fe4189dae9b 30
+lib/rice_web/api/user_json.ex
+  s_8c80ad8d2af680::t_828fe4189dae9b 43-47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "bff669c0777b087e2ea16ace9db7772988c7abd2",
+  "prompts": {},
+  "sessions": {
+    "s_8c80ad8d2af680": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1cacbb5-9264-4c9e-8d1e-0245a530ded4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
