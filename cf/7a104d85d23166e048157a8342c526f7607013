@@ -1,0 +1,25 @@
+lib/rice/accounts.ex
+  s_8c80ad8d2af680::t_19e991410710a2 214,266,268-269,272
+config/config.exs
+  s_8c80ad8d2af680::t_19e991410710a2 30
+lib/rice/accounts/verification_code.ex
+  s_8c80ad8d2af680::t_19e991410710a2 16
+test/rice_web/api/registration_controller_test.exs
+  s_8c80ad8d2af680::t_e08a71ee482a22 56-57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "cf7a104d85d23166e048157a8342c526f7607013",
+  "prompts": {},
+  "sessions": {
+    "s_8c80ad8d2af680": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1cacbb5-9264-4c9e-8d1e-0245a530ded4",
+        "model": "unknown"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
