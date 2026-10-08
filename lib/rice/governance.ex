@@ -112,14 +112,22 @@ defmodule Rice.Governance do
     end
   end
 
-  @doc "删自己的提案(软删)。别人的返回 :forbidden 而不是假装成功。"
+  @doc """
+  删自己的提案(软删)。别人的返回 :forbidden 而不是假装成功。
+  有人投过票就不能删了 —— 否则作者看势头不对删掉,这次表决就没有结果。
+  """
   def delete_proposal(%User{id: user_id}, %Proposal{} = proposal) do
-    if proposal.user_id == user_id do
-      proposal
-      |> Ecto.Changeset.change(deleted_at: DateTime.utc_now())
-      |> Repo.update()
-    else
-      {:error, :forbidden}
+    cond do
+      proposal.user_id != user_id ->
+        {:error, :forbidden}
+
+      proposal.agree_count + proposal.oppose_count > 0 ->
+        {:error, :conflict}
+
+      true ->
+        proposal
+        |> Ecto.Changeset.change(deleted_at: DateTime.utc_now())
+        |> Repo.update()
     end
   end
 
@@ -160,19 +168,22 @@ defmodule Rice.Governance do
     end
   end
 
-  # 原子自增,不读-改-写 —— 并发投票时不会互相覆盖计数
-  defp bump_count(repo, proposal_id, "agree") do
-    {1, _} =
-      repo.update_all(from(p in Proposal, where: p.id == ^proposal_id), inc: [agree_count: 1])
+  # 原子自增,不读-改-写。条件里再判一次"还开着":和结票抢同一行时,
+  # 要么计进结果,要么整张票回滚成"已截止",不会计了数却没算进结果。
+  defp bump_count(repo, proposal_id, choice) do
+    field = if choice == "agree", do: :agree_count, else: :oppose_count
+    now = DateTime.utc_now()
 
-    {:ok, :agree}
-  end
+    open =
+      from p in Proposal,
+        where:
+          p.id == ^proposal_id and p.status == "open" and is_nil(p.deleted_at) and
+            p.closes_at > ^now
 
-  defp bump_count(repo, proposal_id, "oppose") do
-    {1, _} =
-      repo.update_all(from(p in Proposal, where: p.id == ^proposal_id), inc: [oppose_count: 1])
-
-    {:ok, :oppose}
+    case repo.update_all(open, inc: [{field, 1}]) do
+      {1, _} -> {:ok, choice}
+      {0, _} -> {:error, :proposal_closed}
+    end
   end
 
   def get_my_vote(%User{id: user_id}, %Proposal{id: proposal_id}) do
@@ -267,13 +278,7 @@ defmodule Rice.Governance do
   defp filter_listed(query, _), do: query
 
   defp filter_title(query, q) when is_binary(q) and q != "" do
-    pattern =
-      "%" <>
-        (q
-         |> String.trim()
-         |> String.replace("\\", "\\\\")
-         |> String.replace("%", "\\%")
-         |> String.replace("_", "\\_")) <> "%"
+    pattern = Repo.contains(q)
 
     from p in query,
       left_join: u in assoc(p, :user),
@@ -324,24 +329,31 @@ defmodule Rice.Governance do
   def close_due_proposals(now \\ DateTime.utc_now()) do
     threshold = Rice.Settings.get_site().proposal_approval_votes
 
-    due =
-      Repo.all(
-        from p in Proposal,
+    # 一条 UPDATE 里读票数、定结果:正在投的票要么已提交被算进来,要么被
+    # `bump_count` 的截止条件挡掉。status = 'open' 让重跑不会重复计数。
+    {_, statuses} =
+      Repo.update_all(
+        from(p in Proposal,
           where: p.status == "open" and is_nil(p.deleted_at) and p.closes_at <= ^now,
-          select: {p.id, p.agree_count}
+          update: [
+            set: [
+              status:
+                fragment(
+                  "CASE WHEN ? >= ? THEN 'passed' ELSE 'rejected' END",
+                  p.agree_count,
+                  ^threshold
+                ),
+              updated_at: ^DateTime.utc_now()
+            ]
+          ],
+          select: p.status
+        ),
+        []
       )
 
-    Enum.reduce(due, %{passed: 0, rejected: 0}, fn {id, agree}, acc ->
-      status = if agree >= threshold, do: "passed", else: "rejected"
-
-      # where status = 'open' 让并发/重跑不会重复计数
-      {count, _} =
-        Repo.update_all(
-          from(p in Proposal, where: p.id == ^id and p.status == "open"),
-          set: [status: status, updated_at: DateTime.utc_now()]
-        )
-
-      if count == 1, do: Map.update!(acc, String.to_existing_atom(status), &(&1 + 1)), else: acc
-    end)
+    %{
+      passed: Enum.count(statuses, &(&1 == "passed")),
+      rejected: Enum.count(statuses, &(&1 == "rejected"))
+    }
   end
 end

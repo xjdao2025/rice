@@ -28,8 +28,7 @@ defmodule Rice.Admin.Users do
   end
 
   defp search(query, q) when is_binary(q) and q != "" do
-    # 用户自己输入的串会进 LIKE,`%` 和 `_` 必须转义,否则一个 "%" 就是全表
-    pattern = "%" <> escape_like(String.trim(q)) <> "%"
+    pattern = Repo.contains(q)
 
     from u in query,
       where:
@@ -38,13 +37,6 @@ defmodule Rice.Admin.Users do
   end
 
   defp search(query, _), do: query
-
-  defp escape_like(value) do
-    value
-    |> String.replace("\\", "\\\\")
-    |> String.replace("%", "\\%")
-    |> String.replace("_", "\\_")
-  end
 
   defp filter_bool(query, field, "true"), do: from(u in query, where: field(u, ^field) == true)
   defp filter_bool(query, field, "false"), do: from(u in query, where: field(u, ^field) == false)

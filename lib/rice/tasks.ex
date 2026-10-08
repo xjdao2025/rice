@@ -11,6 +11,10 @@ defmodule Rice.Tasks do
   alias Rice.Tasks.{Application, ApplicationState, Event, Notification, Submission, Task}
   alias Rice.{Grains, Pagination, Repo}
 
+  # 仍占着名额的申请状态。被撤销指派(released)的人留着 appointed_at,
+  # 所以"算不算承接者"一律按状态判断,不看 appointed_at。
+  @appointed ApplicationState.appointed_states()
+
   @overdue_detail "交付已超时，仍可提交成果"
   @public_visibility_grace_seconds 24 * 60 * 60
 
@@ -415,8 +419,8 @@ defmodule Rice.Tasks do
     end)
   end
 
-  defp previous_application_status(_task, %Application{appointed_at: appointed_at})
-       when not is_nil(appointed_at),
+  defp previous_application_status(_task, %Application{status: status})
+       when status in @appointed,
        do: "appointed"
 
   defp previous_application_status(%Task{assignee_id: user_id}, %Application{user_id: user_id})
@@ -1164,8 +1168,10 @@ defmodule Rice.Tasks do
 
   def approve_result(user, %Task{} = task, submission_id) do
     with_locked_task(task.id, fn current_task ->
+      # 被指派后才升成节点管理员的人,不能自己给自己验收发奖
       with :ok <- authorize_management(current_task, user),
-           {:ok, submission} <- fetch_record(Submission, current_task, submission_id) do
+           {:ok, submission} <- fetch_record(Submission, current_task, submission_id),
+           :ok <- if(submission.user_id == user.id, do: {:error, :forbidden}, else: :ok) do
         approve_submission(user, current_task, submission)
       end
     end)
@@ -1542,7 +1548,7 @@ defmodule Rice.Tasks do
   defp filter_status(query, _status, _user, _mine), do: query
 
   defp filter_query(query, value) when is_binary(value) and value != "" do
-    pattern = "%" <> escape_like(String.trim(value)) <> "%"
+    pattern = Repo.contains(value)
     from(t in query, where: ilike(t.title, ^pattern) or ilike(t.description, ^pattern))
   end
 
@@ -1573,9 +1579,10 @@ defmodule Rice.Tasks do
         (t.status == "open" or
            (t.capacity > 1 and t.status in ["in_progress", "overdue", "under_review"])) and
           fragment(
-            "(SELECT count(*) FROM task_applications a WHERE a.task_id = ? AND a.round = ? AND a.appointed_at IS NOT NULL)",
+            "(SELECT count(*) FROM task_applications a WHERE a.task_id = ? AND a.round = ? AND a.status = ANY(?))",
             t.id,
-            t.round
+            t.round,
+            ^@appointed
           ) < t.capacity and t.creator_id != ^id and
           (is_nil(t.funding_node_id) or t.node_id not in ^managed_ids) and
           not exists(applied) and
@@ -1648,8 +1655,7 @@ defmodule Rice.Tasks do
       from(a in Application,
         join: user in User,
         on: user.id == a.user_id,
-        where:
-          a.task_id == parent_as(:task).id and not is_nil(a.appointed_at) and user.did == ^did,
+        where: a.task_id == parent_as(:task).id and a.status in ^@appointed and user.did == ^did,
         select: 1
       )
 
@@ -1689,7 +1695,7 @@ defmodule Rice.Tasks do
       from(a in Application,
         where:
           a.task_id == parent_as(:task).id and a.user_id == ^id and
-            (a.final_status == "appointed" or not is_nil(a.appointed_at)),
+            (a.final_status == "appointed" or a.status in ^@appointed),
         select: 1
       )
 
@@ -1707,7 +1713,7 @@ defmodule Rice.Tasks do
       from(a in Application,
         where:
           a.task_id == parent_as(:task).id and a.round == parent_as(:task).round and
-            a.user_id == ^id and not is_nil(a.appointed_at),
+            a.user_id == ^id and a.status in ^@appointed,
         select: 1
       )
 
@@ -2106,13 +2112,6 @@ defmodule Rice.Tasks do
       to_status: to_status,
       detail: detail
     })
-  end
-
-  defp escape_like(value) do
-    value
-    |> String.replace("\\", "\\\\")
-    |> String.replace("%", "\\%")
-    |> String.replace("_", "\\_")
   end
 
   defp fetch_record(schema, task, id) do

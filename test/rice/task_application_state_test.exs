@@ -330,6 +330,14 @@ defmodule Rice.TaskApplicationStateTest do
     assert node_balance(publisher) == {30, 60}
     assert task.status == "under_review"
 
+    # 被撤销的人留着 appointed_at,列表筛选不能拿它当"还在承接"
+    ids = fn user, params -> Enum.map(Tasks.list_tasks(user, params).entries, & &1.id) end
+    assert task.id in ids.(user_fixture(), %{"available" => "true"})
+    refute task.id in ids.(first, %{"mine" => "assigned"})
+    assert task.id in ids.(first, %{"mine" => "applied"})
+    refute task.id in ids.(nil, %{"participant_did" => first.did})
+    assert task.id in ids.(nil, %{"participant_did" => second.did})
+
     {:ok, task} = Tasks.appoint(publisher, task, c.id)
     assert Repo.get!(Application, c.id).reward_slot == 1
     assert {:error, :conflict} = Tasks.release_assignee(publisher, task, a.id)

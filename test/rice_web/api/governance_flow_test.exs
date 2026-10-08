@@ -154,7 +154,7 @@ defmodule RiceWeb.Api.GovernanceFlowTest do
              second["id"]
            ]
 
-    # ── 删除:只能删自己的,删了就查不到 ───────────────────────────────
+    # ── 删除:只能删自己的;有人投过票就删不掉,删了就查不到 ─────────────
     assert build_conn()
            |> authed(v1_token)
            |> delete(~p"/api/proposals/#{second["id"]}")
@@ -163,9 +163,20 @@ defmodule RiceWeb.Api.GovernanceFlowTest do
     assert build_conn()
            |> authed(author_token)
            |> delete(~p"/api/proposals/#{second["id"]}")
+           |> response(409)
+
+    unvoted =
+      build_conn()
+      |> authed(author_token)
+      |> post(~p"/api/proposals", %{title: "写错了", closes_at: closes_at})
+      |> json_response(201)
+      |> Map.fetch!("data")
+
+    assert build_conn()
+           |> authed(author_token)
+           |> delete(~p"/api/proposals/#{unvoted["id"]}")
            |> response(204)
 
-    assert show(author_token, second["id"]) |> response(404)
-    assert Enum.map(list(v1_token, %{mine: "voted"}), & &1["id"]) == [first["id"]]
+    assert show(author_token, unvoted["id"]) |> response(404)
   end
 end

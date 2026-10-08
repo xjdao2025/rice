@@ -167,6 +167,38 @@ defmodule RiceWeb.Api.CommunityAdminTest do
     end
   end
 
+  test "承接人后来升为节点管理员,不能验收自己的成果", ctx do
+    task = create("tasks", ctx.owner_token, ctx.node)
+    path = "/api/tasks/#{task["id"]}"
+
+    application_id =
+      build_conn()
+      |> authed(ctx.manager_token)
+      |> post("#{path}/applications", %{contact: "电话"})
+      |> json_response(201)
+      |> get_in(["data", "my_application", "id"])
+
+    build_conn()
+    |> authed(ctx.owner_token)
+    |> post("#{path}/applications/#{application_id}/appoint")
+    |> json_response(200)
+
+    submission_id =
+      build_conn()
+      |> authed(ctx.manager_token)
+      |> post("#{path}/submissions", %{body: "交付"})
+      |> json_response(201)
+      |> get_in(["data", "submissions"])
+      |> hd()
+      |> Map.fetch!("id")
+
+    role(ctx, "admin")
+    approve = "#{path}/submissions/#{submission_id}/approve"
+    assert build_conn() |> authed(ctx.manager_token) |> post(approve) |> response(403)
+
+    assert build_conn() |> authed(ctx.owner_token) |> post(approve) |> json_response(200)
+  end
+
   defp recipients(kind, id, action \\ nil) do
     query = from n in Rice.Tasks.Notification, select: n.recipient_id
 

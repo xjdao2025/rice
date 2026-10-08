@@ -298,6 +298,30 @@ defmodule Rice.EventsTest do
     assert hd(applicant.past_applications).contact == "旧期私人联系方式"
   end
 
+  test "创建者被撤掉管理员后，往届申请的联系方式也一并收回", ctx do
+    creator = user_fixture()
+
+    membership =
+      Repo.insert!(
+        Rice.Community.Membership.changeset(%Rice.Community.Membership{
+          node_id: ctx.node.id,
+          user_id: creator.id,
+          role: "admin"
+        })
+      )
+
+    {:ok, event} = Events.create_event(creator, attrs(ctx.node))
+    {:ok, event} = Events.apply(ctx.first, event, %{contact: "旧期私人联系方式"})
+    {:ok, cancelled} = Events.cancel(creator, event)
+    {:ok, reopened} = Events.update_event(creator, cancelled, attrs(ctx.node))
+    view = fn -> RiceWeb.Api.EventJSON.show(%{event: reopened, current_user: creator}).data end
+
+    assert [%{contact: "旧期私人联系方式"}] = view.().past_applications
+
+    Repo.update!(Ecto.Changeset.change(membership, role: "member"))
+    assert view.().past_applications == []
+  end
+
   test "已完成活动不可编辑，也不改变旧期申请和收据", ctx do
     event = event!(ctx, %{capacity: 2})
     {:ok, event} = Events.apply(ctx.first, event, %{contact: "第一位联系方式"})

@@ -222,7 +222,7 @@ defmodule Rice.Admin.Grants do
   end
 
   defp filter_recipient(query, q) when is_binary(q) and q != "" do
-    pattern = "%" <> escape_like(String.trim(q)) <> "%"
+    pattern = Repo.contains(q)
 
     from t in query,
       left_join: u in assoc(t, :to_user),
@@ -257,11 +257,4 @@ defmodule Rice.Admin.Grants do
   end
 
   defp parse_time(_), do: :error
-
-  defp escape_like(value) do
-    value
-    |> String.replace("\\", "\\\\")
-    |> String.replace("%", "\\%")
-    |> String.replace("_", "\\_")
-  end
 end

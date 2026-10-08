@@ -189,6 +189,41 @@ defmodule RiceWeb.Api.EventControllerTest do
     refute inspect(public) =~ "私人申请理由"
   end
 
+  test "搜索词里的 % 和 _ 按字面匹配，不是通配符" do
+    {host, token} = user_with_token()
+    node = node_fixture(%{user_id: host.id})
+    now = DateTime.utc_now()
+
+    for title <- ["100%出席", "普通聚会"] do
+      build_conn()
+      |> authed(token)
+      |> post(~p"/api/events", %{
+        organizer_contact: "社区服务台",
+        node_id: node.id,
+        title: title,
+        description: "描述",
+        location: "地点",
+        capacity: 1,
+        client_request_id: title,
+        application_deadline: DateTime.add(now, 1800),
+        starts_at: DateTime.add(now, 3600),
+        ends_at: DateTime.add(now, 7200)
+      })
+      |> json_response(201)
+    end
+
+    titles = fn q ->
+      build_conn()
+      |> get(~p"/api/events", %{q: q})
+      |> json_response(200)
+      |> Map.fetch!("data")
+      |> Enum.map(& &1["title"])
+    end
+
+    assert titles.("%") == ["100%出席"]
+    assert titles.("_") == []
+  end
+
   test "非法输入返回错误，草稿仅本人可见" do
     {host, token} = user_with_token()
     node = node_fixture(%{user_id: host.id})

@@ -103,7 +103,7 @@ defmodule Rice.Community do
   end
 
   defp filter_node_query(query, q) when is_binary(q) and q != "" do
-    pattern = "%" <> String.replace(String.trim(q), ["\\", "%", "_"], &"\\#{&1}") <> "%"
+    pattern = Repo.contains(q)
     from n in query, where: ilike(n.name, ^pattern) or ilike(n.description, ^pattern)
   end
 
@@ -434,13 +434,7 @@ defmodule Rice.Community do
   end
 
   defp filter_holder(query, q) when is_binary(q) and q != "" do
-    pattern =
-      "%" <>
-        (q
-         |> String.trim()
-         |> String.replace("\\", "\\\\")
-         |> String.replace("%", "\\%")
-         |> String.replace("_", "\\_")) <> "%"
+    pattern = Repo.contains(q)
 
     from a in query,
       join: u in assoc(a, :user),

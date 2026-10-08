@@ -14,11 +14,12 @@ defmodule RiceWeb.Api.EventJSON do
     current = Enum.filter(event.applications, &(&1.round == event.round))
     past = Enum.filter(event.applications, &(&1.round < event.round))
     own = if user, do: Enum.find(current, &(&1.user_id == user.id))
+    manage? = Events.can_manage?(event, user)
 
     visible_current =
       cond do
         not detail? or is_nil(user) -> []
-        Events.can_manage?(event, user) -> current
+        manage? -> current
         own -> [own]
         true -> []
       end
@@ -26,7 +27,9 @@ defmodule RiceWeb.Api.EventJSON do
     visible_past =
       cond do
         not detail? or is_nil(user) -> []
-        user.id == event.creator_id -> past
+        # 往届名单只给收集它的创建者,而且要仍有管理权:换社区后新管理员看不到,
+        # 创建者被撤掉管理员后也收回
+        manage? and user.id == event.creator_id -> past
         true -> Enum.filter(past, &(&1.user_id == user.id))
       end
 
@@ -38,7 +41,7 @@ defmodule RiceWeb.Api.EventJSON do
       description: event.description,
       organizer_contact: event.organizer_contact,
       settlement_node_id: event.settlement_node_id,
-      can_manage: Events.can_manage?(event, user),
+      can_manage: manage?,
       attachments: Enum.map(event.image_links, &AttachmentJSON.embed(&1.attachment)),
       status: event.status,
       round: event.round,

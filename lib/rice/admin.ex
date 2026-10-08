@@ -295,11 +295,12 @@ defmodule Rice.Admin do
 
   defp active, do: from(a in AdminUser, where: is_nil(a.deleted_at))
 
-  # 12 位,去掉了容易看错的 0/O/1/l/I —— 这串要靠人念给同事听
-  @password_alphabet ~c"23456789ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz"
+  # 12 位,去掉了容易看错的 0/O/1/l/I —— 这串要靠人念给同事听。
+  # 随机源用 :crypto,不用 Enum.random(:rand 不是密码学安全的)。
+  @password_alphabet "23456789ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz"
   defp generate_password do
-    for _ <- 1..12, into: "" do
-      <<Enum.random(@password_alphabet)>>
+    for <<byte <- :crypto.strong_rand_bytes(12)>>, into: "" do
+      binary_part(@password_alphabet, rem(byte, byte_size(@password_alphabet)), 1)
     end
   end
 

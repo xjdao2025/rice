@@ -86,7 +86,7 @@ defmodule Rice.Events do
     query =
       case params["q"] do
         value when is_binary(value) and value != "" ->
-          term = "%#{String.trim(value)}%"
+          term = Repo.contains(value)
           where(query, [e], ilike(e.title, ^term) or ilike(e.description, ^term))
 
         _ ->

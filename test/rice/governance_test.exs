@@ -120,6 +120,24 @@ defmodule Rice.GovernanceTest do
       assert reload(p).status == "passed"
     end
 
+    # 投票前读到的提案还是 open,结票却先一步落了库:这一票不能计数后又不算进结果
+    test "结票之后到达的票整张回滚", %{author: author} do
+      p = proposal_fixture(author)
+      make_due(p)
+      Governance.close_due_proposals()
+      voter = user_fixture()
+
+      assert {:error, :proposal_closed} =
+               Governance.vote(
+                 voter,
+                 %{p | closes_at: DateTime.add(DateTime.utc_now(), 60)},
+                 "agree"
+               )
+
+      assert reload(p).agree_count == 0
+      refute Governance.get_my_vote(voter, p)
+    end
+
     test "差一票就不通过", %{author: author} do
       p = proposal_fixture(author)
       for _ <- 1..2, do: {:ok, _} = Governance.vote(user_fixture(), p, "agree")

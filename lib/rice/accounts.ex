@@ -149,7 +149,7 @@ defmodule Rice.Accounts do
     q = if is_binary(q), do: String.trim(q), else: ""
 
     if String.length(q) in 1..256 do
-      pattern = "%" <> String.replace(q, ["\\", "%", "_"], &"\\#{&1}") <> "%"
+      pattern = Repo.contains(q)
 
       from(u in enabled_users(),
         where: ilike(u.nickname, ^pattern) or ilike(u.handle, ^pattern),
