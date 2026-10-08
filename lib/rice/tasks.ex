@@ -8,7 +8,7 @@ defmodule Rice.Tasks do
 
   alias Ecto.Multi
   alias Rice.Accounts.User
-  alias Rice.Tasks.{Application, Event, Notification, Submission, Task}
+  alias Rice.Tasks.{Application, ApplicationState, Event, Notification, Submission, Task}
   alias Rice.{Grains, Pagination, Repo}
 
   @overdue_detail "交付已超时，仍可提交成果"
@@ -106,7 +106,8 @@ defmodule Rice.Tasks do
     |> Repo.preload(:applications)
     |> Map.fetch!(:applications)
     |> Enum.filter(
-      &(&1.round == task.round and (not is_nil(&1.appointed_at) or &1.user_id == task.assignee_id))
+      &(&1.round == task.round and
+          (ApplicationState.appointed?(&1.status) or &1.user_id == task.assignee_id))
     )
   end
 
@@ -118,15 +119,21 @@ defmodule Rice.Tasks do
         Enum.any?(appointed_applications(task), &(&1.user_id == user.id))
 
   def my_status(task, user, now \\ DateTime.utc_now()) do
-    if task.capacity == 1 or task.status in ~w(draft completed expired cancelled) or
-         not appointed?(task, user) do
-      task.status
-    else
-      case latest_submission(task, user.id) do
-        %Submission{final_status: "approved"} -> "completed"
-        %Submission{review_reason: nil} -> "under_review"
-        _ -> if(execution_overdue?(task, now), do: "overdue", else: "in_progress")
-      end
+    application =
+      if is_struct(user, User) and task.capacity > 1 and
+           task.status not in ~w(draft completed expired cancelled),
+         do: Enum.find(appointed_applications(task), &(&1.user_id == user.id))
+
+    if application, do: application_progress(task, application, now), else: task.status
+  end
+
+  # 申请状态 → 任务口径的状态。appointed / overdue 以交付截止为准实时判断,
+  # 落库的 overdue 由定时任务和 refresh_overdue 追平,编辑延期时立即生效。
+  defp application_progress(task, %Application{status: status}, now) do
+    case status do
+      "completed" -> "completed"
+      "under_review" -> "under_review"
+      _ -> if(execution_overdue?(task, now), do: "overdue", else: "in_progress")
     end
   end
 
@@ -269,7 +276,8 @@ defmodule Rice.Tasks do
                |> maybe_reset_assignee(reopening?)
                |> maybe_advance_round(task.round, reopening?),
              {:ok, changeset} <- aggregate_edited_task(task, changeset, user.id),
-             {:ok, saved} <- Repo.update(changeset) do
+             {:ok, saved} <- Repo.update(changeset),
+             :ok <- sync_after_edit(task, saved) do
           saved = Repo.preload(saved, :image_links, force: true)
           after_snapshot = task_snapshot(saved)
 
@@ -747,10 +755,13 @@ defmodule Rice.Tasks do
         {:ok, preload_detail(task)}
 
       true ->
-        with {:ok, _} <-
-               application
-               |> Ecto.Changeset.change(rejected_at: DateTime.utc_now())
-               |> Repo.update(),
+        with {:ok, [_]} <-
+               move_applications(
+                 Repo,
+                 from(a in Application, where: a.id == ^application.id),
+                 "rejected",
+                 rejected_at: DateTime.utc_now()
+               ),
              {:ok, _} <-
                Repo.insert(
                  notification_changeset(
@@ -761,6 +772,9 @@ defmodule Rice.Tasks do
                  )
                ) do
           {:ok, preload_detail(task)}
+        else
+          {:ok, _} -> {:error, :conflict}
+          error -> error
         end
     end
   end
@@ -797,13 +811,14 @@ defmodule Rice.Tasks do
         else
           reason = Ecto.Changeset.get_field(changeset, :appointment_reason)
 
-          with {:ok, _} <-
-                 Repo.update(
-                   Ecto.Changeset.change(application,
-                     appointed_at: DateTime.utc_now(),
-                     appointment_reason: reason,
-                     reward_slot: length(appointed) + 1
-                   )
+          with {:ok, [_]} <-
+                 move_applications(
+                   Repo,
+                   from(a in Application, where: a.id == ^application.id),
+                   "appointed",
+                   appointed_at: DateTime.utc_now(),
+                   appointment_reason: reason,
+                   reward_slot: length(appointed) + 1
                  ),
                {:ok, _} <-
                  Repo.insert(
@@ -817,6 +832,9 @@ defmodule Rice.Tasks do
                  ),
                {:ok, updated} <- update_multi_status(task, user.id, reason) do
             {:ok, updated}
+          else
+            {:ok, _} -> {:error, :conflict}
+            error -> error
           end
         end
     end
@@ -858,19 +876,33 @@ defmodule Rice.Tasks do
             end)
           end
 
-        transition_task(
-          from(t in Task, where: t.id == ^task.id and t.status == "open"),
-          task,
-          [
-            status: "in_progress",
-            assignee_id: application.user_id,
-            appointed_at: DateTime.utc_now(),
-            appointment_reason: appointment_reason
-          ],
-          creator_id,
-          appointment_reason,
-          notifications
-        )
+        appointed_at = DateTime.utc_now()
+
+        with {:ok, [_]} <-
+               move_applications(
+                 Repo,
+                 from(a in Application, where: a.id == ^application.id),
+                 "appointed",
+                 appointed_at: appointed_at,
+                 appointment_reason: appointment_reason
+               ),
+             {:ok, _} <- move_applications(Repo, round_applications(task), "not_selected") do
+          transition_task(
+            from(t in Task, where: t.id == ^task.id and t.status == "open"),
+            task,
+            [
+              status: "in_progress",
+              assignee_id: application.user_id,
+              appointed_at: appointed_at,
+              appointment_reason: appointment_reason
+            ],
+            creator_id,
+            appointment_reason,
+            notifications
+          )
+        else
+          {:ok, _} -> {:error, :conflict}
+        end
     end
   end
 
@@ -903,9 +935,14 @@ defmodule Rice.Tasks do
           )
 
         with {:ok, _} <- Repo.insert(changeset),
+             {:ok, [_]} <-
+               move_applications(Repo, user_application(task, user.id), "under_review"),
              {:ok, updated} <- update_multi_status(task, user.id),
              :ok <- notify_managers(task, user.id, "result_submitted") do
           {:ok, updated}
+        else
+          {:ok, _} -> {:error, :conflict}
+          error -> error
         end
     end
   end
@@ -941,6 +978,9 @@ defmodule Rice.Tasks do
         status: "under_review",
         updated_at: now
       )
+    end)
+    |> Multi.run(:applications, fn repo, _ ->
+      sync_applications(repo, task, "under_review")
     end)
     |> Multi.insert(
       :event,
@@ -1014,6 +1054,8 @@ defmodule Rice.Tasks do
 
         if application && task.status in ~w(in_progress overdue under_review) do
           with {:ok, _} <- settle_application_reward(task, application),
+               {:ok, [_]} <-
+                 move_applications(Repo, user_application(task, submission.user_id), "completed"),
                {:ok, _} <-
                  Repo.update(Ecto.Changeset.change(submission, final_status: "approved")),
                {:ok, updated} <- update_multi_status(task, user.id),
@@ -1028,6 +1070,9 @@ defmodule Rice.Tasks do
                    )
                  ) do
             {:ok, updated}
+          else
+            {:ok, _} -> {:error, :conflict}
+            error -> error
           end
         else
           {:error, :conflict}
@@ -1079,6 +1124,8 @@ defmodule Rice.Tasks do
       %Submission{id: id, review_reason: nil, final_status: nil} when id == submission.id ->
         with true <- task.status in ~w(in_progress overdue under_review) or {:error, :conflict},
              {:ok, _} <- Repo.update(Submission.review_changeset(submission, reason)),
+             {:ok, [_]} <-
+               move_applications(Repo, user_application(task, submission.user_id), "appointed"),
              {:ok, updated} <- update_multi_status(task, user.id, reason),
              {:ok, _} <-
                Repo.insert(
@@ -1123,6 +1170,9 @@ defmodule Rice.Tasks do
           status: next_status,
           updated_at: now
         )
+      end)
+      |> Multi.run(:applications, fn repo, _ ->
+        sync_applications(repo, task, next_status)
       end)
       |> Multi.insert(
         :event,
@@ -1550,6 +1600,9 @@ defmodule Rice.Tasks do
       |> Multi.run(:task, fn repo, _ ->
         conditional_update(repo, query, Keyword.put(updates, :updated_at, now))
       end)
+      |> Multi.run(:applications, fn repo, _ ->
+        sync_applications(repo, task, Keyword.fetch!(updates, :status))
+      end)
       |> maybe_run_reward(reward_step)
       |> Multi.insert(
         :event,
@@ -1700,7 +1753,7 @@ defmodule Rice.Tasks do
 
   defp aggregate_multi_status(task, now) do
     appointed = appointed_applications(task)
-    statuses = Enum.map(appointed, &my_status(task, &1.user, now))
+    statuses = Enum.map(appointed, &application_progress(task, &1, now))
 
     application_closed? =
       not is_nil(task.application_deadline) and
@@ -1722,6 +1775,7 @@ defmodule Rice.Tasks do
   end
 
   defp update_multi_status(task, actor_id, detail \\ nil, now \\ DateTime.utc_now()) do
+    {:ok, _} = refresh_overdue(Repo, task, now)
     current = preload_detail(task)
     {next, unused} = aggregate_multi_status(current, now)
 
@@ -1764,41 +1818,21 @@ defmodule Rice.Tasks do
         (not is_nil(task.application_deadline) and
            DateTime.compare(task.application_deadline, now) != :gt)
 
-    pending =
-      if closed?,
-        do:
-          Enum.filter(
-            task.applications,
-            &(&1.round == task.round and is_nil(&1.appointed_at) and is_nil(&1.rejected_at))
-          ),
-        else: []
+    if closed? do
+      # pending -> not_selected 只会发生一次,通知跟着迁移走,不需要再查通知表去重。
+      {:ok, user_ids} = move_applications(Repo, round_applications(task), "not_selected")
 
-    Enum.reduce_while(pending, :ok, fn application, _ ->
-      notified? =
-        Repo.exists?(
-          from n in Notification,
-            where:
-              n.task_id == ^task.id and n.recipient_id == ^application.user_id and
-                n.event == "application_not_selected" and
-                n.inserted_at >= ^application.inserted_at
-        )
-
-      if notified? do
-        {:cont, :ok}
-      else
+      Enum.reduce_while(user_ids, :ok, fn user_id, _ ->
         case Repo.insert(
-               notification_changeset(
-                 task,
-                 application.user_id,
-                 actor_id,
-                 "application_not_selected"
-               )
+               notification_changeset(task, user_id, actor_id, "application_not_selected")
              ) do
           {:ok, _} -> {:cont, :ok}
           error -> {:halt, error}
         end
-      end
-    end)
+      end)
+    else
+      :ok
+    end
   end
 
   defp notify_managers(task, actor_id, event) do
@@ -1941,6 +1975,81 @@ defmodule Rice.Tasks do
       submissions: [],
       events: from(e in Event, where: e.to_status == "open", order_by: [asc: e.id])
     )
+  end
+
+  # 编辑可能改变任务状态(过期 / 超期 / 延期恢复)或申请是否还开放,申请状态要跟上。
+  defp sync_after_edit(%Task{} = old, %Task{} = saved) do
+    now = DateTime.utc_now()
+
+    result =
+      cond do
+        saved.capacity > 1 and saved.status in ~w(in_progress overdue under_review) ->
+          with {:ok, _} <- refresh_overdue(Repo, saved, now) do
+            if accepting_applications?(saved),
+              do: move_applications(Repo, round_applications(saved), "pending"),
+              else: {:ok, []}
+          end
+
+        old.status != saved.status ->
+          sync_applications(Repo, old, saved.status)
+
+        true ->
+          {:ok, []}
+      end
+
+    with {:ok, _} <- result, do: :ok
+  end
+
+  defp round_applications(%Task{id: id, round: round}),
+    do: from(a in Application, where: a.task_id == ^id and a.round == ^round)
+
+  defp user_application(%Task{} = task, user_id),
+    do: from(a in round_applications(task), where: a.user_id == ^user_id)
+
+  @doc false
+  # 申请状态机的唯一入口:只放行 ApplicationState 里允许的迁移,返回真正迁移了的 user_id。
+  def move_applications(repo, scope, to, extra \\ []) do
+    sources = ApplicationState.sources(to)
+    query = from(a in scope, where: a.status in ^sources, select: a.user_id)
+    set = [status: to, updated_at: DateTime.utc_now()] ++ extra
+    {_count, user_ids} = repo.update_all(query, set: set)
+    {:ok, user_ids}
+  end
+
+  # 任务状态变化时,同步单人任务那一个承接申请(多人任务按人逐个迁移,不走这里)。
+  defp sync_applications(repo, %Task{} = task, to) do
+    scope = round_applications(task)
+
+    result =
+      case {task.capacity, task.status, to} do
+        {_, from, "cancelled"} when from in ~w(open draft) ->
+          move_applications(repo, scope, "cancelled")
+
+        {_, "open", "expired"} ->
+          move_applications(repo, scope, "expired")
+
+        {1, _, to}
+        when not is_nil(task.assignee_id) and to in ~w(overdue under_review completed) ->
+          move_applications(repo, user_application(task, task.assignee_id), to)
+
+        {1, from, "in_progress"}
+        when from in ~w(under_review overdue) and not is_nil(task.assignee_id) ->
+          move_applications(repo, user_application(task, task.assignee_id), "appointed")
+
+        _ ->
+          {:ok, []}
+      end
+
+    with {:ok, _} <- result, do: {:ok, :synced}
+  end
+
+  # 多人任务:交付截止已过 → appointed 记为 overdue;截止被延后 → overdue 回到 appointed。
+  defp refresh_overdue(repo, %Task{} = task, now) do
+    scope = round_applications(task)
+
+    if execution_overdue?(task, now),
+      do: move_applications(repo, from(a in scope, where: a.status == "appointed"), "overdue"),
+      else: move_applications(repo, from(a in scope, where: a.status == "overdue"), "appointed")
   end
 
   defp preload_detail(task) do

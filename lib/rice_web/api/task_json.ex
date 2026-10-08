@@ -139,6 +139,7 @@ defmodule RiceWeb.Api.TaskJSON do
       round: application.round,
       reason: application.reason,
       status: application_status(application, task),
+      state: application.status,
       user: public_user(application.user),
       inserted_at: application.inserted_at,
       appointed_at: application.appointed_at,
@@ -265,28 +266,18 @@ defmodule RiceWeb.Api.TaskJSON do
     end
   end
 
+  # `status` 保持老前端认得的粗粒度取值;细粒度的在 `state`(Rice.Tasks.ApplicationState)。
   defp application_status(%Application{final_status: status}, _task) when not is_nil(status),
     do: status
 
-  defp application_status(%Application{appointed_at: time}, _task) when not is_nil(time),
-    do: "appointed"
+  defp application_status(%Application{status: "pending"}, %{
+         status: "open",
+         application_deadline: deadline
+       }),
+       do: if(past?(deadline), do: "expired", else: "pending")
 
-  defp application_status(%Application{user_id: id}, %{assignee_id: id}), do: "appointed"
-
-  defp application_status(%Application{rejected_at: rejected_at}, _task)
-       when not is_nil(rejected_at),
-       do: "not_selected"
-
-  defp application_status(_application, %{status: "open", application_deadline: deadline}),
-    do: if(past?(deadline), do: "expired", else: "pending")
-
-  defp application_status(_application, %{status: "cancelled"}), do: "cancelled"
-  defp application_status(_application, %{status: "expired"}), do: "expired"
-
-  defp application_status(_application, %{capacity: capacity} = task) when capacity > 1,
-    do: if(Rice.Tasks.accepting_applications?(task), do: "pending", else: "not_selected")
-
-  defp application_status(_application, _task), do: "not_selected"
+  defp application_status(%Application{status: status}, _task),
+    do: Rice.Tasks.ApplicationState.legacy(status)
 
   defp submission_status(%Submission{final_status: status}, _task) when not is_nil(status),
     do: status

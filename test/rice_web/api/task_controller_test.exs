@@ -582,4 +582,39 @@ defmodule RiceWeb.Api.TaskControllerTest do
 
     assert Rice.Repo.aggregate(Rice.Grains.Receipt, :count) == 1
   end
+
+  test "申请 status 保持粗粒度,state 给出申请状态机的细粒度状态" do
+    publisher = task_publisher_fixture()
+    {:ok, publisher_token} = Rice.Accounts.issue_token(publisher)
+    [chosen, rejected, other] = for _ <- 1..3, do: user_fixture()
+
+    {:ok, task} =
+      Rice.Tasks.create_task(publisher, %{
+        title: "状态展示",
+        description: "单人任务",
+        organizer_contact: "节点服务台"
+      })
+
+    [a, r, _o] =
+      for worker <- [chosen, rejected, other] do
+        {:ok, application} = Rice.Tasks.apply(worker, task, %{contact: "联系"})
+        application
+      end
+
+    {:ok, task} = Rice.Tasks.reject_application(publisher, task, r.id)
+    {:ok, task} = Rice.Tasks.appoint(publisher, task, a.id)
+    {:ok, task} = Rice.Tasks.submit_result(chosen, task, %{body: "成果"})
+
+    manager =
+      build_conn()
+      |> put_req_header("authorization", "Bearer " <> publisher_token)
+      |> get(~p"/api/tasks/#{task.id}")
+      |> json_response(200)
+      |> get_in(["data", "applications"])
+      |> Map.new(&{&1["user"]["did"], {&1["status"], &1["state"]}})
+
+    assert manager[chosen.did] == {"appointed", "under_review"}
+    assert manager[rejected.did] == {"not_selected", "rejected"}
+    assert manager[other.did] == {"not_selected", "not_selected"}
+  end
 end

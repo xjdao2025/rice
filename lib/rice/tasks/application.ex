@@ -11,6 +11,7 @@ defmodule Rice.Tasks.Application do
     field(:appointed_at, :utc_datetime_usec)
     field(:appointment_reason, :string)
     field(:reward_slot, :integer)
+    field(:status, :string, default: "pending")
 
     belongs_to(:task, Rice.Tasks.Task)
     belongs_to(:user, Rice.Accounts.User)
