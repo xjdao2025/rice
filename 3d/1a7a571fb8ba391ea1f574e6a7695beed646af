@@ -1,0 +1,27 @@
+test/support/fixtures.ex
+  s_8c80ad8d2af680::t_8f7e75451a39b9 59-62,64-65
+test/rice_web/api/community_admin_test.exs
+  s_8c80ad8d2af680::t_c42641b079b962 109
+test/rice/tasks_test.exs
+  s_8c80ad8d2af680::t_078a539c7f52cd 449
+test/rice/events_test.exs
+  s_8c80ad8d2af680::t_b2126403d3b42d 143
+test/rice_web/api/community_wallet_test.exs
+  s_8c80ad8d2af680::t_e282cd3b74bc6b 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3d1a7a571fb8ba391ea1f574e6a7695beed646af",
+  "prompts": {},
+  "sessions": {
+    "s_8c80ad8d2af680": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1cacbb5-9264-4c9e-8d1e-0245a530ded4",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
