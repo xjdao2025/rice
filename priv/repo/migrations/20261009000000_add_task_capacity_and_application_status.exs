@@ -1,7 +1,7 @@
 defmodule Rice.Repo.Migrations.AddTaskCapacityAndApplicationStatus do
   @moduledoc """
-  合并了三份迁移的最终状态:
-    * 节点发放的幂等唯一索引
+  合并了五份迁移的最终状态:
+    * 节点发放的幂等唯一索引;转账 / 打赏的重试标识(request_id)
     * 任务领取人数(capacity)与每个申请的奖励名额(reward_slot)
     * task_applications.status —— 申请自己的状态机(见 Rice.Tasks.ApplicationState)
   """
@@ -10,10 +10,20 @@ defmodule Rice.Repo.Migrations.AddTaskCapacityAndApplicationStatus do
   @max_capacity 1_000
 
   def up do
-    # ── 节点发放 ──────────────────────────────────────────────────────────
+    # ── 稻米流转 ──────────────────────────────────────────────────────────
     create unique_index(:grain_transfers, [:subject_uri],
              where: "kind = 'grant' AND to_node_id IS NOT NULL AND subject_uri IS NOT NULL",
              name: :grain_transfers_node_grant_request
+           )
+
+    # 网络超时后带同一个 request_id 重试,同一付款人只记一笔
+    alter table(:grain_transfers) do
+      add :request_id, :string, size: 128
+    end
+
+    create unique_index(:grain_transfers, [:from_user_id, :request_id],
+             where: "request_id IS NOT NULL",
+             name: :grain_transfers_request_id
            )
 
     # ── 多人承接 ──────────────────────────────────────────────────────────
@@ -104,6 +114,15 @@ defmodule Rice.Repo.Migrations.AddTaskCapacityAndApplicationStatus do
        END
       FROM tasks t
      WHERE t.id = a.task_id
+    """
+
+    # 单人任务就是只有一个名额的多人任务,也按名额编号算账:已指派的那一个占 1 号。
+    # 每个轮次最多一条,唯一索引不会冲突。
+    execute """
+    UPDATE task_applications a SET reward_slot = 1
+      FROM tasks t
+     WHERE t.id = a.task_id AND t.capacity = 1 AND a.reward_slot IS NULL
+       AND a.status IN ('appointed', 'overdue', 'under_review', 'completed')
     """
 
     create constraint(:task_applications, :task_applications_status,
