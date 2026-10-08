@@ -76,7 +76,8 @@ defmodule RiceWeb.Api.NodeControllerTest do
       }
     end
 
-    test "入会申请仅本人和本节点管理员可见，余额不公开", ctx do
+    test "入会申请仅本人和本节点管理员可见，节点余额公开", ctx do
+      Rice.Repo.update!(Ecto.Changeset.change(ctx.node, grain_balance: 123, grain_frozen_balance: 5))
       data = apply_join(ctx, "我的私人申请理由")
       application_id = data["my_application"]["id"]
       assert data["my_application"]["status"] == "pending"
@@ -90,6 +91,8 @@ defmodule RiceWeb.Api.NodeControllerTest do
         refute Map.has_key?(public["data"], "applications")
         refute Jason.encode!(public) =~ "我的私人申请理由"
         refute Map.has_key?(public["data"]["owner"], "grain_balance")
+        assert public["data"]["grain_balance"] == 123
+        assert public["data"]["grain_frozen_balance"] == 5
       end
 
       admin_data = get_node(ctx.admin_token, ctx.node.id)

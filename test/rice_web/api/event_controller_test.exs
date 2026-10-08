@@ -90,7 +90,7 @@ defmodule RiceWeb.Api.EventControllerTest do
       |> post(~p"/api/events/#{id}/applications", %{contact: "测试联系方式"})
       |> json_response(409)
 
-    assert denied["errors"]["detail"] == "活动已满，暂无可用名额"
+    assert denied["errors"]["detail"] == "人数已满，暂无可用名额"
     assert Repo.get!(Rice.Accounts.User, late.id).grain_balance == 100
     assert Repo.get!(Rice.Accounts.User, late.id).grain_frozen_balance == 0
     refute Repo.get_by(Rice.Events.Application, event_id: id, user_id: late.id)

@@ -59,6 +59,34 @@ defmodule RiceWeb.Api.Admin.GrainController do
     end
   end
 
+  @doc "向节点独立账户发放，使用与个人发放相同的管理员验证码。"
+  def create_node(conn, %{"node_id" => node_id} = params) do
+    case Grants.grant_node(
+           conn.assigns.current_admin,
+           node_id,
+           params["amount"],
+           params["client_request_id"],
+           params["code"],
+           memo: params["memo"]
+         ) do
+      {:ok, transfer, status} ->
+        conn
+        |> put_status(if(status == :created, do: :created, else: :ok))
+        |> json(%{
+          data: %{
+            id: transfer.id,
+            amount: transfer.amount,
+            memo: transfer.memo,
+            to_node_id: transfer.to_node_id,
+            replayed: status == :replayed
+          }
+        })
+
+      error ->
+        handle(conn, error)
+    end
+  end
+
   defp handle(conn, error) do
     case error do
       # 验证码不对 / 过期,和登录时给的是同一类响应
@@ -91,6 +119,9 @@ defmodule RiceWeb.Api.Admin.GrainController do
 
       {:error, :invalid_amount} ->
         {:error, :invalid_amount}
+
+      {:error, reason} when reason in [:not_found, :conflict, :missing_request_id] ->
+        {:error, reason}
 
       {:error, %Ecto.Changeset{} = cs} ->
         {:error, cs}

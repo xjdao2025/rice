@@ -8,6 +8,11 @@ defmodule RiceWeb.Api.GrainTransferJSON do
     }
   end
 
+  def grants(%{page: page, total_granted: total_granted}) do
+    index(%{page: page, viewer: nil})
+    |> put_in([:meta, :total_granted], total_granted)
+  end
+
   def show(%{transfer: transfer} = assigns), do: %{data: data(transfer, assigns[:viewer])}
 
   @doc """

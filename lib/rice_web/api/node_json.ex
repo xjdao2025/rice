@@ -45,6 +45,8 @@ defmodule RiceWeb.Api.NodeJSON do
     own_application = if user, do: Enum.find(node.applications, &(&1.user_id == user.id))
 
     Map.merge(embed(node), %{
+      grain_balance: node.grain_balance,
+      grain_frozen_balance: node.grain_frozen_balance,
       role: role(node, user),
       can_manage_members: not is_nil(user) and node.user_id == user.id,
       my_application: if(own_application, do: application(own_application))

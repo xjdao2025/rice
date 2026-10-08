@@ -131,6 +131,118 @@ defmodule Rice.TaskApplicationConcurrencyTest do
     end)
   end
 
+  test "多人名额并发接收不超员，重复交付和验收只扣发一次" do
+    supervisor = start_supervised!(Task.Supervisor)
+
+    Sandbox.unboxed_run(Repo, fn ->
+      publisher = task_publisher_fixture()
+      [first, second, third] = for _ <- 1..3, do: user_fixture()
+      ids = [publisher.id, first.id, second.id, third.id]
+
+      try do
+        node = funded_node_fixture(publisher, 60)
+
+        {:ok, task} =
+          Tasks.create_task(publisher, %{
+            title: "多人并发",
+            description: "两名承作人",
+            organizer_contact: "节点服务台",
+            capacity: 2,
+            reward_amount: 10
+          })
+
+        applications =
+          for worker <- [first, second, third] do
+            {:ok, application} = Tasks.apply(worker, task, %{contact: "联系方式"})
+            application
+          end
+
+        [a, b, c] = applications
+
+        accepted =
+          race(supervisor, [
+            fn -> Tasks.appoint(publisher, task, a.id) end,
+            fn -> Tasks.appoint(publisher, task, a.id) end
+          ])
+
+        assert Enum.all?(accepted, &match?({:ok, _}, &1))
+
+        assert Repo.aggregate(
+                 from(n in Notification,
+                   where:
+                     n.task_id == ^task.id and n.event == "assignee_appointed" and
+                       n.recipient_id == ^first.id
+                 ),
+                 :count
+               ) == 1
+
+        outcomes =
+          race(supervisor, [
+            fn -> Tasks.appoint(publisher, task, b.id) end,
+            fn -> Tasks.appoint(publisher, task, c.id) end
+          ])
+
+        assert Enum.count(outcomes, &match?({:ok, _}, &1)) == 1
+        assert Enum.count(outcomes, &(&1 == {:error, :capacity_full})) == 1
+
+        assert Repo.aggregate(
+                 from(a in Application,
+                   where: a.task_id == ^task.id and not is_nil(a.appointed_at)
+                 ),
+                 :count
+               ) == 2
+
+        assert Repo.aggregate(
+                 from(n in Notification,
+                   where: n.task_id == ^task.id and n.event == "application_not_selected"
+                 ),
+                 :count
+               ) == 1
+
+        submissions =
+          race(supervisor, [
+            fn -> Tasks.submit_result(first, task, %{body: "成果"}) end,
+            fn -> Tasks.submit_result(first, task, %{body: "成果"}) end
+          ])
+
+        assert Enum.count(submissions, &match?({:ok, _}, &1)) == 1
+        assert Enum.count(submissions, &(&1 == {:error, :conflict})) == 1
+        submission = Repo.one!(from(s in Rice.Tasks.Submission, where: s.task_id == ^task.id))
+
+        approvals =
+          race(supervisor, [
+            fn -> Tasks.approve_result(publisher, task, submission.id) end,
+            fn -> Tasks.approve_result(publisher, task, submission.id) end
+          ])
+
+        assert Enum.all?(approvals, &match?({:ok, _}, &1))
+        assert Repo.get!(Rice.Tasks.Task, task.id).status == "in_progress"
+        assert %{grain_balance: 10} = Repo.get!(Rice.Accounts.User, first.id)
+
+        assert %{grain_balance: 40, grain_frozen_balance: 10} =
+                 Repo.get!(Rice.Community.Node, node.id)
+
+        assert Repo.aggregate(
+                 from(t in Rice.Grains.Transfer,
+                   where: t.to_user_id == ^first.id and t.kind == "task_reward"
+                 ),
+                 :count
+               ) == 1
+
+        assert Repo.aggregate(
+                 from(n in Notification,
+                   where: n.task_id == ^task.id and n.event == "result_approved"
+                 ),
+                 :count
+               ) == 1
+
+        assert Rice.Grains.reconcile().ok?
+      after
+        cleanup(ids)
+      end
+    end)
+  end
+
   defp race(supervisor, actions) do
     parent = self()
 

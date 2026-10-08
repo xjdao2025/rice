@@ -22,6 +22,7 @@ defmodule RiceWeb.Api.Admin.GrainJSON do
       amount: transfer.amount,
       memo: transfer.memo,
       to: recipient(transfer.to_user),
+      to_node: node_recipient(transfer.to_node),
       inserted_at: transfer.inserted_at
     }
   end
@@ -34,4 +35,8 @@ defmodule RiceWeb.Api.Admin.GrainJSON do
     |> UserJSON.public()
     |> Map.merge(%{email: user.email, phone: user.phone, phone_region: user.phone_region})
   end
+
+  defp node_recipient(%Ecto.Association.NotLoaded{}), do: nil
+  defp node_recipient(nil), do: nil
+  defp node_recipient(node), do: %{id: node.id, name: node.name}
 end

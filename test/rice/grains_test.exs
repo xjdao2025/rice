@@ -23,15 +23,16 @@ defmodule Rice.GrainsTest do
     test "打赏带上帖子 URI" do
       from = user_fixture() |> give_grain(100)
       to = user_fixture()
+      uri = "at://#{to.did}/app.bsky.feed.post/abc"
 
       assert {:ok, t} =
                Grains.transfer(from, to, 5,
                  kind: "reward",
-                 subject_uri: "at://did:plc:x/app.bsky.feed.post/abc"
+                 subject_uri: uri
                )
 
       assert t.kind == "reward"
-      assert t.subject_uri == "at://did:plc:x/app.bsky.feed.post/abc"
+      assert t.subject_uri == uri
     end
 
     test "可以用 DID 指定收款方" do

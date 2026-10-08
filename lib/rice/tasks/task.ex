@@ -3,6 +3,8 @@ defmodule Rice.Tasks.Task do
   use Rice.Schema
 
   @statuses ~w(draft open in_progress overdue under_review completed expired cancelled)
+  @max_capacity 1_000
+  @max_grain_amount 9_223_372_036_854_775_807
 
   schema "tasks" do
     field(:title, :string)
@@ -18,6 +20,7 @@ defmodule Rice.Tasks.Task do
     field(:appointed_at, :utc_datetime_usec)
     field(:appointment_reason, :string)
     field(:reward_amount, :integer, default: 0)
+    field(:capacity, :integer, default: 1)
     field(:reward_status, :string, default: "none")
     field(:reward_subject_uri, :string)
     field(:round, :integer, default: 1)
@@ -44,6 +47,7 @@ defmodule Rice.Tasks.Task do
       :application_deadline,
       :execution_deadline,
       :reward_amount,
+      :capacity,
       :client_request_id
     ])
     |> validate_required([:title, :description])
@@ -55,6 +59,9 @@ defmodule Rice.Tasks.Task do
     |> validate_length(:title, min: 1, max: 128)
     |> validate_length(:description, min: 1, max: 4000)
     |> validate_number(:reward_amount, greater_than_or_equal_to: 0)
+    |> validate_required([:capacity])
+    |> validate_number(:capacity, greater_than: 0, less_than_or_equal_to: @max_capacity)
+    |> validate_total_reward()
     |> validate_execution_deadline(opts)
     |> validate_length(:requirement, max: 4000)
     |> validate_length(:client_request_id, max: 128)
@@ -98,6 +105,16 @@ defmodule Rice.Tasks.Task do
   end
 
   def statuses, do: @statuses
+  def max_capacity, do: @max_capacity
+
+  defp validate_total_reward(changeset) do
+    amount = get_field(changeset, :reward_amount)
+    capacity = get_field(changeset, :capacity)
+
+    if is_integer(amount) and is_integer(capacity) and amount * capacity > @max_grain_amount,
+      do: add_error(changeset, :reward_amount, "任务总奖励超出稻米范围"),
+      else: changeset
+  end
 
   defp trim(value) when is_binary(value), do: String.trim(value)
   defp trim(_), do: ""

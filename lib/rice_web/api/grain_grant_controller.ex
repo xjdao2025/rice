@@ -6,6 +6,8 @@ defmodule RiceWeb.Api.GrainGrantController do
 
   def index(conn, params) do
     page = Rice.Grains.list_grants(params)
-    put_view(conn, json: RiceWeb.Api.GrainTransferJSON) |> render(:index, page: page, viewer: nil)
+
+    put_view(conn, json: RiceWeb.Api.GrainTransferJSON)
+    |> render(:grants, page: page, total_granted: Rice.Grains.total_granted())
   end
 end

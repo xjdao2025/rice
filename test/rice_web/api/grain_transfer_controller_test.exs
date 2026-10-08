@@ -129,10 +129,15 @@ defmodule RiceWeb.Api.GrainTransferControllerTest do
       assert data["memo"] == "谢谢"
       assert data["direction"] == "out"
       assert data["to"]["did"] == to.did
+
+      assert %{"data" => %{"entries" => entries}} =
+               conn |> authed(token) |> get(~p"/api/wallet") |> json_response(200)
+
+      assert Enum.any?(entries, &(&1["id"] == data["id"] and &1["memo"] == "谢谢"))
     end
 
     test "打赏带帖子 URI", %{conn: conn, token: token, recipient: to} do
-      uri = "at://did:plc:x/app.bsky.feed.post/abc"
+      uri = "at://#{to.did}/app.bsky.feed.post/abc"
 
       assert %{"data" => data} =
                conn
@@ -147,6 +152,31 @@ defmodule RiceWeb.Api.GrainTransferControllerTest do
 
       assert data["kind"] == "reward"
       assert data["subject_uri"] == uri
+    end
+
+    test "打赏不能把别人的帖子记为接收人的收入", %{
+      conn: conn,
+      token: token,
+      sender: from,
+      recipient: to
+    } do
+      uri = "at://did:plc:other/app.bsky.feed.post/abc"
+      count = Rice.Repo.aggregate(Rice.Grains.Transfer, :count)
+
+      assert %{"errors" => %{"subject_uri" => [_]}} =
+               conn
+               |> authed(token)
+               |> post(~p"/api/grain_transfers", %{
+                 to: to.did,
+                 amount: 5,
+                 kind: "reward",
+                 subject_uri: uri
+               })
+               |> json_response(422)
+
+      assert Rice.Repo.aggregate(Rice.Grains.Transfer, :count) == count
+      assert Rice.Repo.get!(Rice.Accounts.User, from.id).grain_balance == 100
+      assert Rice.Repo.get!(Rice.Accounts.User, to.id).grain_balance == 0
     end
 
     test "余额不足 422", %{conn: conn, token: token, recipient: to} do
@@ -300,13 +330,16 @@ defmodule RiceWeb.Api.GrainTransferControllerTest do
   end
 
   describe "GET /api/grain_grants" do
-    test "公开可读,只列增发", %{conn: conn} do
+    test "公开总发行数来自增发流水，不读取站点配置", %{conn: conn} do
+      site_settings_fixture(%{issued_grain_scale: 999})
       a = user_fixture() |> give_grain(100)
       b = user_fixture()
       {:ok, _} = Rice.Grains.grant(b, 50)
       {:ok, _} = Rice.Grains.transfer(a, b, 10)
 
-      assert %{"data" => [one]} = conn |> get(~p"/api/grain_grants") |> json_response(200)
+      assert %{"data" => [one], "meta" => %{"total_granted" => 50}} =
+               conn |> get(~p"/api/grain_grants") |> json_response(200)
+
       assert one["kind"] == "grant"
       assert is_nil(one["from"])
       assert one["to"]["did"] == b.did

@@ -1,6 +1,95 @@
 defmodule RiceWeb.Api.TaskControllerTest do
   use RiceWeb.ConnCase, async: true
 
+  test "多人任务公开承作人及每人奖励，个人仅能查看自己的申请和成果" do
+    publisher = task_publisher_fixture()
+    {:ok, publisher_token} = Rice.Accounts.issue_token(publisher)
+    {first, first_token} = user_with_token()
+    {second, second_token} = user_with_token()
+    {_visitor, visitor_token} = user_with_token()
+    funded_node_fixture(publisher, 100)
+
+    {:ok, task} =
+      Rice.Tasks.create_task(publisher, %{
+        title: "多人任务",
+        description: "两名承作人",
+        organizer_contact: "节点服务台",
+        capacity: 2,
+        reward_amount: 10
+      })
+
+    task =
+      Enum.reduce([first, second], task, fn worker, current ->
+        {:ok, application} = Rice.Tasks.apply(worker, current, %{contact: "私有联系方式#{worker.id}"})
+        {:ok, updated} = Rice.Tasks.appoint(publisher, current, application.id)
+        updated
+      end)
+
+    {:ok, task} = Rice.Tasks.submit_result(first, task, %{body: "第一人的私有成果"})
+    {:ok, task} = Rice.Tasks.submit_result(second, task, %{body: "第二人的私有成果"})
+
+    public =
+      build_conn() |> get(~p"/api/tasks/#{task.id}") |> json_response(200) |> Map.fetch!("data")
+
+    assert %{
+             "capacity" => 2,
+             "appointed_count" => 2,
+             "total_reward_amount" => 20,
+             "reward_amount" => 10,
+             "assignee" => nil
+           } = public
+
+    assert Enum.sort(Enum.map(public["assignees"], & &1["id"])) ==
+             Enum.sort([first.id, second.id])
+
+    assert public["submissions"] == nil
+    assert public["applications"] == nil
+
+    for {worker, token, expected_body} <- [
+          {first, first_token, "第一人的私有成果"},
+          {second, second_token, "第二人的私有成果"}
+        ] do
+      own =
+        build_conn()
+        |> authed(token)
+        |> get(~p"/api/tasks/#{task.id}")
+        |> json_response(200)
+        |> Map.fetch!("data")
+
+      assert own["my_status"] == "under_review"
+      assert own["my_application_status"] == "appointed"
+      assert own["my_application"]["contact"] == "私有联系方式#{worker.id}"
+      assert [%{"body" => ^expected_body}] = own["submissions"]
+      assert own["applications"] == nil
+    end
+
+    manager =
+      build_conn()
+      |> authed(publisher_token)
+      |> get(~p"/api/tasks/#{task.id}")
+      |> json_response(200)
+      |> Map.fetch!("data")
+
+    assert length(manager["submissions"]) == 2
+    assert length(manager["applications"]) == 2
+    assert "approve_result" in manager["allowed_actions"]
+
+    visitor =
+      build_conn()
+      |> authed(visitor_token)
+      |> get(~p"/api/tasks/#{task.id}")
+      |> json_response(200)
+      |> Map.fetch!("data")
+
+    assert visitor["submissions"] == nil
+    submission = Enum.find(task.submissions, &(&1.user_id == second.id))
+
+    assert build_conn()
+           |> authed(first_token)
+           |> post(~p"/api/tasks/#{task.id}/submissions/#{submission.id}/approve", %{})
+           |> json_response(403)
+  end
+
   test "个人列表允许访客，但拒绝无效或过期的 Bearer 令牌" do
     {:ok, expired} = Rice.Accounts.issue_token(user_fixture(), validity_days: -1)
 

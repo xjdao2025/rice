@@ -58,6 +58,7 @@ defmodule Rice.Grains.Transfer do
     |> check_constraint(:from_user_id, name: :grain_transfers_from_matches_kind)
     |> check_constraint(:to_user_id, name: :grain_transfers_to_account)
     |> unique_constraint(:subject_uri, name: :grain_transfers_community_fund_request)
+    |> unique_constraint(:subject_uri, name: :grain_transfers_node_grant_request)
   end
 
   defp validate_not_self(changeset) do

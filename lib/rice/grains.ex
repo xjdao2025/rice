@@ -27,15 +27,19 @@ defmodule Rice.Grains do
   :recipient_disabled | changeset}`。
   """
   def transfer(%User{} = from, to_identifier, amount, opts \\ []) do
+    kind = Keyword.get(opts, :kind, "gift")
+    subject_uri = Keyword.get(opts, :subject_uri)
+
     with {:ok, to} <- resolve_recipient(to_identifier),
-         :ok <- ensure_not_self(from, to) do
+         :ok <- ensure_not_self(from, to),
+         :ok <- ensure_reward_post(kind, to, subject_uri) do
       attrs = %{
-        kind: Keyword.get(opts, :kind, "gift"),
+        kind: kind,
         from_user_id: from.id,
         to_user_id: to.id,
         amount: amount,
         memo: Keyword.get(opts, :memo, "") || "",
-        subject_uri: Keyword.get(opts, :subject_uri)
+        subject_uri: subject_uri
       }
 
       changeset = Transfer.changeset(%Transfer{}, attrs)
@@ -318,6 +322,7 @@ defmodule Rice.Grains do
           id: entry.id,
           kind: entry.kind,
           amount: entry.amount,
+          memo: Map.get(entry, :memo),
           subject_uri: entry.subject_uri,
           inserted_at: entry.inserted_at,
           from_user: wallet_user(entry.from_user),
@@ -435,6 +440,21 @@ defmodule Rice.Grains do
   defp ensure_not_self(%User{id: id}, %User{id: id}), do: {:error, :cannot_transfer_to_self}
   defp ensure_not_self(_, _), do: :ok
 
+  defp ensure_reward_post("reward", _, uri) when uri in [nil, ""], do: :ok
+
+  defp ensure_reward_post("reward", %User{did: did}, uri) when is_binary(uri) do
+    case String.split(uri, "/") do
+      ["at:", "", ^did, "app.bsky.feed.post", rkey] when rkey != "" ->
+        if String.contains?(rkey, ["?", "#"]), do: {:error, :invalid_reward_post}, else: :ok
+
+      _ ->
+        {:error, :invalid_reward_post}
+    end
+  end
+
+  defp ensure_reward_post("reward", _, _), do: {:error, :invalid_reward_post}
+  defp ensure_reward_post(_, _, _), do: :ok
+
   # ── 查询 ────────────────────────────────────────────────────────────────
 
   @doc "我的稻米明细:收和付都算。按 id 倒序 —— TSID 的字典序就是时间序。"
@@ -448,8 +468,14 @@ defmodule Rice.Grains do
 
   @doc "后台发放记录(全站公开,原 /score-distribute-record/page)。"
   def list_grants(params \\ %{}) do
-    from(t in Transfer, where: t.kind == "grant", preload: [:to_user])
+    from(t in Transfer, where: t.kind == "grant", preload: [:to_user, :to_node])
     |> Pagination.paginate(Repo, Pagination.params(params))
+  end
+
+  @doc "已发行稻米总量，以发放流水为准。"
+  def total_granted do
+    Repo.one(from t in Transfer, where: t.kind == "grant", select: coalesce(sum(t.amount), 0))
+    |> to_integer()
   end
 
   @doc "对账用:全站可用与冻结余额之和应当等于发放总额。"

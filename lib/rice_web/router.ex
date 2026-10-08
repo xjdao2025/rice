@@ -179,6 +179,7 @@ defmodule RiceWeb.Router do
     get "/grain_grants", GrainController, :index
     post "/grain_grants/challenge", GrainController, :challenge
     post "/grain_grants", GrainController, :create
+    post "/nodes/:node_id/grain_grants", GrainController, :create_node
 
     get "/proposals", ProposalController, :index
     get "/proposals/:id", ProposalController, :show

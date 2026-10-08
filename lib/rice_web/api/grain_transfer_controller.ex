@@ -56,6 +56,11 @@ defmodule RiceWeb.Api.GrainTransferController do
         {:error, :cannot_transfer_to_self} ->
           conn |> put_status(:unprocessable_entity) |> json(%{errors: %{to: ["不能转给自己"]}})
 
+        {:error, :invalid_reward_post} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{errors: %{subject_uri: ["赞赏帖子与接收人不匹配"]}})
+
         {:error, %Ecto.Changeset{} = changeset} ->
           {:error, changeset}
       end

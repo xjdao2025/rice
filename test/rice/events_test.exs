@@ -590,7 +590,9 @@ defmodule Rice.EventsTest do
     uri = "rice://event_applications/#{own.id}"
 
     assert Repo.aggregate(
-             from(r in Rice.Grains.Receipt, where: r.subject_uri == ^uri and r.kind == "refunded"),
+             from(r in Rice.Grains.Receipt,
+               where: r.subject_uri == ^uri and r.kind == "refunded"
+             ),
              :count
            ) == 1
 

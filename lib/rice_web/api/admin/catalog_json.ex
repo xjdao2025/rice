@@ -64,6 +64,8 @@ defmodule RiceWeb.Api.Admin.NodeJSON do
       name: node.name,
       description: node.description,
       position: node.position,
+      grain_balance: node.grain_balance,
+      grain_frozen_balance: node.grain_frozen_balance,
       logo: AttachmentJSON.embed(node.logo),
       owner: owner(node.user),
       inserted_at: node.inserted_at

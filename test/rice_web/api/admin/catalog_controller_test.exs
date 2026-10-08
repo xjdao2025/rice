@@ -173,6 +173,8 @@ defmodule RiceWeb.Api.Admin.CatalogControllerTest do
 
       assert node["owner"]["nickname"] == "节点主"
       assert node["owner"]["grain_balance"] == 0
+      assert node["grain_balance"] == 0
+      assert node["grain_frozen_balance"] == 0
     end
   end
 

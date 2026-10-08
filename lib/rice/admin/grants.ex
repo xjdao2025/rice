@@ -12,8 +12,13 @@ defmodule Rice.Admin.Grants do
   import Ecto.Query
 
   alias Rice.Accounts.User
+  alias Rice.Admin.AdminUser
+  alias Rice.Community.Node
   alias Rice.Grains.Transfer
   alias Rice.{Pagination, Repo}
+
+  # nodes.grain_balance and grain_transfers.amount are PostgreSQL bigint.
+  @max_bigint 9_223_372_036_854_775_807
 
   @doc """
   校验一批发放请求,但**不动账**。返回解析好的收款人。
@@ -74,6 +79,101 @@ defmodule Rice.Admin.Grants do
     end
   end
 
+  @doc """
+  管理员向节点账户发放稻米。`client_request_id` 在同一管理员、节点下标识一次发放。
+
+  锁住节点后先检查流水，再消费一次性验证码。重试相同请求返回原流水，不会
+  再增加余额；同一请求标识对应不同金额或备注则返回冲突。
+  """
+  def grant_node(%AdminUser{} = admin, node_id, amount, request_id, code, opts \\ []) do
+    memo = Keyword.get(opts, :memo) || ""
+
+    with :ok <- validate_node_id(node_id),
+         :ok <- validate_node_amount(amount),
+         :ok <- validate_request_id(request_id),
+         {:ok, changeset} <- node_grant_changeset(admin, node_id, amount, request_id, memo) do
+      memo = Ecto.Changeset.get_field(changeset, :memo)
+
+      Repo.transaction(fn ->
+        node = Repo.one(from n in Node, where: n.id == ^node_id, lock: "FOR UPDATE")
+        if is_nil(node), do: Repo.rollback(:not_found)
+
+        uri = Ecto.Changeset.get_field(changeset, :subject_uri)
+        existing = Repo.get_by(Transfer, kind: "grant", to_node_id: node.id, subject_uri: uri)
+
+        cond do
+          existing && existing.amount == amount && existing.memo == memo ->
+            {existing, :replayed}
+
+          existing ->
+            Repo.rollback(:conflict)
+
+          node.grain_balance > @max_bigint - amount ->
+            Repo.rollback(:invalid_amount)
+
+          true ->
+            case Rice.Admin.verify_grant_code(admin, code) do
+              :ok ->
+                with {:ok, transfer} <- Repo.insert(changeset),
+                     {1, _} <-
+                       Repo.update_all(
+                         from(n in Node, where: n.id == ^node.id),
+                         inc: [grain_balance: amount]
+                       ) do
+                  {transfer, :created}
+                else
+                  {:error, reason} -> Repo.rollback(reason)
+                  _ -> Repo.rollback(:not_found)
+                end
+
+              {:error, reason} ->
+                # Keep a failed verification's attempt counter; no money was touched.
+                {:verification_error, reason}
+            end
+        end
+      end)
+      |> case do
+        {:ok, {:verification_error, reason}} -> {:error, reason}
+        {:ok, {transfer, status}} -> {:ok, transfer, status}
+        {:error, reason} -> {:error, reason}
+      end
+    end
+  end
+
+  defp validate_node_id(id) do
+    if Rice.Tsid.valid?(id), do: :ok, else: {:error, :not_found}
+  end
+
+  defp validate_node_amount(amount)
+       when is_integer(amount) and amount > 0 and amount <= @max_bigint,
+       do: :ok
+
+  defp validate_node_amount(_), do: {:error, :invalid_amount}
+
+  defp validate_request_id(id) when is_binary(id) and byte_size(id) in 1..128 do
+    if String.trim(id) == "", do: {:error, :missing_request_id}, else: :ok
+  end
+
+  defp validate_request_id(_), do: {:error, :missing_request_id}
+
+  defp node_grant_changeset(admin, node_id, amount, request_id, memo) do
+    uri = "rice://nodes/#{node_id}/grants/#{admin.id}/#{request_id}"
+
+    changeset =
+      Transfer.changeset(%Transfer{}, %{
+        kind: "grant",
+        to_node_id: node_id,
+        amount: amount,
+        memo: memo,
+        subject_uri: uri
+      })
+
+    case Ecto.Changeset.apply_action(changeset, :insert) do
+      {:ok, _} -> {:ok, changeset}
+      {:error, changeset} -> {:error, changeset}
+    end
+  end
+
   defp validate_amount(amount) when is_integer(amount) and amount > 0, do: :ok
   defp validate_amount(_), do: {:error, :invalid_amount}
 
@@ -113,7 +213,7 @@ defmodule Rice.Admin.Grants do
   def list_grants(params \\ %{}) do
     from(t in Transfer,
       where: t.kind == "grant",
-      preload: [to_user: :avatar]
+      preload: [to_user: :avatar, to_node: []]
     )
     |> filter_recipient(params["q"])
     |> filter_after(params["since"])
@@ -125,10 +225,11 @@ defmodule Rice.Admin.Grants do
     pattern = "%" <> escape_like(String.trim(q)) <> "%"
 
     from t in query,
-      join: u in assoc(t, :to_user),
+      left_join: u in assoc(t, :to_user),
+      left_join: n in assoc(t, :to_node),
       where:
         ilike(u.nickname, ^pattern) or ilike(u.email, ^pattern) or ilike(u.phone, ^pattern) or
-          ilike(u.handle, ^pattern)
+          ilike(u.handle, ^pattern) or ilike(n.name, ^pattern) or ilike(n.id, ^pattern)
   end
 
   defp filter_recipient(query, _), do: query

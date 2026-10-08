@@ -39,7 +39,7 @@ defmodule RiceWeb.Api.FallbackController do
   end
 
   def call(conn, {:error, :capacity_full}) do
-    conn |> put_status(:conflict) |> json(%{errors: %{detail: "活动已满，暂无可用名额"}})
+    conn |> put_status(:conflict) |> json(%{errors: %{detail: "人数已满，暂无可用名额"}})
   end
 
   def call(conn, {:error, :missing_request_id}) do

@@ -3,6 +3,296 @@ defmodule Rice.TasksTest do
 
   alias Rice.Tasks
 
+  test "多人任务按名额冻结，每人独立退回、交付、验收及幂等发放" do
+    publisher = task_publisher_fixture()
+    [first, second, third, visitor] = for _ <- 1..4, do: user_fixture()
+    node = funded_node_fixture(publisher, 120)
+
+    {:ok, task} =
+      Tasks.create_task(publisher, %{
+        title: "多人交付",
+        description: "分别交付",
+        organizer_contact: "节点服务台",
+        capacity: 2,
+        reward_amount: 30
+      })
+
+    assert %{grain_balance: 60, grain_frozen_balance: 60} =
+             Repo.get!(Rice.Community.Node, node.id)
+
+    applications =
+      for worker <- [first, second, third] do
+        {:ok, application} = Tasks.apply(worker, task, %{contact: "联系人#{worker.id}"})
+        application
+      end
+
+    [a, b, c] = applications
+
+    {:ok, task} =
+      Tasks.appoint(publisher, task, a.id, %{appointment_reason: String.duplicate("人", 512)})
+
+    assert task.status == "in_progress"
+    assert is_nil(task.assignee_id)
+
+    assert Enum.any?(
+             Tasks.list_tasks(visitor, %{"available" => true}).entries,
+             &(&1.id == task.id)
+           )
+
+    assert Tasks.list_tasks(first, %{"mine" => "applied"}).entries == []
+    assert [assigned] = Tasks.list_tasks(first, %{"mine" => "assigned"}).entries
+    assert assigned.id == task.id
+
+    assert Tasks.list_notifications(second)
+           |> Enum.all?(&(&1.event != "application_not_selected"))
+
+    {:ok, task} = Tasks.appoint(publisher, task, b.id)
+    assert {:error, :capacity_full} = Tasks.appoint(publisher, task, c.id)
+    assert Tasks.list_tasks(visitor, %{"available" => true}).entries == []
+
+    assert Enum.count(Tasks.list_notifications(third), &(&1.event == "application_not_selected")) ==
+             1
+
+    assert {:error, :conflict} = Tasks.cancel(publisher, task)
+
+    {:ok, task} = Tasks.submit_result(first, task, %{body: "第一位的成果"})
+    assert Tasks.my_status(task, first) == "under_review"
+    assert Tasks.my_status(task, second) == "in_progress"
+
+    assert [%{id: id}] =
+             Tasks.list_tasks(second, %{"mine" => "assigned", "status" => "in_progress"}).entries
+
+    assert id == task.id
+
+    assert Tasks.list_tasks(first, %{"mine" => "assigned", "status" => "in_progress"}).entries ==
+             []
+
+    first_submission = Enum.find(task.submissions, &(&1.user_id == first.id))
+    {:ok, task} = Tasks.request_changes(publisher, task, first_submission.id, "补充一个附件")
+    {:ok, task} = Tasks.submit_result(second, task, %{body: "第二位的成果"})
+    second_submission = Enum.find(task.submissions, &(&1.user_id == second.id))
+    {:ok, task} = Tasks.approve_result(publisher, task, second_submission.id)
+    assert task.status == "in_progress"
+    assert Tasks.my_status(task, second) == "completed"
+    assert Tasks.my_status(task, first) == "in_progress"
+    assert {:ok, _} = Tasks.approve_result(publisher, task, second_submission.id)
+    assert %{grain_balance: 30} = Repo.get!(Rice.Accounts.User, second.id)
+    assert %{grain_frozen_balance: 30} = Repo.get!(Rice.Community.Node, node.id)
+    {:ok, task} = Tasks.submit_result(first, task, %{body: "补充后的成果"})
+    latest = Enum.find(task.submissions, &(&1.user_id == first.id and is_nil(&1.review_reason)))
+    {:ok, task} = Tasks.approve_result(publisher, task, latest.id)
+    assert task.status == "completed"
+    assert task.reward_status == "settled"
+    assert %{grain_balance: 30} = Repo.get!(Rice.Accounts.User, first.id)
+    assert %{grain_balance: 60, grain_frozen_balance: 0} = Repo.get!(Rice.Community.Node, node.id)
+
+    assert Repo.aggregate(from(t in Rice.Grains.Transfer, where: t.kind == "task_reward"), :count) ==
+             2
+
+    assert Enum.count(Tasks.list_notifications(third), &(&1.event == "application_not_selected")) ==
+             1
+
+    assert Rice.Grains.reconcile().ok?
+  end
+
+  test "未设申请截止时，部分承作人验收通过仍保留空缺名额的冻结" do
+    publisher = task_publisher_fixture()
+    worker = user_fixture()
+    node = funded_node_fixture(publisher, 50)
+
+    {:ok, task} =
+      Tasks.create_task(publisher, %{
+        title: "持续招募",
+        description: "独立验收",
+        organizer_contact: "节点服务台",
+        capacity: 2,
+        reward_amount: 10
+      })
+
+    {:ok, application} = Tasks.apply(worker, task, %{contact: "联系方式"})
+    {:ok, task} = Tasks.appoint(publisher, task, application.id)
+    {:ok, task} = Tasks.submit_result(worker, task, %{body: "成果"})
+    {:ok, task} = Tasks.approve_result(publisher, task, hd(task.submissions).id)
+    assert task.status == "in_progress"
+    assert Tasks.my_status(task, worker) == "completed"
+    assert Tasks.accepting_applications?(task)
+
+    assert %{grain_balance: 30, grain_frozen_balance: 10} =
+             Repo.get!(Rice.Community.Node, node.id)
+
+    assert %{grain_balance: 10} = Repo.get!(Rice.Accounts.User, worker.id)
+    assert Rice.Grains.reconcile().ok?
+  end
+
+  test "延长多人交付期限复用个人状态汇总，奖励和人数只可原值回传" do
+    publisher = task_publisher_fixture()
+    [first, second] = for _ <- 1..2, do: user_fixture()
+    now = DateTime.utc_now()
+
+    {:ok, task} =
+      Tasks.create_task(publisher, %{
+        title: "延长交付",
+        description: "独立验收",
+        organizer_contact: "节点服务台",
+        capacity: 2,
+        application_deadline: DateTime.add(now, 1800),
+        execution_deadline: DateTime.add(now, 3600)
+      })
+
+    task =
+      Enum.reduce([first, second], task, fn worker, current ->
+        {:ok, application} = Tasks.apply(worker, current, %{contact: "联系方式"})
+        {:ok, updated} = Tasks.appoint(publisher, current, application.id)
+        updated
+      end)
+
+    {:ok, task} = Tasks.submit_result(first, task, %{body: "等待验收"})
+
+    {:ok, task} =
+      Tasks.update_task(publisher, task, %{
+        application_deadline: DateTime.add(now, -3600),
+        execution_deadline: DateTime.add(now, -1)
+      })
+
+    assert task.status == "overdue"
+    assert Tasks.my_status(task, first) == "under_review"
+    assert Tasks.my_status(task, second) == "overdue"
+
+    {:ok, task} =
+      Tasks.update_task(publisher, task, %{
+        execution_deadline: DateTime.add(now, 7200),
+        reward_amount: 0,
+        capacity: 2
+      })
+
+    assert task.status == "under_review"
+    assert Tasks.my_status(task, second) == "in_progress"
+    assert List.last(task.events).to_status == "under_review"
+    assert {:error, reward_changeset} = Tasks.update_task(publisher, task, %{reward_amount: 1})
+    assert errors_on(reward_changeset).reward_amount != []
+    assert {:error, capacity_changeset} = Tasks.update_task(publisher, task, %{capacity: 3})
+    assert errors_on(capacity_changeset).capacity != []
+    assert Repo.aggregate(Rice.Grains.Receipt, :count) == 0
+  end
+
+  test "未招满且已接收者都通过，截止时自动完成并退还未使用名额" do
+    publisher = task_publisher_fixture()
+    worker = user_fixture()
+    node = funded_node_fixture(publisher, 50)
+
+    {:ok, task} =
+      Tasks.create_task(publisher, %{
+        title: "未招满",
+        description: "按名额奖励",
+        organizer_contact: "节点服务台",
+        capacity: 3,
+        reward_amount: 7,
+        application_deadline: DateTime.add(DateTime.utc_now(), 3600)
+      })
+
+    {:ok, application} = Tasks.apply(worker, task, %{contact: "联系方式"})
+    {:ok, task} = Tasks.appoint(publisher, task, application.id)
+    {:ok, task} = Tasks.submit_result(worker, task, %{body: "已完成"})
+    {:ok, task} = Tasks.approve_result(publisher, task, hd(task.submissions).id)
+    assert task.status == "in_progress"
+    assert Tasks.my_status(task, worker) == "completed"
+    assert %{grain_frozen_balance: 14} = Repo.get!(Rice.Community.Node, node.id)
+    now = DateTime.add(task.application_deadline, 1)
+    assert {:ok, [completed]} = Tasks.check_due_tasks(now)
+    assert completed.status == "completed"
+    assert %{grain_balance: 43, grain_frozen_balance: 0} = Repo.get!(Rice.Community.Node, node.id)
+
+    assert Repo.aggregate(from(r in Rice.Grains.Receipt, where: r.kind == "refunded"), :count) ==
+             2
+
+    assert {:ok, []} = Tasks.check_due_tasks(now)
+    assert Rice.Grains.reconcile().ok?
+  end
+
+  test "多人零奖励沿用状态，交付超时不失效、不重复写入或退还" do
+    publisher = task_publisher_fixture()
+    worker = user_fixture()
+
+    {:ok, task} =
+      Tasks.create_task(publisher, %{
+        title: "零奖励",
+        description: "多人参与",
+        organizer_contact: "节点服务台",
+        capacity: 2,
+        execution_deadline: DateTime.add(DateTime.utc_now(), 3600)
+      })
+
+    {:ok, application} = Tasks.apply(worker, task, %{contact: "联系方式"})
+    {:ok, task} = Tasks.appoint(publisher, task, application.id)
+    now = DateTime.add(task.execution_deadline, 1)
+    assert {:ok, [overdue]} = Tasks.check_due_tasks(now)
+    assert overdue.status == "overdue"
+    before = Repo.get!(Rice.Tasks.Task, task.id).updated_at
+    assert {:ok, [_]} = Tasks.check_due_tasks(now)
+    assert Repo.get!(Rice.Tasks.Task, task.id).updated_at == before
+    assert Repo.aggregate(Rice.Grains.Receipt, :count) == 0
+    assert Enum.count(Tasks.list_notifications(worker), &(&1.event == "task_overdue")) == 1
+  end
+
+  test "取消、失效与重开各按本轮名额冻结退还，人数与单价在活动中只读" do
+    publisher = task_publisher_fixture()
+    worker = user_fixture()
+    node = funded_node_fixture(publisher, 90)
+
+    {:ok, task} =
+      Tasks.create_task(publisher, %{
+        title: "新一轮",
+        description: "保留旧记录",
+        organizer_contact: "节点服务台",
+        capacity: 2,
+        reward_amount: 10
+      })
+
+    assert {:error, changeset} = Tasks.update_task(publisher, task, %{capacity: 3})
+    assert Map.has_key?(errors_on(changeset), :capacity)
+    {:ok, old_application} = Tasks.apply(worker, task, %{contact: "联系方式"})
+    {:ok, task} = Tasks.cancel(publisher, task)
+    assert %{grain_balance: 90, grain_frozen_balance: 0} = Repo.get!(Rice.Community.Node, node.id)
+    deadline = DateTime.add(DateTime.utc_now(), 3600)
+
+    {:ok, task} =
+      Tasks.update_task(publisher, task, %{
+        capacity: 3,
+        reward_amount: 5,
+        application_deadline: deadline
+      })
+
+    assert task.round == 2
+    assert task.capacity == 3
+    assert Repo.get!(Rice.Tasks.Application, old_application.id).final_status == "cancelled"
+
+    assert %{grain_balance: 75, grain_frozen_balance: 15} =
+             Repo.get!(Rice.Community.Node, node.id)
+
+    assert {:ok, [expired]} = Tasks.check_due_tasks(DateTime.add(deadline, 1))
+    assert expired.status == "expired"
+    assert %{grain_balance: 90, grain_frozen_balance: 0} = Repo.get!(Rice.Community.Node, node.id)
+    assert Rice.Grains.reconcile().ok?
+  end
+
+  test "人数范围与总额检查先于发布，余额不足时所有名额一起回滚" do
+    publisher = task_publisher_fixture()
+    node = funded_node_fixture(publisher, 20)
+    attrs = %{title: "容量限制", description: "需要全部冻结", organizer_contact: "节点服务台", reward_amount: 10}
+
+    for capacity <- [0, Rice.Tasks.Task.max_capacity() + 1, 1.5] do
+      assert {:error, %Ecto.Changeset{}} =
+               Tasks.create_task(publisher, Map.put(attrs, :capacity, capacity))
+    end
+
+    assert {:error, :insufficient_balance} =
+             Tasks.create_task(publisher, Map.put(attrs, :capacity, 3))
+
+    assert Repo.aggregate(Rice.Tasks.Task, :count) == 0
+    assert Repo.aggregate(Rice.Grains.Receipt, :count) == 0
+    assert %{grain_balance: 20, grain_frozen_balance: 0} = Repo.get!(Rice.Community.Node, node.id)
+  end
+
   test "任务奖励在发布时冻结，在认可结果时发给承作人" do
     publisher = task_publisher_fixture()
     worker = user_fixture()
@@ -490,12 +780,12 @@ defmodule Rice.TasksTest do
     assert {:error, changeset} =
              Tasks.update_task(publisher, task, %{reward_amount: 60})
 
-    assert "已发布任务不能修改稻米报酬" in errors_on(changeset).reward_amount
+    assert "已发布任务不能修改任务奖励" in errors_on(changeset).reward_amount
 
     assert {:error, changeset} =
              Tasks.update_task(publisher, task, %{node_id: second_node.id})
 
-    assert "已发布任务不能修改所属社区" in errors_on(changeset).node_id
+    assert "已发布任务不能修改所属节点" in errors_on(changeset).node_id
 
     assert {:ok, edited} =
              Tasks.update_task(publisher, task, %{
@@ -531,7 +821,7 @@ defmodule Rice.TasksTest do
     assert {:error, changeset} =
              Tasks.update_task(publisher, edited, %{reward_amount: 200})
 
-    assert "已发布任务不能修改稻米报酬" in errors_on(changeset).reward_amount
+    assert "已发布任务不能修改任务奖励" in errors_on(changeset).reward_amount
     assert Repo.aggregate(from(e in Rice.Tasks.Event, where: not is_nil(e.before)), :count) == 1
     assert Repo.aggregate(Rice.Grains.Receipt, :count) == 1
 
@@ -967,7 +1257,7 @@ defmodule Rice.TasksTest do
              end)
 
     assert {:error, changeset} = Tasks.update_task(publisher, task, %{reward_amount: 50})
-    assert "已发布任务不能修改稻米报酬" in errors_on(changeset).reward_amount
+    assert "已发布任务不能修改任务奖励" in errors_on(changeset).reward_amount
     assert Repo.get!(Rice.Tasks.Task, task.id).funding_node_id == nil
     assert Repo.get!(Rice.Tasks.Task, task.id).reward_amount == 40
 

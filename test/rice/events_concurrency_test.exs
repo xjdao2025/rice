@@ -43,7 +43,9 @@ defmodule Rice.EventsConcurrencyTest do
         assert Enum.count(approval, &(&1 == {:error, :capacity_full})) == 1
 
         assert Repo.aggregate(
-                 from(a in Application, where: a.event_id == ^event.id and a.status == "approved"),
+                 from(a in Application,
+                   where: a.event_id == ^event.id and a.status == "approved"
+                 ),
                  :count
                ) == 1
 
@@ -78,7 +80,9 @@ defmodule Rice.EventsConcurrencyTest do
         assert Enum.all?(starts, &match?({:ok, _}, &1))
 
         assert Repo.aggregate(
-                 from(h in EventHistory, where: h.event_id == ^event.id and h.action == "started"),
+                 from(h in EventHistory,
+                   where: h.event_id == ^event.id and h.action == "started"
+                 ),
                  :count
                ) == 1
 
