@@ -15,13 +15,16 @@
 pending ──指派──▶ appointed ──提交──▶ under_review ──通过──▶ completed
    │                 │  ▲                 │
    │                 │  └───要求修改──────┘
-   │                 └─超期─▶ overdue ──提交──▶ under_review
+   │                 ├─超期─▶ overdue ──提交──▶ under_review
+   │                 └─撤销指派 / 提前结束──▶ released   (overdue 同)
    ├──拒绝──▶ rejected
-   ├──名额满 / 申请截止──▶ not_selected   (申请重新开放时可回到 pending)
+   ├──名额满 / 申请截止──▶ not_selected   (名额空出来或申请重新开放时回到 pending)
    └──任务取消 / 过期──▶ cancelled / expired
 ```
 
-- 终态:`completed`、`rejected`、`cancelled`、`expired`。
+- 终态:`completed`、`released`、`rejected`、`cancelled`、`expired`。
+- `released` 只在多人任务出现:被指派后又被撤销。保留 `appointed_at`,`reward_slot` 清空,
+  名额(和它那份冻结)让给下一个被指派的人;对方已提交等待验收时不能撤,要先验收或退回修改。
 - **所有改状态的地方都经过 `Rice.Tasks.move_applications/4`**,它只放行
   `Rice.Tasks.ApplicationState.transitions/0` 里列出的迁移,非法迁移不改动任何行。
 - 数据库约束 `task_applications_status` / `task_applications_status_fields` 保证取值合法,
@@ -43,14 +46,27 @@ pending ──指派──▶ appointed ──提交──▶ under_review ─�
 
 多人汇总规则(`aggregate_multi_status`),**最差者优先**:
 
-1. 有人 `overdue` → `overdue`;
-2. 否则有人 `under_review` → `under_review`;
-3. 否则 → `in_progress`;
-4. 全部已指派的人都 `completed`,**并且**(名额已满 **或** 申请已截止)→ `completed`。
+1. 没有人占着名额(都被撤销了)→ 回到 `open`,之后按申请截止由定时任务过期退款;
+2. 全部占名额的人都 `completed`,**并且**(名额已满 **或** 申请已截止)→ `completed`;
+3. 否则有人 `overdue` → `overdue`;
+4. 否则有人 `under_review` → `under_review`;
+5. 否则 → `in_progress`。
 
 因此任务状态不能用来判断某个人能做什么,个人动作一律看自己的申请状态(`my_status`)。
 `appointed` / `overdue` 以交付截止时间实时判断,落库的 `overdue` 由定时任务
-(`check_due_tasks`)和编辑任务时追平。
+(`check_due_tasks`)和编辑任务时追平。定时任务只在多人任务还有事可做时才处理它
+(申请截止后仍有 `pending`、或承作人都结束了该收尾、或交付截止后还有人没记成超期),
+已经处理过的不会每分钟重新加锁。
+
+### 多人任务怎么收尾
+
+多人任务不能像单人任务那样取消(只允许 `open` 时取消)。节点管理员有两个动作:
+
+- **撤销指派**(`release_assignee`):某个人不交付或联系不上,把他变成 `released`。
+  名额空出来后,之前因名额满而 `not_selected` 的申请重新变回 `pending`。
+- **提前结束**(`close`):不等名额填满。已 `completed` 的保留,仍在承作的变 `released`,
+  `pending` 的变 `not_selected`,所有没结算的名额退回节点。有人通过验收记为 `completed`,
+  一个都没有记为 `cancelled`。有成果等待验收时拒绝(409),先验收或退回修改。
 
 ## 多人承接的数据在哪
 
@@ -65,8 +81,9 @@ pending ──指派──▶ appointed ──提交──▶ under_review ─�
 
 - `reward_amount` 是**每人**的奖励。发布时从**节点账户**(`funding_node_id`)一次性冻结
   `reward_amount × capacity`,不是发布者个人余额。节点余额不足,发布返回 422。
-- 每个名额在指派时分配 `reward_slot`;该人验收通过时只结算他那一份。
-- 任务整体完成时,没有用上的名额按份退回节点。
+- 每个名额在指派时分配 `reward_slot`(取 1..capacity 里最小的空号);该人验收通过时只结算他那一份。
+  撤销指派不动账,只是把号让出来。
+- 任务整体完成或提前结束时,没有结算的名额按份退回节点。
 - 任务 `reward_status` 在部分结算期间保持 `reserved`,完成后才是 `settled`;个人结算以
   `grain_receipts` 为准。
 
@@ -78,20 +95,25 @@ pending ──指派──▶ appointed ──提交──▶ under_review ─�
 | `open` / `in_progress` / `overdue` / `under_review` | **不可改**(422) | 可改 |
 | `expired` / `cancelled`(编辑即重新开放) | 可改,按新的 `单价 × 人数` 重新冻结,`round + 1` | 可改 |
 
-已有人被指派后,奖励与人数就锁死。把申请截止时间改到过去可以提前收尾:已指派的人都完成时,
-任务立即完成并退回剩余名额(这是副作用而非专门的功能)。
+已有人被指派后,奖励与人数就锁死。要提前收尾用上面的「提前结束」,不要靠改截止时间。
 
 ## 接口
 
+多人任务多两个动作,都要节点管理员,什么时候可用看任务的 `allowed_actions`:
+
+- `POST /api/tasks/:id/applications/:application_id/release`(可带 `reason`)→ `release_assignee`
+- `POST /api/tasks/:id/close` → `close`
+
 申请对象有两个状态字段:
 
-- `status`:**粗粒度**,给现有前端用。取值 `pending` / `appointed` / `not_selected` /
+- `status`:**粗粒度**,给现有前端用。取值 `pending` / `appointed` / `released` / `not_selected` /
   `cancelled` / `expired`(`appointed` 包含 overdue、under_review、completed;`rejected` 显示为
-  `not_selected`)。
+  `not_selected`;多人任务申请已截止但定时任务还没跑时,`pending` 先显示为 `not_selected`)。
 - `state`:**细粒度**,即 `task_applications.status` 本身。
 
 ## 迁移
 
 任务相关的三份迁移合并为 `priv/repo/migrations/20261009000000_add_task_capacity_and_application_status.exs`
 (节点发放唯一索引、`capacity` / `reward_slot`、申请 `status` 及回填)。`down` 不可用。
+回填只把**当前轮次**的 `assignee_id` 认作已指派;重开过的任务里同一个人旧轮次的申请仍按归档结果算。
 已经跑过合并前两份旧迁移(`20261007120000`、`20261008065240`)的库无法再跑它,需要重建。
