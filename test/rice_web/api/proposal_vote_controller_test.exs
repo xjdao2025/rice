@@ -2,8 +2,8 @@ defmodule RiceWeb.Api.ProposalVoteControllerTest do
   use RiceWeb.ConnCase, async: true
 
   setup do
-    {voter, token} = user_with_token()
-    %{voter: voter, token: token, proposal: proposal_fixture(user_fixture())}
+    {voter, token} = node_member_with_token()
+    %{voter: voter, token: token, proposal: proposal_fixture(node_member_fixture())}
   end
 
   describe "POST /api/proposals/:id/vote" do

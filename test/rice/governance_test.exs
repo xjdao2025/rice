@@ -8,8 +8,8 @@ defmodule Rice.GovernanceTest do
 
   describe "投票" do
     setup do
-      author = user_fixture()
-      %{author: author, proposal: proposal_fixture(author), voter: user_fixture()}
+      author = node_member_fixture()
+      %{author: author, proposal: proposal_fixture(author), voter: node_member_fixture()}
     end
 
     test "投票后计数增加", %{proposal: p, voter: voter} do
@@ -30,7 +30,7 @@ defmodule Rice.GovernanceTest do
     end
 
     test "并发投票:计数不丢、不重", %{proposal: p} do
-      voters = for _ <- 1..20, do: user_fixture()
+      voters = for _ <- 1..20, do: node_member_fixture()
       parent = self()
 
       voters
@@ -100,7 +100,7 @@ defmodule Rice.GovernanceTest do
   describe "结票" do
     setup do
       site_settings_fixture(%{proposal_approval_votes: 3})
-      %{author: user_fixture()}
+      %{author: node_member_fixture()}
     end
 
     defp make_due(proposal) do
@@ -113,7 +113,7 @@ defmodule Rice.GovernanceTest do
 
     test "达到门槛的通过", %{author: author} do
       p = proposal_fixture(author)
-      for _ <- 1..3, do: {:ok, _} = Governance.vote(user_fixture(), p, "agree")
+      for _ <- 1..3, do: {:ok, _} = Governance.vote(node_member_fixture(), p, "agree")
       make_due(p)
 
       assert %{passed: 1, rejected: 0} = Governance.close_due_proposals()
@@ -125,7 +125,7 @@ defmodule Rice.GovernanceTest do
       p = proposal_fixture(author)
       make_due(p)
       Governance.close_due_proposals()
-      voter = user_fixture()
+      voter = node_member_fixture()
 
       assert {:error, :proposal_closed} =
                Governance.vote(
@@ -140,7 +140,7 @@ defmodule Rice.GovernanceTest do
 
     test "差一票就不通过", %{author: author} do
       p = proposal_fixture(author)
-      for _ <- 1..2, do: {:ok, _} = Governance.vote(user_fixture(), p, "agree")
+      for _ <- 1..2, do: {:ok, _} = Governance.vote(node_member_fixture(), p, "agree")
       make_due(p)
 
       assert %{passed: 0, rejected: 1} = Governance.close_due_proposals()
@@ -149,8 +149,8 @@ defmodule Rice.GovernanceTest do
 
     test "反对票不影响门槛判定 —— 只看同意票数", %{author: author} do
       p = proposal_fixture(author)
-      for _ <- 1..3, do: {:ok, _} = Governance.vote(user_fixture(), p, "agree")
-      for _ <- 1..99, do: {:ok, _} = Governance.vote(user_fixture(), p, "oppose")
+      for _ <- 1..3, do: {:ok, _} = Governance.vote(node_member_fixture(), p, "agree")
+      for _ <- 1..99, do: {:ok, _} = Governance.vote(node_member_fixture(), p, "oppose")
       make_due(p)
 
       assert %{passed: 1} = Governance.close_due_proposals()
@@ -181,7 +181,7 @@ defmodule Rice.GovernanceTest do
 
   describe "提案的增删" do
     test "截止时间必须在将来" do
-      user = user_fixture()
+      user = node_member_fixture()
 
       assert {:error, changeset} =
                Governance.create_proposal(user, %{
@@ -193,8 +193,8 @@ defmodule Rice.GovernanceTest do
     end
 
     test "只能删自己的" do
-      author = user_fixture()
-      other = user_fixture()
+      author = node_member_fixture()
+      other = node_member_fixture()
       p = proposal_fixture(author)
 
       assert {:error, :forbidden} = Governance.delete_proposal(other, p)

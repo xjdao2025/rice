@@ -102,6 +102,10 @@ defmodule Rice.Governance do
     end
   end
 
+  # 提案和投票都只给节点用户(node_member),和 core 一致:
+  # "非节点用户不能提案" / "非节点用户不能投票提案"
+  def create_proposal(%User{node_member: false}, _attrs), do: {:error, :forbidden}
+
   def create_proposal(%User{} = user, attrs) do
     %Proposal{user_id: user.id}
     |> Proposal.create_changeset(attrs)
@@ -139,6 +143,9 @@ defmodule Rice.Governance do
   """
   def vote(%User{} = user, %Proposal{} = proposal, choice) do
     cond do
+      not user.node_member ->
+        {:error, :forbidden}
+
       not Proposal.open?(proposal) ->
         {:error, :proposal_closed}
 

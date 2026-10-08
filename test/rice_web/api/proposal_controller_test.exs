@@ -7,7 +7,7 @@ defmodule RiceWeb.Api.ProposalControllerTest do
 
   describe "GET /api/proposals" do
     test "公开可读", %{conn: conn} do
-      author = user_fixture(%{nickname: "发起人"})
+      author = node_member_fixture(%{nickname: "发起人"})
       proposal_fixture(author, %{title: "修路提案"})
 
       assert %{"data" => [one]} = conn |> get(~p"/api/proposals") |> json_response(200)
@@ -20,10 +20,10 @@ defmodule RiceWeb.Api.ProposalControllerTest do
     end
 
     test "total_votes 是现算的", %{conn: conn} do
-      author = user_fixture()
+      author = node_member_fixture()
       p = proposal_fixture(author)
-      {:ok, _} = Governance.vote(user_fixture(), p, "agree")
-      {:ok, _} = Governance.vote(user_fixture(), p, "oppose")
+      {:ok, _} = Governance.vote(node_member_fixture(), p, "agree")
+      {:ok, _} = Governance.vote(node_member_fixture(), p, "oppose")
 
       assert %{"data" => [one]} = conn |> get(~p"/api/proposals") |> json_response(200)
       assert one["agree_count"] == 1
@@ -32,7 +32,7 @@ defmodule RiceWeb.Api.ProposalControllerTest do
     end
 
     test "发起人的联系方式不外露", %{conn: conn} do
-      author = user_fixture(%{email: "secret@example.com", phone: "13800000000"})
+      author = node_member_fixture(%{email: "secret@example.com", phone: "13800000000"})
       proposal_fixture(author)
 
       body = conn |> get(~p"/api/proposals") |> response(200)
@@ -41,7 +41,7 @@ defmodule RiceWeb.Api.ProposalControllerTest do
     end
 
     test "按状态筛选", %{conn: conn} do
-      author = user_fixture()
+      author = node_member_fixture()
       open = proposal_fixture(author)
       passed = proposal_fixture(author)
       Rice.Repo.update!(Ecto.Changeset.change(passed, status: "passed"))
@@ -56,9 +56,9 @@ defmodule RiceWeb.Api.ProposalControllerTest do
     end
 
     test "mine=true 只返回自己的", %{conn: conn} do
-      {me, token} = user_with_token()
+      {me, token} = node_member_with_token()
       mine = proposal_fixture(me)
-      proposal_fixture(user_fixture())
+      proposal_fixture(node_member_fixture())
 
       assert %{"data" => [one]} =
                conn |> authed(token) |> get(~p"/api/proposals?mine=true") |> json_response(200)
@@ -67,10 +67,10 @@ defmodule RiceWeb.Api.ProposalControllerTest do
     end
 
     test "mine=voted 返回我投过票的(不含我发起但没投的)", %{conn: conn} do
-      {me, token} = user_with_token()
+      {me, token} = node_member_with_token()
       _authored = proposal_fixture(me)
-      voted = proposal_fixture(user_fixture())
-      _untouched = proposal_fixture(user_fixture())
+      voted = proposal_fixture(node_member_fixture())
+      _untouched = proposal_fixture(node_member_fixture())
       {:ok, _} = Rice.Governance.vote(me, voted, "agree")
 
       assert %{"data" => [one]} =
@@ -80,10 +80,10 @@ defmodule RiceWeb.Api.ProposalControllerTest do
     end
 
     test "mine=all 是发起与投票的并集,且不重复", %{conn: conn} do
-      {me, token} = user_with_token()
+      {me, token} = node_member_with_token()
       both = proposal_fixture(me)
-      voted = proposal_fixture(user_fixture())
-      _untouched = proposal_fixture(user_fixture())
+      voted = proposal_fixture(node_member_fixture())
+      _untouched = proposal_fixture(node_member_fixture())
       # 自己发起的自己也投了 —— join 实现会让它出现两次,EXISTS 不会
       {:ok, _} = Rice.Governance.vote(me, both, "agree")
       {:ok, _} = Rice.Governance.vote(me, voted, "oppose")
@@ -95,7 +95,7 @@ defmodule RiceWeb.Api.ProposalControllerTest do
     end
 
     test "mine 与 status 可以叠加", %{conn: conn} do
-      {me, token} = user_with_token()
+      {me, token} = node_member_with_token()
       open = proposal_fixture(me)
       passed = proposal_fixture(me)
       Rice.Repo.update!(Ecto.Changeset.change(passed, status: "passed"))
@@ -110,17 +110,17 @@ defmodule RiceWeb.Api.ProposalControllerTest do
     end
 
     test "未登录时 mine 被忽略,退回公开列表", %{conn: conn} do
-      proposal_fixture(user_fixture())
-      proposal_fixture(user_fixture())
+      proposal_fixture(node_member_fixture())
+      proposal_fixture(node_member_fixture())
 
       assert %{"data" => data} = conn |> get(~p"/api/proposals?mine=voted") |> json_response(200)
       assert length(data) == 2
     end
 
     test "my_vote 反映当前用户的投票,未登录恒为 null", %{conn: conn} do
-      {me, token} = user_with_token()
-      voted = proposal_fixture(user_fixture())
-      untouched = proposal_fixture(user_fixture())
+      {me, token} = node_member_with_token()
+      voted = proposal_fixture(node_member_fixture())
+      untouched = proposal_fixture(node_member_fixture())
       {:ok, _} = Rice.Governance.vote(me, voted, "oppose")
 
       assert %{"data" => data} =
@@ -147,7 +147,7 @@ defmodule RiceWeb.Api.ProposalControllerTest do
     end
 
     test "软删和下架的不出现", %{conn: conn} do
-      author = user_fixture()
+      author = node_member_fixture()
       deleted = proposal_fixture(author)
       Rice.Repo.update!(Ecto.Changeset.change(deleted, deleted_at: DateTime.utc_now()))
       unlisted = proposal_fixture(author)
@@ -157,7 +157,7 @@ defmodule RiceWeb.Api.ProposalControllerTest do
     end
 
     test "分页", %{conn: conn} do
-      author = user_fixture()
+      author = node_member_fixture()
       for _ <- 1..25, do: proposal_fixture(author)
 
       page1 = conn |> get(~p"/api/proposals") |> json_response(200)
@@ -174,7 +174,7 @@ defmodule RiceWeb.Api.ProposalControllerTest do
 
   describe "GET /api/proposals/:id" do
     test "命中", %{conn: conn} do
-      p = proposal_fixture(user_fixture(), %{title: "详情"})
+      p = proposal_fixture(node_member_fixture(), %{title: "详情"})
 
       assert %{"data" => %{"title" => "详情"}} =
                conn |> get(~p"/api/proposals/#{p.id}") |> json_response(200)
@@ -189,7 +189,7 @@ defmodule RiceWeb.Api.ProposalControllerTest do
 
   describe "POST /api/proposals" do
     test "发起提案", %{conn: conn} do
-      {_user, token} = user_with_token()
+      {_user, token} = node_member_with_token()
 
       assert %{"data" => data} =
                conn
@@ -203,7 +203,7 @@ defmodule RiceWeb.Api.ProposalControllerTest do
 
     # status / 票数 / 上架状态都不能由客户端指定
     test "客户端不能自己指定状态和票数", %{conn: conn} do
-      {_user, token} = user_with_token()
+      {_user, token} = node_member_with_token()
 
       assert %{"data" => data} =
                conn
@@ -222,7 +222,7 @@ defmodule RiceWeb.Api.ProposalControllerTest do
     end
 
     test "截止时间在过去 422", %{conn: conn} do
-      {_user, token} = user_with_token()
+      {_user, token} = node_member_with_token()
 
       assert conn
              |> authed(token)
@@ -234,7 +234,7 @@ defmodule RiceWeb.Api.ProposalControllerTest do
     end
 
     test "缺标题 / 标题超长 422", %{conn: conn} do
-      {_user, token} = user_with_token()
+      {_user, token} = node_member_with_token()
 
       for params <- [
             %{closes_at: future()},
@@ -254,7 +254,7 @@ defmodule RiceWeb.Api.ProposalControllerTest do
 
   describe "DELETE /api/proposals/:id" do
     test "能删自己的", %{conn: conn} do
-      {me, token} = user_with_token()
+      {me, token} = node_member_with_token()
       p = proposal_fixture(me)
 
       assert conn |> authed(token) |> delete(~p"/api/proposals/#{p.id}") |> response(204)
@@ -262,15 +262,15 @@ defmodule RiceWeb.Api.ProposalControllerTest do
     end
 
     test "删不了别人的 —— 403", %{conn: conn} do
-      {_me, token} = user_with_token()
-      p = proposal_fixture(user_fixture())
+      {_me, token} = node_member_with_token()
+      p = proposal_fixture(node_member_fixture())
 
       assert conn |> authed(token) |> delete(~p"/api/proposals/#{p.id}") |> json_response(403)
       refute Rice.Repo.get!(Rice.Governance.Proposal, p.id).deleted_at
     end
 
     test "未认证 401", %{conn: conn} do
-      p = proposal_fixture(user_fixture())
+      p = proposal_fixture(node_member_fixture())
       assert conn |> delete(~p"/api/proposals/#{p.id}") |> json_response(401)
     end
   end

@@ -22,10 +22,10 @@ defmodule RiceWeb.Api.GovernanceFlowTest do
 
   test "发起、投票、评论、下架复核、到期结票,每个身份看到的都是自己的那份" do
     {:ok, _} = Rice.Settings.update_site(%{proposal_approval_votes: 2})
-    {_author, author_token} = user_with_token(%{nickname: "发起人"})
-    {_v1, v1_token} = user_with_token(%{nickname: "甲"})
-    {_v2, v2_token} = user_with_token(%{nickname: "乙"})
-    {_v3, v3_token} = user_with_token(%{nickname: "丙"})
+    {_author, author_token} = node_member_with_token(%{nickname: "发起人"})
+    {_v1, v1_token} = node_member_with_token(%{nickname: "甲"})
+    {_v2, v2_token} = node_member_with_token(%{nickname: "乙"})
+    {_v3, v3_token} = node_member_with_token(%{nickname: "丙"})
     {_admin, admin_token} = admin_with_token()
     closes_at = DateTime.add(DateTime.utc_now(), 3600)
 
@@ -49,6 +49,16 @@ defmodule RiceWeb.Api.GovernanceFlowTest do
       |> Map.fetch!("data")
 
     assert first["status"] == "open" and first["agree_count"] == 0
+
+    # 提案和投票只给节点用户,和 core 一致
+    {_outsider, outsider_token} = user_with_token()
+
+    assert build_conn()
+           |> authed(outsider_token)
+           |> post(~p"/api/proposals", %{title: "非节点用户", closes_at: closes_at})
+           |> response(403)
+
+    assert vote(outsider_token, first["id"], "agree") |> response(403)
     assert Enum.map(list(nil), & &1["id"]) == [second["id"], first["id"]]
 
     # ── 投票:一人一票,计数现算 ────────────────────────────────────────

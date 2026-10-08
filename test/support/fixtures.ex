@@ -21,6 +21,16 @@ defmodule Rice.Fixtures do
     |> Repo.insert!()
   end
 
+  @doc "节点用户:能发起提案、投票。"
+  def node_member_fixture(attrs \\ %{}),
+    do: attrs |> user_fixture() |> Ecto.Changeset.change(node_member: true) |> Repo.update!()
+
+  def node_member_with_token(attrs \\ %{}) do
+    user = node_member_fixture(attrs)
+    {:ok, token} = Rice.Accounts.issue_token(user)
+    {user, token}
+  end
+
   @doc "返回 {user, 明文令牌}。"
   def user_with_token(attrs \\ %{}) do
     user = user_fixture(attrs)

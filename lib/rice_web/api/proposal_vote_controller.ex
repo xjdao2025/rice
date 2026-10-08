@@ -30,8 +30,8 @@ defmodule RiceWeb.Api.ProposalVoteController do
           |> put_status(:unprocessable_entity)
           |> json(%{errors: %{choice: ["只能是 agree 或 oppose"]}})
 
-        {:error, %Ecto.Changeset{} = changeset} ->
-          {:error, changeset}
+        error ->
+          error
       end
     end
   end
