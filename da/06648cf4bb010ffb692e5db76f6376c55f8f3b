@@ -1,0 +1,31 @@
+test/rice_web/api/task_flow_test.exs
+  s_8c80ad8d2af680::t_9b4479e28d5313 190
+  s_8c80ad8d2af680::t_5c8a1837b0d39f 288-294
+  s_8c80ad8d2af680::t_e0c750bda8c364 1-14,16-189,191-287,295-308
+  s_8c80ad8d2af680::t_06d49caa72ea90 15
+test/rice/task_application_state_test.exs
+  s_8c80ad8d2af680::t_5c8a1837b0d39f 185-187,199,213-215,239-245,253,266-268,270-272,276-278,281-283
+  s_8c80ad8d2af680::t_1100b07c809a6d 177-184,188-198,206-212,216-238,246-252,261-265,269,273-275,279-280,284-336
+  s_8c80ad8d2af680::t_448f50e501bcc5 200-205
+  s_8c80ad8d2af680::t_7838b907850cd6 254-260
+lib/rice/tasks.ex
+  s_8c80ad8d2af680::t_bfbe89cbdfb296 792,798,801-805
+  s_8c80ad8d2af680::t_a18a1994fb9cd8 795
+  s_8c80ad8d2af680::t_7631fb747c859c 812,814-834,836-837
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "da06648cf4bb010ffb692e5db76f6376c55f8f3b",
+  "prompts": {},
+  "sessions": {
+    "s_8c80ad8d2af680": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1cacbb5-9264-4c9e-8d1e-0245a530ded4",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
