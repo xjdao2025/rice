@@ -1,0 +1,26 @@
+test/rice/tasks_test.exs
+  s_8c80ad8d2af680::t_5ecfbba6f9f0dd 397
+  s_8c80ad8d2af680::t_b9f293fd1ecb58 727
+  s_8c80ad8d2af680::t_d946ee0c8577ec 529
+  s_8c80ad8d2af680::t_e66dfde2dd0b8e 730
+lib/rice/inbox.ex
+  s_8c80ad8d2af680::t_d946ee0c8577ec 92-101
+lib/rice_web/components/core_components.ex
+  s_8c80ad8d2af680::t_087edaaf1a04f8 78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b1584bd484520bc1ea268293d4978404d6b93228",
+  "prompts": {},
+  "sessions": {
+    "s_8c80ad8d2af680": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1cacbb5-9264-4c9e-8d1e-0245a530ded4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
