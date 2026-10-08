@@ -1,0 +1,47 @@
+priv/repo/migrations/20261009000000_add_task_capacity_and_application_status.exs
+  s_8c80ad8d2af680::t_471b09d892700e 112,117
+  s_8c80ad8d2af680::t_df95b0e994023e 53-54,61
+test/rice/tasks_test.exs
+  s_8c80ad8d2af680::t_2716b77eb6f2a4 231-232
+lib/rice/tasks.ex
+  s_8c80ad8d2af680::t_68e5998f938728 1943-1946
+  s_8c80ad8d2af680::t_e739c739d86032 1274-1276
+  s_8c80ad8d2af680::t_de1df4314e76ca 1019
+  s_8c80ad8d2af680::t_2988168ec279e4 821
+  s_8c80ad8d2af680::t_a896ef78904236 911-1018,1020-1033,1041-1043
+  s_8c80ad8d2af680::t_3a374e071ae796 1034-1040
+  s_8c80ad8d2af680::t_8cc9e34ceecc8e 1332-1351,1354,1357,1359-1361
+  s_8c80ad8d2af680::t_0dc8e50bbdd2d8 1927-1928
+lib/rice_web/api/task_json.ex
+  s_8c80ad8d2af680::t_cc6c57171342d1 290-294
+  s_8c80ad8d2af680::t_dd66f823623da8 226-228,231-238
+lib/rice/tasks/application_state.ex
+  s_8c80ad8d2af680::t_334a2315989e11 8-9,17,22,24,27-29,32-33,37,45,55,58
+test/rice/task_application_state_test.exs
+  s_8c80ad8d2af680::t_4167c47bce5ed1 176-324,327-328,331-332
+  s_8c80ad8d2af680::t_637eddcc37ab3d 325-326,329-330
+lib/rice_web/api/task_controller.ex
+  s_8c80ad8d2af680::t_08d190faa0e35a 53-57
+test/rice_web/api/task_controller_test.exs
+  s_8c80ad8d2af680::t_67379b8e703514 620-646,650-672,677-683,685
+  s_8c80ad8d2af680::t_a49c2505e9441d 684
+  s_8c80ad8d2af680::t_de1df4314e76ca 647-649,673-676
+lib/rice_web/router.ex
+  s_8c80ad8d2af680::t_9ec168607ed3cc 269,271-275
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8887d01370ce2c347108531f0f2ec97acc602149",
+  "prompts": {},
+  "sessions": {
+    "s_8c80ad8d2af680": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1cacbb5-9264-4c9e-8d1e-0245a530ded4",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
