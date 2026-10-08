@@ -174,8 +174,12 @@ defmodule Rice.PaginationTest do
           Pagination.params(%{"limit" => "2", "before" => first.next_cursor})
         )
 
-      assert Enum.map(first.entries, & &1.id) -- Enum.map(second.entries, & &1.id) ==
-               Enum.map(first.entries, & &1.id)
+      first_ids = Enum.map(first.entries, & &1.id)
+      second_ids = Enum.map(second.entries, & &1.id)
+      assert length(second_ids) == 2
+      assert first_ids -- second_ids == first_ids
+      # 游标是降序的:第二页全都比第一页的最后一个早
+      assert Enum.all?(second_ids, &(&1 < List.last(first_ids)))
     end
   end
 

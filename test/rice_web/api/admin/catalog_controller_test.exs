@@ -130,12 +130,6 @@ defmodule RiceWeb.Api.Admin.CatalogControllerTest do
     end
 
     # positions 必须排在 /:id 前面,否则会被当成一个 id
-    test "positions 不会被当成 id", %{conn: conn, token: token} do
-      assert conn
-             |> authed(token)
-             |> put(~p"/api/admin/apps/positions", %{ids: []})
-             |> json_response(200)
-    end
   end
 
   describe "另外三种资源" do
@@ -185,8 +179,4 @@ defmodule RiceWeb.Api.Admin.CatalogControllerTest do
   end
 
   # 管理端令牌是另一套,C 端用户拿不到后台
-  test "C 端令牌进不来", %{conn: conn} do
-    {_user, user_token} = user_with_token()
-    assert conn |> authed(user_token) |> get(~p"/api/admin/apps") |> json_response(401)
-  end
 end

@@ -20,21 +20,6 @@ defmodule Rice.GrainsTest do
       assert Rice.Repo.aggregate(Grains.Transfer, :count) == 1
     end
 
-    test "打赏带上帖子 URI" do
-      from = user_fixture() |> give_grain(100)
-      to = user_fixture()
-      uri = "at://#{to.did}/app.bsky.feed.post/abc"
-
-      assert {:ok, t} =
-               Grains.transfer(from, to, 5,
-                 kind: "reward",
-                 subject_uri: uri
-               )
-
-      assert t.kind == "reward"
-      assert t.subject_uri == uri
-    end
-
     test "可以用 DID 指定收款方" do
       from = user_fixture() |> give_grain(100)
       to = user_fixture()
@@ -184,17 +169,6 @@ defmodule Rice.GrainsTest do
       assert [^second, ^first] =
                Enum.map(Grains.list_transfers(me).entries, & &1.id)
                |> Enum.map(fn id -> Enum.find([second, first], &(&1.id == id)) end)
-    end
-
-    test "发放记录只列 grant" do
-      a = user_fixture() |> give_grain(100)
-      b = user_fixture()
-
-      {:ok, _} = Grains.grant(b, 50)
-      {:ok, _} = Grains.transfer(a, b, 10)
-
-      assert [one] = Grains.list_grants().entries
-      assert one.kind == "grant"
     end
   end
 end

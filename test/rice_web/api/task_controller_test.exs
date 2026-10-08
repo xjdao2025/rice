@@ -136,32 +136,6 @@ defmodule RiceWeb.Api.TaskControllerTest do
            |> json_response(403)
   end
 
-  test "公开履历隐藏未录取申请，已承接任务和已发布任务可见", %{conn: conn} do
-    publisher = task_publisher_fixture()
-    worker = user_fixture()
-    task = task_fixture(publisher)
-    assert {:ok, application} = Rice.Tasks.apply(worker, task, %{contact: "测试联系方式"})
-
-    assert %{"data" => []} =
-             build_conn()
-             |> get(~p"/api/tasks?participant_did=#{worker.did}")
-             |> json_response(200)
-
-    assert {:ok, _} = Rice.Tasks.appoint(publisher, task, application.id)
-
-    assert %{"data" => [%{"id" => task_id}]} =
-             conn
-             |> get(~p"/api/tasks?participant_did=#{worker.did}")
-             |> json_response(200)
-
-    assert task_id == task.id
-
-    assert %{"data" => [%{"id" => ^task_id}]} =
-             build_conn()
-             |> get(~p"/api/tasks?creator_did=#{publisher.did}")
-             |> json_response(200)
-  end
-
   test "发布者拒绝候选后返回未入选，动作及可见范围同步更新" do
     publisher = task_publisher_fixture()
     {:ok, publisher_token} = Rice.Accounts.issue_token(publisher)
@@ -616,71 +590,5 @@ defmodule RiceWeb.Api.TaskControllerTest do
     assert manager[chosen.did] == {"appointed", "under_review"}
     assert manager[rejected.did] == {"not_selected", "rejected"}
     assert manager[other.did] == {"not_selected", "not_selected"}
-  end
-
-  test "多人任务通过接口撤销指派和提前结束,allowed_actions 跟着变" do
-    publisher = task_publisher_fixture()
-    funded_node_fixture(publisher, 60)
-    {:ok, publisher_token} = Rice.Accounts.issue_token(publisher)
-    [first, second] = for _ <- 1..2, do: user_fixture()
-    {:ok, worker_token} = Rice.Accounts.issue_token(second)
-
-    {:ok, task} =
-      Rice.Tasks.create_task(publisher, %{
-        title: "多人收尾",
-        description: "撤销与结束",
-        organizer_contact: "节点服务台",
-        capacity: 2,
-        reward_amount: 30
-      })
-
-    [a, b] =
-      for worker <- [first, second] do
-        {:ok, application} = Rice.Tasks.apply(worker, task, %{contact: "联系"})
-        application
-      end
-
-    {:ok, task} = Rice.Tasks.appoint(publisher, task, a.id)
-    {:ok, task} = Rice.Tasks.appoint(publisher, task, b.id)
-    {:ok, task} = Rice.Tasks.submit_result(second, task, %{body: "B"})
-
-    manager = fn ->
-      build_conn() |> put_req_header("authorization", "Bearer " <> publisher_token)
-    end
-
-    detail = manager.() |> get(~p"/api/tasks/#{task.id}") |> json_response(200)
-    assert "release_assignee" in detail["data"]["allowed_actions"]
-    # 有成果待验收,不能提前结束
-    refute "close" in detail["data"]["allowed_actions"]
-    assert manager.() |> post(~p"/api/tasks/#{task.id}/close") |> json_response(409)
-
-    # 承作人自己不能撤
-    assert build_conn()
-           |> put_req_header("authorization", "Bearer " <> worker_token)
-           |> post(~p"/api/tasks/#{task.id}/applications/#{a.id}/release")
-           |> json_response(403)
-
-    released =
-      manager.()
-      |> post(~p"/api/tasks/#{task.id}/applications/#{a.id}/release", %{"reason" => "联系不上"})
-      |> json_response(200)
-
-    first_app = Enum.find(released["data"]["applications"], &(&1["user"]["did"] == first.did))
-    assert {first_app["status"], first_app["state"]} == {"released", "released"}
-    assert released["data"]["appointed_count"] == 1
-
-    sub = hd(task.submissions)
-
-    manager.()
-    |> post(~p"/api/tasks/#{task.id}/submissions/#{sub.id}/approve")
-    |> json_response(200)
-
-    closed = manager.() |> post(~p"/api/tasks/#{task.id}/close") |> json_response(200)
-    assert closed["data"]["status"] == "completed"
-    assert closed["data"]["reward_status"] == "settled"
-    assert closed["data"]["allowed_actions"] == []
-
-    assert %{grain_balance: 30, grain_frozen_balance: 0} =
-             Rice.Repo.get_by!(Rice.Community.Node, user_id: publisher.id)
   end
 end

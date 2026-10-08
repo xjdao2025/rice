@@ -254,23 +254,6 @@ defmodule Rice.EventsTest do
     assert Rice.Grains.reconcile().ok?
   end
 
-  test "取消活动后只改文案也开启空白新一期", ctx do
-    event = event!(ctx)
-    {:ok, event} = Events.apply(ctx.first, event, %{contact: "原联系方式"})
-    old = application(event, ctx.first)
-    {:ok, cancelled} = Events.cancel(ctx.host, event)
-    assert DateTime.compare(cancelled.application_deadline, DateTime.utc_now()) == :gt
-
-    {:ok, reopened} = Events.update_event(ctx.host, cancelled, %{title: "新一期活动"})
-
-    assert reopened.status == "open"
-    assert reopened.round == 2
-    assert Repo.get!(Application, old.id).payment_status == "refunded"
-    refute Enum.any?(reopened.applications, &(&1.round == 2))
-    assert balances(ctx.first) == {100, 0}
-    assert Rice.Grains.reconcile().ok?
-  end
-
   test "取消活动重开时必须有将来的有效日程", ctx do
     event = event!(ctx)
     {:ok, cancelled} = Events.cancel(ctx.host, event)

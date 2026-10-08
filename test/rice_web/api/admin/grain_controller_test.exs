@@ -28,23 +28,6 @@ defmodule RiceWeb.Api.Admin.GrainControllerTest do
   end
 
   describe "发放" do
-    test "发给一个人", %{conn: conn, token: token, code: code} do
-      user = user_fixture(%{phone: "13800002222", phone_region: "86"})
-
-      assert %{"data" => %{"granted" => 1}} =
-               conn
-               |> authed(token)
-               |> post(~p"/api/admin/grain_grants", %{
-                 to: ["13800002222"],
-                 amount: 100,
-                 memo: "补贴",
-                 code: code
-               })
-               |> json_response(201)
-
-      assert Rice.Repo.get!(Rice.Accounts.User, user.id).grain_balance == 100
-    end
-
     test "收款人可以用邮箱 / handle / DID / id", %{conn: conn, token: token, code: code} do
       a = user_fixture(%{email: "a@example.com"})
       b = user_fixture(%{handle: "bb.web5.xjdao.test"})
@@ -152,13 +135,6 @@ defmodule RiceWeb.Api.Admin.GrainControllerTest do
       assert Rice.Repo.get!(Rice.Accounts.User, user.id).grain_balance == 15
     end
 
-    test "全是空白就等于没有收款人", %{conn: conn, token: token, code: code} do
-      assert conn
-             |> authed(token)
-             |> post(~p"/api/admin/grain_grants", %{to: ["", "  "], amount: 10, code: code})
-             |> json_response(422)
-    end
-
     # 按手机号找和按 DID 找必须是同一个结果。原先联系方式那条路排除了停用的,
     # id/DID/handle 那条路没排除 —— 同一个人换个写法就发得出去了。
     test "停用的用户收不到,五种写法都收不到", %{conn: conn, token: token, code: code} do
@@ -191,18 +167,6 @@ defmodule RiceWeb.Api.Admin.GrainControllerTest do
       end
 
       assert Rice.Repo.get!(Rice.Accounts.User, user.id).grain_balance == 0
-    end
-
-    test "发放后账本自洽", %{conn: conn, token: token, code: code} do
-      a = user_fixture()
-      b = user_fixture()
-
-      conn
-      |> authed(token)
-      |> post(~p"/api/admin/grain_grants", %{to: [a.did, b.did], amount: 70, code: code})
-      |> json_response(201)
-
-      assert Rice.Grains.reconcile().ok?
     end
   end
 

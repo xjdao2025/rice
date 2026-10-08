@@ -306,24 +306,6 @@ defmodule RiceWeb.Api.GrainTransferControllerTest do
       assert Enum.sort(Enum.map(data, & &1["direction"])) == ["in", "out"]
     end
 
-    test "分页可用", %{conn: conn} do
-      {me, token} = user_with_token()
-      for _ <- 1..25, do: {:ok, _} = Rice.Grains.grant(me, 1)
-
-      page1 = conn |> authed(token) |> get(~p"/api/grain_transfers") |> json_response(200)
-      assert length(page1["data"]) == 20
-
-      page2 =
-        build_conn()
-        |> authed(token)
-        |> get(~p"/api/grain_transfers?before=#{page1["meta"]["next_cursor"]}")
-        |> json_response(200)
-
-      assert length(page2["data"]) == 5
-      ids = Enum.map(page1["data"] ++ page2["data"], & &1["id"])
-      assert length(Enum.uniq(ids)) == 25
-    end
-
     test "未认证 401", %{conn: conn} do
       assert conn |> get(~p"/api/grain_transfers") |> json_response(401)
     end

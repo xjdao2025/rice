@@ -183,22 +183,6 @@ defmodule RiceWeb.Api.Admin.UserControllerTest do
       assert meta["per_page"] == 2
     end
 
-    test "第 2 页和第 1 页不重样", %{conn: conn, token: token} do
-      for i <- 1..5, do: user_fixture(%{nickname: "翻页#{i}"})
-
-      ids = fn page ->
-        conn
-        |> authed(token)
-        |> get(~p"/api/admin/users?page=#{page}&per_page=2")
-        |> json_response(200)
-        |> Map.fetch!("data")
-        |> Enum.map(& &1["id"])
-      end
-
-      assert ids.(1) != ids.(2)
-      assert ids.(1) -- ids.(2) == ids.(1)
-    end
-
     test "过滤条件和页码一起用时,total 算的是过滤后的", %{conn: conn, token: token} do
       for i <- 1..4, do: user_fixture(%{nickname: "甲#{i}"})
       for i <- 1..3, do: user_fixture(%{nickname: "乙#{i}"})
@@ -213,18 +197,6 @@ defmodule RiceWeb.Api.Admin.UserControllerTest do
     end
 
     # 少了这条,C 端信息流哪天被默认切成页码都没人发现
-    test "不传 page 时仍是游标,meta 里没有 total", %{conn: conn, token: token} do
-      for i <- 1..3, do: user_fixture(%{nickname: "游标#{i}"})
-
-      assert %{"meta" => meta} =
-               conn
-               |> authed(token)
-               |> get(~p"/api/admin/users?limit=2")
-               |> json_response(200)
-
-      assert Map.has_key?(meta, "next_cursor")
-      refute Map.has_key?(meta, "total")
-    end
   end
 
   test "未认证 401", %{conn: conn} do

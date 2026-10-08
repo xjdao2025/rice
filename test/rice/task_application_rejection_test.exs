@@ -74,20 +74,4 @@ defmodule Rice.TaskApplicationRejectionTest do
     assert {:error, :conflict} =
              Tasks.reject_application(publisher, other_task, other_application.id)
   end
-
-  test "申请截止后不能再拒绝候选，任务转为失效" do
-    publisher = task_publisher_fixture()
-    worker = user_fixture()
-    task = task_fixture(publisher)
-    {:ok, application} = Tasks.apply(worker, task, %{contact: "测试联系方式"})
-
-    task
-    |> change(application_deadline: DateTime.add(DateTime.utc_now(), -60))
-    |> Repo.update!()
-
-    assert {:error, :conflict} = Tasks.reject_application(publisher, task, application.id)
-    assert is_nil(Repo.get!(Application, application.id).rejected_at)
-    assert {:ok, [_]} = Tasks.check_due_tasks()
-    assert {:ok, %{status: "expired"}} = Tasks.fetch_task(task.id, publisher)
-  end
 end

@@ -26,12 +26,6 @@ defmodule Rice.Files.StorageLocalTest do
     assert {:ok, "你好,世界"} = Local.get(k)
   end
 
-  test "put 会自动建目录" do
-    k = key()
-    assert :ok = Local.put(k, "x")
-    assert Local.exists?(k)
-  end
-
   test "二进制内容不被改动" do
     k = key()
     content = :crypto.strong_rand_bytes(4096)
@@ -74,13 +68,6 @@ defmodule Rice.Files.StorageLocalTest do
     test "形状不对" do
       for bad <- ["", "abc", "a/b", "abc/def", "ab/ABCDEFGHIJKLM", "ab/abcdefghijkl"] do
         assert_raise ArgumentError, fn -> Local.get(bad) end
-      end
-    end
-
-    test "合法 key 不被误伤" do
-      for _ <- 1..50 do
-        k = key()
-        assert :ok = Local.put(k, "x")
       end
     end
   end

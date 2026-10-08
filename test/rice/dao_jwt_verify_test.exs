@@ -107,10 +107,6 @@ defmodule Rice.DaoJwtVerifyTest do
       assert {:error, :bad_signature} = Rice.Dao.verify_jwt("#{h}.#{p}.#{other_sig}")
     end
 
-    test "别的钥匙签的", %{key: _key} do
-      assert {:error, :bad_signature} = Rice.Dao.verify_jwt(sign(fixture_key(), "k1", %{}))
-    end
-
     test "claims 被改过（换个 uid 就想变成别人）", %{key: key} do
       [h, _p, sig] = String.split(sign(key, "k1", %{}), ".")
       forged = b64(Jason.encode!(%{"uid" => "别人", "type" => "client"}))

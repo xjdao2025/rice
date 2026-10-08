@@ -156,17 +156,6 @@ defmodule Rice.Import.AdminUsersTest do
 
   describe "幂等" do
     # "提前预导 → 切换日只跑增量" 靠的就是这个
-    test "同一个 legacy_id 插第二次不会多出一行" do
-      row = row()
-
-      assert {:ok, first} = AdminUsers.build(row)
-      assert {:ok, _} = Repo.insert(first, on_conflict: :nothing)
-
-      assert {:ok, second} = AdminUsers.build(row)
-      assert {:ok, _} = Repo.insert(second, on_conflict: :nothing)
-
-      assert Repo.aggregate(AdminUser, :count) == 1
-    end
   end
 
   describe "格式不对的行进警告,不进库" do

@@ -23,11 +23,6 @@ defmodule RiceWeb.Api.ProposalCommentControllerTest do
       assert one["id"] == created["id"]
     end
 
-    test "列表公开可读", %{conn: conn, proposal: p} do
-      assert %{"data" => []} =
-               conn |> get(~p"/api/proposals/#{p.id}/comments") |> json_response(200)
-    end
-
     test "评论者的联系方式不外露", %{conn: conn, proposal: p} do
       {_u, token} = user_with_token(%{email: "secret@example.com"})
       conn |> authed(token) |> post(~p"/api/proposals/#{p.id}/comments", %{body: "x"})

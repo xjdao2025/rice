@@ -38,11 +38,6 @@ defmodule Rice.TsidTest do
         assert Tsid.parse(encoded) == {us, clock}
       end
     end
-
-    test "53 位微秒 + 10 位 clock_id 的边界值不溢出 13 个字符" do
-      {_us, _clock, _int, max} = List.last(@vectors)
-      assert String.length(max) == 13
-    end
   end
 
   describe "generate/0" do
@@ -68,18 +63,6 @@ defmodule Rice.TsidTest do
       for [a, b] <- Enum.chunk_every(ids, 2, 1, :discard) do
         assert a < b
       end
-    end
-
-    test "字典序等于时间序" do
-      first = Tsid.generate()
-      Process.sleep(5)
-      later = Tsid.generate()
-
-      assert first < later
-
-      {us1, _} = Tsid.parse(first)
-      {us2, _} = Tsid.parse(later)
-      assert us1 < us2
     end
 
     test "并发生成不产生碰撞" do

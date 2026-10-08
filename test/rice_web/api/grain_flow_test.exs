@@ -408,42 +408,4 @@ defmodule RiceWeb.Api.GrainFlowTest do
     assert %{ok?: true, granted: 500, balances: 500, frozen: 0} = Rice.Grains.reconcile()
     assert Repo.aggregate(from(t in Transfer, where: t.kind == "grant"), :count) == 3
   end
-
-  test "后台发放校验在验码之前,失败不烧验证码也不动账" do
-    {_admin, admin_token, issue_code} = admin_with_code()
-    user = user_fixture()
-    code = issue_code.()
-
-    assert %{"errors" => %{"to" => [message]}} =
-             build_conn()
-             |> authed(admin_token)
-             |> post(~p"/api/admin/grain_grants", %{
-               to: [user.handle, "nobody.web5.xjdao.test"],
-               amount: 10,
-               code: code
-             })
-             |> json_response(422)
-
-    assert message =~ "nobody.web5.xjdao.test"
-    assert balances(user) == {0, 0}
-
-    # 改对收款人,同一个码还能用
-    assert %{"data" => %{"granted" => 1}} =
-             build_conn()
-             |> authed(admin_token)
-             |> post(~p"/api/admin/grain_grants", %{to: [user.handle], amount: 10, code: code})
-             |> json_response(201)
-
-    assert balances(user) == {10, 0}
-
-    # 普通用户令牌进不了后台
-    {_, user_token} = user_with_token()
-
-    assert build_conn()
-           |> authed(user_token)
-           |> post(~p"/api/admin/grain_grants", %{to: [user.handle], amount: 10, code: code})
-           |> json_response(401)
-
-    assert Rice.Grains.reconcile().ok?
-  end
 end

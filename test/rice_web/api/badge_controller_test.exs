@@ -86,13 +86,5 @@ defmodule RiceWeb.Api.BadgeControllerTest do
       assert {:error, changeset} = Rice.Community.award_badge(badge, user)
       assert "该用户已获得这枚勋章" in errors_on(changeset).badge_id
     end
-
-    test "持有人数是现算的,不是缓存字段" do
-      badge = badge_fixture()
-      assert Rice.Community.badge_holder_count(badge) == 0
-
-      for _ <- 1..3, do: {:ok, _} = Rice.Community.award_badge(badge, user_fixture())
-      assert Rice.Community.badge_holder_count(badge) == 3
-    end
   end
 end

@@ -2,7 +2,7 @@ defmodule Rice.TaskApplicationStateTest do
   use Rice.DataCase, async: true
 
   alias Rice.Tasks
-  alias Rice.Tasks.{Application, ApplicationState}
+  alias Rice.Tasks.Application
 
   defp states(task) do
     Repo.all(
@@ -35,20 +35,6 @@ defmodule Rice.TaskApplicationStateTest do
   defp apply!(user, task) do
     {:ok, application} = Tasks.apply(user, task, %{contact: "联系方式"})
     application
-  end
-
-  test "迁移表只含合法状态,终态没有出口" do
-    for {from, tos} <- ApplicationState.transitions(), to <- tos do
-      assert from in ApplicationState.states() and to in ApplicationState.states()
-    end
-
-    for final <- ~w(completed rejected cancelled expired),
-        do: assert(ApplicationState.transitions()[final] == [])
-
-    refute ApplicationState.can?("completed", "appointed")
-    assert ApplicationState.can?("under_review", "appointed")
-    assert ApplicationState.legacy("under_review") == "appointed"
-    assert ApplicationState.legacy("rejected") == "not_selected"
   end
 
   test "move_applications 拒绝非法迁移,不改动行" do

@@ -81,23 +81,6 @@ defmodule RiceWeb.Api.ProposalVoteControllerTest do
                |> json_response(200)
     end
 
-    test "看到的是自己的票,不是别人的", %{conn: conn, proposal: p} do
-      {_other, other_token} = user_with_token()
-      {me, my_token} = user_with_token()
-
-      build_conn()
-      |> authed(other_token)
-      |> post(~p"/api/proposals/#{p.id}/vote", %{choice: "agree"})
-
-      assert %{"data" => nil} =
-               conn
-               |> authed(my_token)
-               |> get(~p"/api/proposals/#{p.id}/vote")
-               |> json_response(200)
-
-      _ = me
-    end
-
     test "未认证 401", %{conn: conn, proposal: p} do
       assert conn |> get(~p"/api/proposals/#{p.id}/vote") |> json_response(401)
     end

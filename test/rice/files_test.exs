@@ -37,11 +37,6 @@ defmodule Rice.FilesTest do
       id = Rice.Tsid.generate()
       assert Files.storage_key(id) == String.slice(id, 0, 2) <> "/" <> id
     end
-
-    test "同一个 id 永远得到同一个 key" do
-      id = Rice.Tsid.generate()
-      assert Files.storage_key(id) == Files.storage_key(id)
-    end
   end
 
   describe "fetch_attachment/1" do

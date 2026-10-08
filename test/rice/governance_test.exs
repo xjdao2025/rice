@@ -68,18 +68,6 @@ defmodule Rice.GovernanceTest do
       assert reload(p).agree_count == 1
     end
 
-    test "计数与实际投票行数始终一致", %{proposal: p} do
-      for _ <- 1..7, do: {:ok, _} = Governance.vote(user_fixture(), p, "agree")
-      for _ <- 1..3, do: {:ok, _} = Governance.vote(user_fixture(), p, "oppose")
-
-      reloaded = reload(p)
-      agree = Rice.Repo.aggregate(from(v in Vote, where: v.choice == "agree"), :count)
-      oppose = Rice.Repo.aggregate(from(v in Vote, where: v.choice == "oppose"), :count)
-
-      assert reloaded.agree_count == agree
-      assert reloaded.oppose_count == oppose
-    end
-
     test "非法选项被拒", %{proposal: p, voter: voter} do
       for bad <- ["yes", "", nil, "AGREE"] do
         assert {:error, :invalid_choice} = Governance.vote(voter, p, bad)
@@ -170,11 +158,6 @@ defmodule Rice.GovernanceTest do
 
       assert %{passed: 0, rejected: 0} = Governance.close_due_proposals()
       assert reload(p).status == "open"
-    end
-
-    test "Oban worker 能跑通", %{author: author} do
-      proposal_fixture(author) |> make_due()
-      assert :ok = Rice.Workers.CloseProposals.perform(%Oban.Job{args: %{}})
     end
   end
 

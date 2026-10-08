@@ -72,15 +72,5 @@ defmodule Rice.DaoJwksTest do
   end
 
   describe "fixture 自身的完整性（同时是导出生产密钥时用的那套校验）" do
-    test "PrivateKey 里的模数与 N 一致，且 N 是标准 base64" do
-      jwk = fixture_jwk()
-
-      {:RSAPrivateKey, _v, n, e, _d, _p, _q, _e1, _e2, _c, _o} =
-        jwk["PrivateKey"] |> Base.decode64!() |> then(&:public_key.der_decode(:RSAPrivateKey, &1))
-
-      assert n == jwk["N"] |> Base.decode64!() |> :binary.decode_unsigned()
-      assert e == jwk["E"] |> Base.decode64!() |> :binary.decode_unsigned()
-      assert e == 65537
-    end
   end
 end

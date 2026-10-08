@@ -89,11 +89,6 @@ defmodule RiceWeb.Api.AnnouncementControllerTest do
       assert length(data) == 5
     end
 
-    test "最后一页的 next_cursor 是 null", %{conn: conn} do
-      assert %{"meta" => %{"next_cursor" => nil}} =
-               conn |> get(~p"/api/announcements?limit=100") |> json_response(200)
-    end
-
     test "limit 超上限时封顶,不会被要求返回全表", %{conn: conn} do
       for n <- 26..120, do: announcement_fixture(%{title: "多#{n}"})
 

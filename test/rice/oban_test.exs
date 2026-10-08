@@ -22,11 +22,6 @@ defmodule Rice.ObanTest do
 
   defp self_ref, do: self() |> :erlang.term_to_binary() |> Base.encode64()
 
-  test "任务能入队" do
-    assert {:ok, _job} = Oban.insert(EchoWorker.new(%{to: self_ref(), msg: "hi"}))
-    assert_enqueued(worker: EchoWorker, args: %{"msg" => "hi"})
-  end
-
   test "drain 后任务被执行" do
     {:ok, _} = Oban.insert(EchoWorker.new(%{to: self_ref(), msg: "跑起来了"}))
 

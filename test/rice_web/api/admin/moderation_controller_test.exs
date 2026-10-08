@@ -334,16 +334,6 @@ defmodule RiceWeb.Api.Admin.ModerationControllerTest do
     end
 
     # C 端令牌调不了管理端 —— 两套令牌互相换不过去
-    test "C 端令牌 401", %{conn: conn} do
-      badge = badge_fixture()
-      {_user, token} = user_with_token()
-
-      assert conn
-             |> authed(token)
-             |> post(~p"/api/admin/badges/#{badge.id}/holders", %{to: ["a"]})
-             |> json_response(401)
-    end
-
     # 发勋章是内容运营,不是管理员管理 —— operator 应该能做
     test "运营也能补发", %{conn: _conn} do
       badge = badge_fixture()

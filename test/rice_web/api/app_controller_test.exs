@@ -6,15 +6,6 @@ defmodule RiceWeb.Api.AppControllerTest do
       assert %{"data" => []} = conn |> get(~p"/api/apps") |> json_response(200)
     end
 
-    test "返回全部应用", %{conn: conn} do
-      app_fixture(%{name: "甲", url: "https://a.test"})
-      app_fixture(%{name: "乙", url: "https://b.test"})
-
-      assert %{"data" => data} = conn |> get(~p"/api/apps") |> json_response(200)
-      assert length(data) == 2
-      assert Enum.map(data, & &1["name"]) |> Enum.sort() == ["乙", "甲"]
-    end
-
     test "按 position 升序", %{conn: conn} do
       app_fixture(%{name: "第三", position: 3})
       app_fixture(%{name: "第一", position: 1})

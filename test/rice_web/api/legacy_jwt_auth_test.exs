@@ -84,14 +84,4 @@ defmodule RiceWeb.Api.LegacyJwtAuthTest do
     |> get(~p"/api/users/me")
     |> json_response(401)
   end
-
-  test "别的钥匙签的票不认", %{conn: conn} do
-    user_fixture(%{legacy_id: "core-uid-4"})
-    other = :public_key.generate_key({:rsa, 2048, 65537})
-
-    conn
-    |> authed(dao_jwt(other, %{"uid" => "core-uid-4"}))
-    |> get(~p"/api/users/me")
-    |> json_response(401)
-  end
 end

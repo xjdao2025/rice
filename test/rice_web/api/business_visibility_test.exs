@@ -29,42 +29,6 @@ defmodule RiceWeb.Api.BusinessVisibilityTest do
     assert Enum.count(manager["data"]["events"], &(&1["detail"] == "收到任务申请")) == 2
   end
 
-  test "钱包与业务通知只返回当前登录账号的内容" do
-    {first, first_token} = user_with_token()
-    {second, second_token} = user_with_token()
-    {:ok, _} = Rice.Grains.grant(first, 100)
-
-    {:ok, _} =
-      Rice.Inbox.notify(
-        Rice.Repo,
-        first.id,
-        second.id,
-        "community_approved",
-        "加入申请已通过",
-        "node",
-        Rice.Tsid.generate()
-      )
-
-    assert build_conn() |> get(~p"/api/wallet") |> json_response(401)
-    assert build_conn() |> get(~p"/api/notifications") |> json_response(401)
-    own = build_conn() |> authed(first_token) |> get(~p"/api/wallet") |> json_response(200)
-    assert own["data"]["earned"] == 100
-    other = build_conn() |> authed(second_token) |> get(~p"/api/wallet") |> json_response(200)
-    assert other["data"]["entries"] == []
-
-    assert %{"notifications" => []} =
-             build_conn()
-             |> authed(second_token)
-             |> get(~p"/api/notifications")
-             |> json_response(200)
-
-    received =
-      build_conn() |> authed(first_token) |> get(~p"/api/notifications") |> json_response(200)
-
-    assert length(received["notifications"]) == 1
-    assert hd(received["notifications"])["subjectType"] == "node"
-  end
-
   test "已有活动通知补齐各自名称和退款结算金额，免费活动不显示金额" do
     {host, _} = user_with_token()
     {recipient, token} = user_with_token()

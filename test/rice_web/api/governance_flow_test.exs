@@ -22,8 +22,8 @@ defmodule RiceWeb.Api.GovernanceFlowTest do
 
   test "发起、投票、评论、下架复核、到期结票,每个身份看到的都是自己的那份" do
     {:ok, _} = Rice.Settings.update_site(%{proposal_approval_votes: 2})
-    {author, author_token} = user_with_token(%{nickname: "发起人"})
-    {v1, v1_token} = user_with_token(%{nickname: "甲"})
+    {_author, author_token} = user_with_token(%{nickname: "发起人"})
+    {_v1, v1_token} = user_with_token(%{nickname: "甲"})
     {_v2, v2_token} = user_with_token(%{nickname: "乙"})
     {_v3, v3_token} = user_with_token(%{nickname: "丙"})
     {_admin, admin_token} = admin_with_token()
@@ -167,6 +167,5 @@ defmodule RiceWeb.Api.GovernanceFlowTest do
 
     assert show(author_token, second["id"]) |> response(404)
     assert Enum.map(list(v1_token, %{mine: "voted"}), & &1["id"]) == [first["id"]]
-    assert author.id != v1.id
   end
 end

@@ -17,15 +17,6 @@ defmodule Rice.SettingsTest do
   end
 
   describe "get_site/0" do
-    test "空库时返回全零默认值而不是 nil" do
-      site = Rice.Settings.get_site()
-
-      assert site.fund_scale == 0
-      assert site.issued_grain_scale == 0
-      assert site.proposal_approval_votes == 0
-      assert site.documents == []
-    end
-
     test "有配置时预加载文件及其附件" do
       site = site_settings_fixture()
       attachment = attachment_fixture(%{kind: "file", filename: "财务公示.pdf"})

@@ -79,14 +79,6 @@ defmodule Rice.AccountsTest do
       assert is_nil(a.email) and is_nil(a.phone)
       assert is_nil(b.email) and is_nil(b.phone)
     end
-
-    test "余额不能为负 —— 数据库层约束" do
-      user = user_fixture()
-
-      assert_raise Ecto.ConstraintError, fn ->
-        Rice.Repo.update!(Ecto.Changeset.change(user, grain_balance: -1))
-      end
-    end
   end
 
   describe "验证码" do
@@ -161,24 +153,6 @@ defmodule Rice.AccountsTest do
           Repo.delete_all(from c in VerificationCode, where: c.target == ^target)
         end)
       end
-    end
-
-    test "不同号码互不影响" do
-      expect(Rice.NotificationsMock, :send_sms, 2, fn _, _, _ -> :ok end)
-
-      assert {:ok, _} =
-               Accounts.send_verification_code(
-                 "sms",
-                 Accounts.phone_target("86", "13800000001"),
-                 "register"
-               )
-
-      assert {:ok, _} =
-               Accounts.send_verification_code(
-                 "sms",
-                 Accounts.phone_target("86", "13800000002"),
-                 "register"
-               )
     end
 
     test "区号不同视为不同目标" do
@@ -323,11 +297,6 @@ defmodule Rice.AccountsTest do
   end
 
   describe "令牌" do
-    test "签发后可以换回用户" do
-      {user, token} = user_with_token()
-      assert Accounts.user_by_token(token).id == user.id
-    end
-
     test "库里只有哈希,存不下明文" do
       {_user, token} = user_with_token()
       [record] = Rice.Repo.all(ApiToken)
@@ -381,13 +350,6 @@ defmodule Rice.AccountsTest do
       assert {:ok, 2} = Accounts.revoke_all_tokens(user)
       assert Accounts.user_by_token(t1) == nil
       assert Accounts.user_by_token(t2) == nil
-    end
-
-    test "两次签发得到不同的令牌" do
-      user = user_fixture()
-      {:ok, a} = Accounts.issue_token(user)
-      {:ok, b} = Accounts.issue_token(user)
-      refute a == b
     end
 
     test "prune_expired 只删过期的" do

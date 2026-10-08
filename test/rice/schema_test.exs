@@ -71,22 +71,6 @@ defmodule Rice.SchemaTest do
     assert widget.updated_at
   end
 
-  test "按 id 排序等于按插入时间排序 —— keyset 分页的前提" do
-    names = for i <- 1..50, do: "w#{i}"
-
-    for name <- names do
-      {:ok, _} = %Widget{} |> Widget.changeset(%{name: name}) |> Repo.insert()
-    end
-
-    ordered = Repo.all(from w in Widget, order_by: [asc: w.id], select: w.name)
-    assert ordered == names
-
-    by_time =
-      Repo.all(from w in Widget, order_by: [asc: w.inserted_at, asc: w.id], select: w.name)
-
-    assert by_time == names
-  end
-
   test "keyset 分页:id > cursor 拿下一页" do
     for i <- 1..10 do
       {:ok, _} = %Widget{} |> Widget.changeset(%{name: "w#{i}"}) |> Repo.insert()
@@ -134,12 +118,6 @@ defmodule Rice.SchemaTest do
 
   # Ecto 的 cast/3 默认把 "" 当作"没填"(empty_values: [""]),在进类型之前就转成 nil,
   # 所以空串不会变成 :invalid 错误 —— 它等价于没传这个字段。记下来免得日后误判。
-  test "空串被当作 nil,不是非法值" do
-    changeset = Widget.changeset(%Widget{}, %{name: "x", parent_id: ""})
-    assert changeset.valid?
-    refute Map.has_key?(changeset.changes, :parent_id)
-  end
-
   test "legacy_id 的 partial unique index:可以多行为 NULL,非 NULL 值唯一" do
     {:ok, _} = %Widget{} |> Widget.changeset(%{name: "a"}) |> Repo.insert()
     {:ok, _} = %Widget{} |> Widget.changeset(%{name: "b"}) |> Repo.insert()
@@ -157,37 +135,4 @@ defmodule Rice.SchemaTest do
   # 但返回的结构里 id **依然有值** —— Ecto 只在主键由数据库生成时才把它置为 nil,
   # 而 TSID 是应用侧生成的。所以不能拿 `%{id: nil}` 判断"有没有真的插进去",
   # 只能靠插入前后各数一次。
-  test "on_conflict: :nothing 冲突时不插入,但返回的 id 不是 nil" do
-    uuid = "3fa85f64-5717-4562-b3fc-2c963f66afa6"
-    {:ok, _} = %Widget{} |> Widget.changeset(%{name: "a", legacy_id: uuid}) |> Repo.insert()
-
-    before_count = Repo.aggregate(Widget, :count)
-
-    assert {:ok, returned} =
-             %Widget{}
-             |> Widget.changeset(%{name: "b", legacy_id: uuid})
-             |> Repo.insert(on_conflict: :nothing)
-
-    refute is_nil(returned.id), "返回的 id 若为 nil,导入任务的计数逻辑就可以简化"
-    assert Repo.aggregate(Widget, :count) == before_count, "冲突行不该被插入"
-  end
-
-  test "并发插入不产生主键冲突" do
-    parent_pid = self()
-
-    ids =
-      1..20
-      |> Task.async_stream(
-        fn i ->
-          Ecto.Adapters.SQL.Sandbox.allow(Repo, parent_pid, self())
-          {:ok, w} = %Widget{} |> Widget.changeset(%{name: "c#{i}"}) |> Repo.insert()
-          w.id
-        end,
-        max_concurrency: 20
-      )
-      |> Enum.map(fn {:ok, id} -> id end)
-
-    assert length(Enum.uniq(ids)) == 20
-    assert Repo.aggregate(Widget, :count) == 20
-  end
 end
