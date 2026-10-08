@@ -40,4 +40,9 @@ defmodule RiceWeb.Api.UserJSON do
       node_member: user.node_member
     }
   end
+
+  @doc "嵌在别的资源里的用户(作者、转账双方等);没预加载或为空都是 null。"
+  def embed(nil), do: nil
+  def embed(%Ecto.Association.NotLoaded{}), do: nil
+  def embed(user), do: public(user)
 end

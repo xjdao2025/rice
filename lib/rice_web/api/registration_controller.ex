@@ -20,21 +20,9 @@ defmodule RiceWeb.Api.RegistrationController do
     channel = params["channel"]
     {target, contact} = contact_for(channel, params)
 
-    case Accounts.verify_code(channel, target, "register", params["code"] || "") do
-      :ok ->
-        ticket = Phoenix.Token.sign(RiceWeb.Endpoint, @ticket_salt, contact)
-        json(conn, %{data: %{ticket: ticket, expires_in: @ticket_max_age}})
-
-      {:error, :too_many_attempts} ->
-        conn
-        |> put_status(:too_many_requests)
-        |> json(%{errors: %{detail: "尝试次数过多,请重新获取验证码"}})
-
-      {:error, :code_expired} ->
-        conn |> put_status(:unprocessable_entity) |> json(%{errors: %{code: ["验证码已过期"]}})
-
-      {:error, _} ->
-        conn |> put_status(:unprocessable_entity) |> json(%{errors: %{code: ["验证码不正确"]}})
+    with :ok <- Accounts.verify_code(channel, target, "register", params["code"] || "") do
+      ticket = Phoenix.Token.sign(RiceWeb.Endpoint, @ticket_salt, contact)
+      json(conn, %{data: %{ticket: ticket, expires_in: @ticket_max_age}})
     end
   end
 
@@ -73,10 +61,9 @@ defmodule RiceWeb.Api.RegistrationController do
   end
 
   defp verify_ticket(ticket) when is_binary(ticket) do
-    case Phoenix.Token.verify(RiceWeb.Endpoint, @ticket_salt, ticket, max_age: @ticket_max_age) do
-      {:ok, contact} -> {:ok, contact}
-      {:error, _} -> {:error, :invalid_ticket}
-    end
+    with {:error, _} <-
+           Phoenix.Token.verify(RiceWeb.Endpoint, @ticket_salt, ticket, max_age: @ticket_max_age),
+         do: {:error, :invalid_ticket}
   end
 
   defp verify_ticket(_), do: {:error, :invalid_ticket}

@@ -35,7 +35,6 @@ defmodule Rice.Files.StorageLocalTest do
 
   test "不存在的 key" do
     assert {:error, :enoent} = Local.get(key())
-    refute Local.exists?(key())
   end
 
   test "delete 是幂等的" do
@@ -43,7 +42,7 @@ defmodule Rice.Files.StorageLocalTest do
     :ok = Local.put(k, "x")
     assert :ok = Local.delete(k)
     assert :ok = Local.delete(k)
-    refute Local.exists?(k)
+    assert {:error, :enoent} = Local.get(k)
   end
 
   test "落盘路径落在 root 之内,且只由 key 决定", %{root: root} do

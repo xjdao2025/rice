@@ -80,11 +80,7 @@ defmodule Rice.Community do
   end
 
   def fetch_node(id, user \\ nil) do
-    with true <- Rice.Tsid.valid?(id), %Node{} = node <- Repo.get(Node, id) do
-      {:ok, preload_nodes(node, user)}
-    else
-      _ -> {:error, :not_found}
-    end
+    with {:ok, node} <- Repo.fetch(Node, id), do: {:ok, preload_nodes(node, user)}
   end
 
   defp preload_nodes(nodes, user) do
@@ -181,16 +177,7 @@ defmodule Rice.Community do
       |> write_result!()
 
     for admin_id <- admin_ids(node) do
-      Rice.Inbox.notify(
-        Repo,
-        admin_id,
-        user.id,
-        "node_application_created",
-        "申请加入#{node.name}",
-        "node",
-        node.id
-      )
-      |> write_result!()
+      notify!(node, admin_id, user.id, "node_application_created", "申请加入#{node.name}")
     end
 
     application
@@ -232,20 +219,12 @@ defmodule Rice.Community do
     end
 
     detail = if status == "approved", do: "加入#{node.name}的申请已通过", else: "加入#{node.name}的申请未通过"
-
-    Rice.Inbox.notify(
-      Repo,
-      application.user_id,
-      user.id,
-      "node_application_#{status}",
-      detail,
-      "node",
-      node.id
-    )
-    |> write_result!()
-
+    notify!(node, application.user_id, user.id, "node_application_#{status}", detail)
     application
   end
+
+  defp notify!(node, recipient, actor, action, detail),
+    do: write_result!(Rice.Inbox.notify(Repo, recipient, actor, action, detail, "node", node.id))
 
   defp write_result!({:ok, value}), do: value
   defp write_result!({:error, reason}), do: Repo.rollback(reason)
@@ -302,16 +281,7 @@ defmodule Rice.Community do
     |> Pagination.paginate(Repo, Pagination.params(params))
   end
 
-  def fetch_badge(id) do
-    if Rice.Tsid.valid?(id) do
-      case Repo.one(from b in Badge, where: b.id == ^id, preload: [:image]) do
-        nil -> {:error, :not_found}
-        badge -> {:ok, badge}
-      end
-    else
-      {:error, :not_found}
-    end
-  end
+  def fetch_badge(id), do: Repo.fetch(from(b in Badge, preload: [:image]), id)
 
   @doc """
   建一枚勋章,可以顺带发给一批人。
@@ -326,7 +296,7 @@ defmodule Rice.Community do
   def create_badge(attrs, recipients \\ []) do
     attrs = Map.new(attrs, fn {k, v} -> {to_string(k), v} end)
 
-    with {:ok, users} <- resolve_recipients(recipients) do
+    with {:ok, users} <- Rice.Accounts.find_users(recipients) do
       Ecto.Multi.new()
       |> Ecto.Multi.insert(:badge, Badge.changeset(%Badge{}, attrs))
       |> award_all(users)
@@ -355,11 +325,10 @@ defmodule Rice.Community do
   会漏的窗口。
   """
   def award_badge_to(%Badge{} = badge, recipients) do
-    with {:ok, users} <- resolve_recipients(recipients) do
-      case users do
-        [] -> {:error, :no_recipients}
-        users -> insert_awards(badge, users)
-      end
+    case Rice.Accounts.find_users(recipients) do
+      {:ok, []} -> {:error, :no_recipients}
+      {:ok, users} -> insert_awards(badge, users)
+      error -> error
     end
   end
 
@@ -393,32 +362,6 @@ defmodule Rice.Community do
         BadgeAward.changeset(%BadgeAward{}, %{badge_id: badge.id, user_id: user.id})
       end)
     end)
-  end
-
-  # 收款人的写法和发放稻米保持一致 —— 运营在两个界面里粘的是同一份名单
-  defp resolve_recipients([]), do: {:ok, []}
-
-  defp resolve_recipients(recipients) when is_list(recipients) do
-    case Enum.reject(recipients, &is_binary/1) do
-      [] -> match_recipients(recipients)
-      bad -> {:error, {:invalid_recipients, bad}}
-    end
-  end
-
-  defp resolve_recipients(_), do: {:error, :invalid_recipients}
-
-  defp match_recipients(recipients) do
-    found =
-      recipients
-      |> Enum.map(&String.trim/1)
-      |> Enum.reject(&(&1 == ""))
-      |> Enum.uniq()
-      |> Enum.map(&{&1, Rice.Accounts.find_user(&1)})
-
-    case Enum.filter(found, fn {_, user} -> is_nil(user) end) do
-      [] -> {:ok, found |> Enum.map(&elem(&1, 1)) |> Enum.uniq_by(& &1.id)}
-      missing -> {:error, {:unknown_recipients, Enum.map(missing, &elem(&1, 0))}}
-    end
   end
 
   @doc "持有某枚勋章的人。"

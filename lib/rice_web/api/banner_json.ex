@@ -3,7 +3,7 @@ defmodule RiceWeb.Api.BannerJSON do
 
   def index(%{banners: banners}), do: %{data: Enum.map(banners, &data/1)}
 
-  defp data(banner) do
+  def data(banner) do
     %{
       id: banner.id,
       url: banner.url,

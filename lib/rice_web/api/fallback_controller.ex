@@ -11,73 +11,45 @@ defmodule RiceWeb.Api.FallbackController do
 
   alias RiceWeb.Api.ErrorJSON
 
-  def call(conn, {:error, :not_found}) do
+  @rendered %{not_found: :"404", unauthorized: :"401", forbidden: :"403"}
+
+  # 错误原因 → {状态码, errors}。文案是对外契约,改一个字前端就要跟着改。
+  @errors %{
+    conflict: {:conflict, %{detail: "资源状态已经变化，请刷新后重试"}},
+    too_many_requests: {:too_many_requests, %{detail: "操作太频繁，请稍后再试"}},
+    capacity_full: {:conflict, %{detail: "人数已满，暂无可用名额"}},
+    grain_reservation_missing: {:conflict, %{detail: "资金记录暂时无法处理，本次操作未生效"}},
+    missing_request_id: {:unprocessable_entity, %{client_request_id: ["缺少有效请求标识"]}},
+    insufficient_balance: {:unprocessable_entity, %{amount: ["可用稻米不足"]}},
+    invalid_ticket: {:unprocessable_entity, %{detail: "注册票据无效或已过期,请重新验证"}},
+    invalid_username: {:unprocessable_entity, %{detail: "用户名须为 3–18 位字母、数字或连字符，首尾须为字母或数字"}},
+    weak_password: {:unprocessable_entity, %{detail: "密码至少 8 位"}},
+    invalid_amount: {:unprocessable_entity, %{detail: "金额必须是正整数"}},
+    invalid_listed: {:unprocessable_entity, %{detail: "listed 必须是 true 或 false"}},
+    cannot_delete_superuser: {:unprocessable_entity, %{detail: "超级管理员不能删除"}},
+    cannot_delete_self: {:unprocessable_entity, %{detail: "不能删除自己"}},
+    unprocessable_entity: {:unprocessable_entity, %{detail: "请求无法处理"}},
+    # 验证码
+    too_many_attempts: {:too_many_requests, %{detail: "尝试次数过多,请重新获取验证码"}},
+    code_expired: {:unprocessable_entity, %{code: ["验证码已过期"]}},
+    invalid_code: {:unprocessable_entity, %{code: ["验证码不正确"]}},
+    # 转账收款人
+    recipient_not_found: {:unprocessable_entity, %{to: ["接收用户不存在"]}},
+    recipient_disabled: {:unprocessable_entity, %{to: ["接收用户已被禁用"]}},
+    cannot_transfer_to_self: {:unprocessable_entity, %{to: ["不能转给自己"]}},
+    invalid_reward_post: {:unprocessable_entity, %{subject_uri: ["赞赏帖子与接收人不匹配"]}}
+  }
+
+  def call(conn, {:error, reason}) when is_map_key(@rendered, reason) do
     conn
-    |> put_status(:not_found)
+    |> put_status(reason)
     |> put_view(json: ErrorJSON)
-    |> render(:"404")
+    |> render(@rendered[reason])
   end
 
-  def call(conn, {:error, :unauthorized}) do
-    conn
-    |> put_status(:unauthorized)
-    |> put_view(json: ErrorJSON)
-    |> render(:"401")
-  end
-
-  def call(conn, {:error, :forbidden}) do
-    conn
-    |> put_status(:forbidden)
-    |> put_view(json: ErrorJSON)
-    |> render(:"403")
-  end
-
-  def call(conn, {:error, :conflict}) do
-    conn
-    |> put_status(:conflict)
-    |> json(%{errors: %{detail: "资源状态已经变化，请刷新后重试"}})
-  end
-
-  def call(conn, {:error, :too_many_requests}) do
-    conn |> put_status(:too_many_requests) |> json(%{errors: %{detail: "操作太频繁，请稍后再试"}})
-  end
-
-  def call(conn, {:error, :capacity_full}) do
-    conn |> put_status(:conflict) |> json(%{errors: %{detail: "人数已满，暂无可用名额"}})
-  end
-
-  def call(conn, {:error, :missing_request_id}) do
-    conn
-    |> put_status(:unprocessable_entity)
-    |> json(%{errors: %{client_request_id: ["缺少有效请求标识"]}})
-  end
-
-  def call(conn, {:error, :insufficient_balance}) do
-    conn
-    |> put_status(:unprocessable_entity)
-    |> json(%{errors: %{amount: ["可用稻米不足"]}})
-  end
-
-  def call(conn, {:error, :grain_reservation_missing}) do
-    conn
-    |> put_status(:conflict)
-    |> json(%{errors: %{detail: "资金记录暂时无法处理，本次操作未生效"}})
-  end
-
-  def call(conn, {:error, reason})
-      when reason in [
-             :invalid_ticket,
-             :invalid_username,
-             :weak_password,
-             :invalid_amount,
-             :invalid_listed,
-             :cannot_delete_superuser,
-             :cannot_delete_self,
-             :unprocessable_entity
-           ] do
-    conn
-    |> put_status(:unprocessable_entity)
-    |> json(%{errors: %{detail: detail(reason)}})
+  def call(conn, {:error, reason}) when is_map_key(@errors, reason) do
+    {status, errors} = @errors[reason]
+    conn |> put_status(status) |> json(%{errors: errors})
   end
 
   def call(conn, {:error, %Ecto.Changeset{} = changeset}) do
@@ -86,13 +58,4 @@ defmodule RiceWeb.Api.FallbackController do
     |> put_view(json: ErrorJSON)
     |> render(:changeset, changeset: changeset)
   end
-
-  defp detail(:invalid_ticket), do: "注册票据无效或已过期,请重新验证"
-  defp detail(:invalid_username), do: "用户名须为 3–18 位字母、数字或连字符，首尾须为字母或数字"
-  defp detail(:weak_password), do: "密码至少 8 位"
-  defp detail(:invalid_amount), do: "金额必须是正整数"
-  defp detail(:invalid_listed), do: "listed 必须是 true 或 false"
-  defp detail(:cannot_delete_superuser), do: "超级管理员不能删除"
-  defp detail(:cannot_delete_self), do: "不能删除自己"
-  defp detail(:unprocessable_entity), do: "请求无法处理"
 end

@@ -28,9 +28,6 @@ defmodule Rice.Files.Storage.Local do
     end
   end
 
-  @impl true
-  def exists?(key) when is_binary(key), do: File.regular?(path_for(key))
-
   def root, do: Application.fetch_env!(:rice, :storage_root)
 
   # key 是我们自己按 TSID 生成的,但拼路径前仍然再挡一道 —— 这类检查的成本

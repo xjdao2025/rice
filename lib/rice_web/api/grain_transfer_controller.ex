@@ -16,62 +16,32 @@ defmodule RiceWeb.Api.GrainTransferController do
 
   # 可以拿手机号 / 邮箱查人,等于一个"这个号是谁"的查询口 —— 按用户限流
   def recipient(conn, params) do
-    with :ok <- Rice.RateLimit.hit({:recipient, conn.assigns.current_user.id}, 30, 3600) do
-      show_recipient(conn, params["to"])
-    end
-  end
-
-  defp show_recipient(conn, identifier) do
-    case Grains.resolve_recipient(identifier) do
-      {:ok, user} ->
-        user = Rice.Repo.preload(user, :avatar)
-        json(conn, %{data: RiceWeb.Api.UserJSON.public(user)})
-
-      {:error, :recipient_not_found} ->
-        conn |> put_status(:unprocessable_entity) |> json(%{errors: %{to: ["接收用户不存在"]}})
-
-      {:error, :recipient_disabled} ->
-        conn |> put_status(:unprocessable_entity) |> json(%{errors: %{to: ["接收用户已被禁用"]}})
+    with :ok <- Rice.RateLimit.hit({:recipient, conn.assigns.current_user.id}, 30, 3600),
+         {:ok, user} <- Grains.resolve_recipient(params["to"]) do
+      json(conn, %{data: RiceWeb.Api.UserJSON.public(Rice.Repo.preload(user, :avatar))})
     end
   end
 
   def create(conn, params) do
-    kind = if params["kind"] == "reward", do: "reward", else: "gift"
+    opts = [
+      kind: if(params["kind"] == "reward", do: "reward", else: "gift"),
+      memo: params["memo"],
+      subject_uri: params["subject_uri"],
+      request_id: params["client_request_id"]
+    ]
 
-    with {:ok, amount} <- fetch_amount(params["amount"]) do
-      opts = [
-        kind: kind,
-        memo: params["memo"],
-        subject_uri: params["subject_uri"],
-        request_id: params["client_request_id"]
-      ]
+    with {:ok, amount} <- fetch_amount(params["amount"]),
+         {:ok, transfer} <- Grains.transfer(conn.assigns.current_user, params["to"], amount, opts) do
+      conn
+      |> put_status(:created)
+      |> render(:show, transfer: transfer, viewer: conn.assigns.current_user)
+    else
+      # 和 fallback 的"可用稻米不足"措辞不同,C 端一直是这句
+      {:error, :insufficient_balance} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{errors: %{amount: ["稻米不足"]}})
 
-      case Grains.transfer(conn.assigns.current_user, params["to"], amount, opts) do
-        {:ok, transfer} ->
-          conn
-          |> put_status(:created)
-          |> render(:show, transfer: transfer, viewer: conn.assigns.current_user)
-
-        {:error, :insufficient_balance} ->
-          conn |> put_status(:unprocessable_entity) |> json(%{errors: %{amount: ["稻米不足"]}})
-
-        {:error, :recipient_not_found} ->
-          conn |> put_status(:unprocessable_entity) |> json(%{errors: %{to: ["接收用户不存在"]}})
-
-        {:error, :recipient_disabled} ->
-          conn |> put_status(:unprocessable_entity) |> json(%{errors: %{to: ["接收用户已被禁用"]}})
-
-        {:error, :cannot_transfer_to_self} ->
-          conn |> put_status(:unprocessable_entity) |> json(%{errors: %{to: ["不能转给自己"]}})
-
-        {:error, :invalid_reward_post} ->
-          conn
-          |> put_status(:unprocessable_entity)
-          |> json(%{errors: %{subject_uri: ["赞赏帖子与接收人不匹配"]}})
-
-        error ->
-          error
-      end
+      error ->
+        error
     end
   end
 

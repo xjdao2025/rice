@@ -7,15 +7,12 @@ defmodule RiceWeb.Api.Admin.PasswordController do
   @doc "发重置码。手机号不是管理员时也返回 202 —— 不泄露谁是管理员。"
   def challenge(conn, params) do
     case Rice.Admin.send_reset_code(params["phone_region"] || "86", params["phone"] || "") do
-      {:ok, _} ->
-        send_resp(conn, :accepted, "")
-
       {:error, :too_many_requests} ->
         conn
         |> put_status(:too_many_requests)
         |> json(%{errors: %{detail: "操作过于频繁,请稍后再试"}})
 
-      {:error, _} ->
+      _ ->
         send_resp(conn, :accepted, "")
     end
   end
@@ -27,19 +24,10 @@ defmodule RiceWeb.Api.Admin.PasswordController do
            params["code"] || "",
            params["password"] || ""
          ) do
-      {:ok, _admin} ->
-        send_resp(conn, :no_content, "")
-
-      {:error, %Ecto.Changeset{} = cs} ->
-        {:error, cs}
-
-      {:error, :too_many_attempts} ->
-        conn
-        |> put_status(:too_many_requests)
-        |> json(%{errors: %{detail: "尝试次数过多,请重新获取验证码"}})
-
-      {:error, _} ->
-        conn |> put_status(:unprocessable_entity) |> json(%{errors: %{code: ["验证码不正确"]}})
+      {:ok, _admin} -> send_resp(conn, :no_content, "")
+      # 管理端过期的码也只说"不正确"
+      {:error, :code_expired} -> {:error, :invalid_code}
+      error -> error
     end
   end
 end

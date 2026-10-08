@@ -28,18 +28,13 @@ defmodule RiceWeb.Api.PasswordController do
       {:error, :weak_password} ->
         conn |> put_status(:unprocessable_entity) |> json(%{errors: %{password: ["密码至少 8 位"]}})
 
-      {:error, :too_many_attempts} ->
-        conn
-        |> put_status(:too_many_requests)
-        |> json(%{errors: %{detail: "尝试次数过多,请重新获取验证码"}})
-
-      {:error, :code_expired} ->
-        conn |> put_status(:unprocessable_entity) |> json(%{errors: %{code: ["验证码已过期"]}})
-
       # 用户不存在与验证码错误返回同样的东西 —— 否则这就是一个
       # "这个手机号注册过没有"的探测接口
-      {:error, reason} when reason in [:invalid_code, :user_not_found] ->
-        conn |> put_status(:unprocessable_entity) |> json(%{errors: %{code: ["验证码不正确"]}})
+      {:error, :user_not_found} ->
+        {:error, :invalid_code}
+
+      {:error, reason} when reason in [:too_many_attempts, :code_expired, :invalid_code] ->
+        {:error, reason}
 
       {:error, _} ->
         conn |> put_status(:bad_gateway) |> json(%{errors: %{detail: "重置密码失败"}})

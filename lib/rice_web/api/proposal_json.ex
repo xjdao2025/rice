@@ -27,14 +27,10 @@ defmodule RiceWeb.Api.ProposalJSON do
       # core 把它塞在列表 VO 的 `choice` 里(0 表示没投),这里用 null。
       my_vote: Map.get(my_votes, proposal.id),
       attachment: AttachmentJSON.embed(proposal.attachment),
-      author: author(proposal.user),
+      author: UserJSON.embed(proposal.user),
       inserted_at: proposal.inserted_at
     }
   end
 
   defp my_votes(assigns), do: Map.get(assigns, :my_votes) || %{}
-
-  defp author(%Ecto.Association.NotLoaded{}), do: nil
-  defp author(nil), do: nil
-  defp author(user), do: UserJSON.public(user)
 end

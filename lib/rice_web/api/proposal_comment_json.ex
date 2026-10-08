@@ -12,12 +12,8 @@ defmodule RiceWeb.Api.ProposalCommentJSON do
       id: comment.id,
       body: comment.body,
       # core 在评论表上存了一份 user_name 副本;这里 join
-      author: author(comment.user),
+      author: UserJSON.embed(comment.user),
       inserted_at: comment.inserted_at
     }
   end
-
-  defp author(%Ecto.Association.NotLoaded{}), do: nil
-  defp author(nil), do: nil
-  defp author(user), do: UserJSON.public(user)
 end

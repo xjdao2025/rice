@@ -34,17 +34,7 @@ defmodule Rice.Files do
 
   # ── 读 ──────────────────────────────────────────────────────────────────
 
-  def fetch_attachment(id) do
-    if Rice.Tsid.valid?(id) do
-      case Repo.get(Attachment, id) do
-        nil -> {:error, :not_found}
-        attachment -> {:ok, attachment}
-      end
-    else
-      # 长度/字符不合法的 id 不可能存在,直接当 404,不去打数据库
-      {:error, :not_found}
-    end
-  end
+  def fetch_attachment(id), do: Repo.fetch(Attachment, id)
 
   @doc "读出附件的字节。元数据存在但字节还没回填时返回 `{:error, :not_stored}`。"
   def read(%Attachment{storage_key: nil}), do: {:error, :not_stored}
@@ -69,21 +59,6 @@ defmodule Rice.Files do
   反过来,写库失败最多留下一个孤儿文件,由清理任务回收,不会让接口返回坏数据。
   """
   def create_attachment(content, attrs, user_id \\ nil) when is_binary(content) do
-    insert_with_content(content, attrs, user_id, fn changeset ->
-      changeset |> validate_size() |> validate_content_type()
-    end)
-  end
-
-  @doc """
-  和 `create_attachment/3` 一样,但**不走上传白名单和大小上限** —— 只给从 core
-  搬历史文件用。那些文件已经在线上被引用着(比如提案正文里嵌的 10MB mp4),
-  拒收的结果只会是页面上一个裂开的图,而不是更安全。不归属任何用户。
-  """
-  def create_legacy_attachment(content, attrs) when is_binary(content) do
-    insert_with_content(content, attrs, nil, & &1)
-  end
-
-  defp insert_with_content(content, attrs, user_id, validate) do
     id = Rice.Tsid.generate()
     key = storage_key(id)
 
@@ -96,7 +71,8 @@ defmodule Rice.Files do
           storage_key: key
         })
       )
-      |> validate.()
+      |> validate_size()
+      |> validate_content_type()
 
     with {:ok, _} <- Ecto.Changeset.apply_action(changeset, :insert),
          :ok <- Storage.put(key, content) do
@@ -112,36 +88,25 @@ defmodule Rice.Files do
     ids = Map.fetch(attrs, "attachment_ids")
     ids = if ids == :error, do: Map.fetch(attrs, :attachment_ids), else: ids
 
-    case ids do
-      :error ->
-        changeset
+    with {:ok, ids} <- ids,
+         true <-
+           is_list(ids) and length(ids) <= 9 and Enum.all?(ids, &Rice.Tsid.valid?/1) and
+             length(Enum.uniq(ids)) == length(ids),
+         data = Repo.preload(changeset.data, :image_links),
+         existing = Map.new(data.image_links, &{&1.attachment_id, &1}),
+         true <- owned_images?(Enum.reject(ids, &Map.has_key?(existing, &1)), user_id) do
+      links =
+        ids
+        |> Enum.with_index()
+        |> Enum.map(fn {id, position} ->
+          link = Map.get(existing, id) || Ecto.build_assoc(data, :image_links)
+          Ecto.Changeset.change(link, attachment_id: id, position: position)
+        end)
 
-      {:ok, ids} ->
-        valid? =
-          is_list(ids) and length(ids) <= 9 and Enum.all?(ids, &Rice.Tsid.valid?/1) and
-            length(Enum.uniq(ids)) == length(ids)
-
-        if valid? do
-          data = Repo.preload(changeset.data, :image_links)
-          existing = Map.new(data.image_links, &{&1.attachment_id, &1})
-          new_ids = Enum.reject(ids, &Map.has_key?(existing, &1))
-
-          if owned_images?(new_ids, user_id) do
-            links =
-              ids
-              |> Enum.with_index()
-              |> Enum.map(fn {id, position} ->
-                link = Map.get(existing, id) || Ecto.build_assoc(data, :image_links)
-                Ecto.Changeset.change(link, attachment_id: id, position: position)
-              end)
-
-            Ecto.Changeset.put_assoc(%{changeset | data: data}, :image_links, links)
-          else
-            Ecto.Changeset.add_error(changeset, :attachment_ids, "最多选择9张本人上传或当前内容已有的有效图片，不能重复")
-          end
-        else
-          Ecto.Changeset.add_error(changeset, :attachment_ids, "最多选择9张本人上传或当前内容已有的有效图片，不能重复")
-        end
+      Ecto.Changeset.put_assoc(%{changeset | data: data}, :image_links, links)
+    else
+      :error -> changeset
+      false -> Ecto.Changeset.add_error(changeset, :attachment_ids, "最多选择9张本人上传或当前内容已有的有效图片，不能重复")
     end
   end
 

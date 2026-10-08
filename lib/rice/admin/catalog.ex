@@ -31,15 +31,7 @@ defmodule Rice.Admin.Catalog do
 
   def fetch(kind, id) do
     {schema, preloads} = fetch_resource(kind)
-
-    if Rice.Tsid.valid?(id) do
-      case Repo.one(from r in schema, where: r.id == ^id, preload: ^preloads) do
-        nil -> {:error, :not_found}
-        record -> {:ok, record}
-      end
-    else
-      {:error, :not_found}
-    end
+    Repo.fetch(from(r in schema, preload: ^preloads), id)
   end
 
   def create(kind, attrs) do
@@ -48,14 +40,14 @@ defmodule Rice.Admin.Catalog do
     struct(schema)
     |> schema.changeset(with_default_position(kind, attrs))
     |> Repo.insert()
-    |> preload_result(preloads)
+    |> Repo.preload_ok(preloads)
   end
 
   def update(kind, id, attrs) do
     {schema, preloads} = fetch_resource(kind)
 
     with {:ok, record} <- fetch(kind, id) do
-      record |> schema.changeset(attrs) |> Repo.update() |> preload_result(preloads)
+      record |> schema.changeset(attrs) |> Repo.update() |> Repo.preload_ok(preloads)
     end
   end
 
@@ -106,9 +98,6 @@ defmodule Rice.Admin.Catalog do
       Map.put(attrs, "position", next)
     end
   end
-
-  defp preload_result({:ok, record}, preloads), do: {:ok, Repo.preload(record, preloads)}
-  defp preload_result(other, _), do: other
 
   defp fetch_resource(kind), do: Map.fetch!(@resources, kind)
 end

@@ -235,15 +235,7 @@ defmodule Rice.Events do
     unwrap!(Changeset.apply_action(changeset, :update))
 
     if event.status in ["open", "in_progress"] do
-      approved =
-        Repo.aggregate(
-          from(a in Application,
-            where: a.event_id == ^event.id and a.round == ^event.round and a.status == "approved"
-          ),
-          :count
-        )
-
-      require!(approved <= Changeset.get_field(changeset, :capacity), :capacity_full)
+      require!(approved_count(event) <= Changeset.get_field(changeset, :capacity), :capacity_full)
     end
 
     before = event_snapshot(event)
@@ -473,17 +465,7 @@ defmodule Rice.Events do
 
         current = start_locked!(current, now)
 
-        applications =
-          Repo.all(
-            from(a in Application,
-              where:
-                a.event_id == ^current.id and a.round == ^current.round and
-                  a.status == "approved",
-              order_by: a.user_id
-            )
-          )
-
-        Enum.each(applications, fn application ->
+        Enum.each(round_applications(current, ["approved"]), fn application ->
           if application.fee_amount > 0 do
             require!(application.payment_status == "reserved", :grain_reservation_missing)
 
@@ -592,14 +574,7 @@ defmodule Rice.Events do
     if before?(now, event.starts_at) do
       event
     else
-      pending =
-        Repo.all(
-          from(a in Application,
-            where: a.event_id == ^event.id and a.round == ^event.round and a.status == "pending",
-            order_by: a.user_id
-          )
-        )
-
+      pending = round_applications(event, ["pending"])
       lock_accounts!(Enum.map(pending, & &1.user_id))
       Enum.each(pending, &refund_application!(event, &1, nil, "not_selected"))
       change_event!(event, nil, "started", "in_progress")
@@ -653,16 +628,25 @@ defmodule Rice.Events do
     )
   end
 
-  defp active_applications(event),
-    do:
-      Repo.all(
-        from(a in Application,
-          where:
-            a.event_id == ^event.id and a.round == ^event.round and
-              a.status in ["pending", "approved"],
-          order_by: a.user_id
-        )
+  defp active_applications(event), do: round_applications(event, ["pending", "approved"])
+
+  defp round_applications(event, statuses) do
+    Repo.all(
+      from(a in Application,
+        where: a.event_id == ^event.id and a.round == ^event.round and a.status in ^statuses,
+        order_by: a.user_id
       )
+    )
+  end
+
+  defp approved_count(event) do
+    Repo.aggregate(
+      from(a in Application,
+        where: a.event_id == ^event.id and a.round == ^event.round and a.status == "approved"
+      ),
+      :count
+    )
+  end
 
   defp lock_accounts!(ids) do
     ids = Enum.uniq(ids)
@@ -677,17 +661,8 @@ defmodule Rice.Events do
   end
 
   # Called only inside with_event's row lock, before creating an application or freezing its fee.
-  defp require_capacity!(event) do
-    count =
-      Repo.aggregate(
-        from(a in Application,
-          where: a.event_id == ^event.id and a.round == ^event.round and a.status == "approved"
-        ),
-        :count
-      )
-
-    require!(count < event.capacity, :capacity_full)
-  end
+  defp require_capacity!(event),
+    do: require!(approved_count(event) < event.capacity, :capacity_full)
 
   defp with_event(id, fun) do
     if Rice.Tsid.valid?(id) do

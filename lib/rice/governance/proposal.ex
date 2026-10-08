@@ -71,7 +71,6 @@ defmodule Rice.Governance.Proposal do
     end
   end
 
-  def statuses, do: @statuses
   def open?(%__MODULE__{status: "open", deleted_at: nil}), do: true
   def open?(%__MODULE__{}), do: false
 end

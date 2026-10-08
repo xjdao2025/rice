@@ -53,13 +53,7 @@ defmodule Rice.Grains do
         case attrs.request_id &&
                Repo.get_by(Transfer, from_user_id: from.id, request_id: attrs.request_id) do
           nil ->
-            with {:ok, transfer} <- Repo.insert(Transfer.changeset(%Transfer{}, attrs)),
-                 {:ok, _} <- debit(Repo, from.id, amount),
-                 {:ok, _} <- credit(Repo, to.id, amount) do
-              transfer
-            else
-              {:error, reason} -> Repo.rollback(reason)
-            end
+            book!(attrs, to.id)
 
           %Transfer{to_user_id: to_id, amount: ^amount, kind: ^kind, subject_uri: ^subject_uri} =
               existing
@@ -70,10 +64,7 @@ defmodule Rice.Grains do
             Repo.rollback(:conflict)
         end
       end)
-      |> case do
-        {:ok, transfer} -> {:ok, Repo.preload(transfer, [:from_user, :to_user])}
-        error -> error
-      end
+      |> Repo.preload_ok([:from_user, :to_user])
     end
   end
 
@@ -88,7 +79,7 @@ defmodule Rice.Grains do
 
     Multi.new()
     |> Multi.insert(:transfer, Transfer.changeset(%Transfer{}, attrs))
-    |> Multi.run(:credit, fn repo, _ -> credit(repo, to.id, amount) end)
+    |> Multi.run(:credit, fn repo, _ -> credit_account(repo, to.id, amount) end)
     |> Repo.transaction()
     |> case do
       {:ok, %{transfer: transfer}} -> {:ok, Repo.preload(transfer, [:from_user, :to_user])}
@@ -267,22 +258,17 @@ defmodule Rice.Grains do
               Repo.rollback(:conflict)
 
             true ->
-              attrs = %{
-                kind: "community_fund",
-                from_user_id: user.id,
-                to_node_id: node.id,
-                amount: amount,
-                subject_uri: uri,
-                memo: "转入节点稻米"
-              }
-
-              with {:ok, transfer} <- Repo.insert(Transfer.changeset(%Transfer{}, attrs)),
-                   {:ok, _} <- debit(Repo, user.id, amount),
-                   {:ok, _} <- credit_account(Repo, {:node, node.id}, amount) do
-                transfer
-              else
-                {:error, reason} -> Repo.rollback(reason)
-              end
+              book!(
+                %{
+                  kind: "community_fund",
+                  from_user_id: user.id,
+                  to_node_id: node.id,
+                  amount: amount,
+                  subject_uri: uri,
+                  memo: "转入节点稻米"
+                },
+                {:node, node.id}
+              )
           end
         end)
     end
@@ -359,6 +345,17 @@ defmodule Rice.Grains do
   defp wallet_user(nil), do: nil
   defp wallet_user(user), do: %{id: user.id, nickname: user.nickname, handle: user.handle}
 
+  # 用户付款:记流水、扣付款人、给收款账户入账,任何一步失败整个事务回滚。
+  defp book!(%{from_user_id: payer, amount: amount} = attrs, recipient) do
+    with {:ok, transfer} <- Repo.insert(Transfer.changeset(%Transfer{}, attrs)),
+         {:ok, _} <- debit(Repo, payer, amount),
+         {:ok, _} <- credit_account(Repo, recipient, amount) do
+      transfer
+    else
+      {:error, reason} -> Repo.rollback(reason)
+    end
+  end
+
   # 这一条 SQL 就是全部的并发控制。`grain_balance >= amount` 让扣款和余额检查
   # 在同一个原子操作里完成,不存在"查完到扣之间被插一脚"的窗口。
   defp debit(repo, user_id, amount) do
@@ -369,13 +366,6 @@ defmodule Rice.Grains do
       )
 
     if count == 1, do: {:ok, count}, else: {:error, :insufficient_balance}
-  end
-
-  defp credit(repo, user_id, amount) do
-    {count, _} =
-      repo.update_all(from(u in User, where: u.id == ^user_id), inc: [grain_balance: amount])
-
-    if count == 1, do: {:ok, count}, else: {:error, :recipient_not_found}
   end
 
   @doc "解析转账收款人，不扣款或创建流水；联系方式查询只供认证后的转账流程使用。"
@@ -391,9 +381,7 @@ defmodule Rice.Grains do
   def resolve_recipient(identifier) when is_binary(identifier) do
     identifier = String.trim(identifier)
 
-    user =
-      find_by_id(identifier) || find_by_did(identifier) || find_by_handle(identifier) ||
-        find_by_contact(identifier)
+    user = Rice.Accounts.get_public_user(identifier) || find_by_contact(identifier)
 
     cond do
       is_nil(user) -> {:error, :recipient_not_found}
@@ -404,25 +392,7 @@ defmodule Rice.Grains do
 
   def resolve_recipient(_), do: {:error, :recipient_not_found}
 
-  defp find_by_id(identifier) do
-    if Rice.Tsid.valid?(identifier) do
-      Repo.one(from u in User, where: is_nil(u.deleted_at) and u.id == ^identifier)
-    end
-  end
-
-  defp find_by_did("did:" <> _ = identifier),
-    do: Repo.one(from u in User, where: is_nil(u.deleted_at) and u.did == ^identifier)
-
-  defp find_by_did(_), do: nil
-
-  defp find_by_handle(identifier) do
-    Repo.one(
-      from u in User,
-        where:
-          is_nil(u.deleted_at) and fragment("lower(?)", u.handle) == ^String.downcase(identifier)
-    )
-  end
-
+  # 不同于 `Accounts.find_user/1`:停用的人也要找出来(好报 recipient_disabled)。
   # 邮箱大小写不敏感;手机号只比号码本身,不含区号 —— 界面上没地方填区号。
   defp find_by_contact(identifier) do
     cond do
@@ -492,32 +462,27 @@ defmodule Rice.Grains do
 
   @doc "对账用:全站可用与冻结余额之和应当等于发放总额。"
   def reconcile do
-    balances =
-      Repo.one(
-        from u in User, where: is_nil(u.deleted_at), select: coalesce(sum(u.grain_balance), 0)
-      )
-
-    granted =
-      Repo.one(from t in Transfer, where: t.kind == "grant", select: coalesce(sum(t.amount), 0))
-
-    frozen =
-      Repo.one(
-        from u in User,
-          where: is_nil(u.deleted_at),
-          select: coalesce(sum(u.grain_frozen_balance), 0)
-      )
-
-    # Postgres 对 bigint 求和返回 numeric,Ecto 映射成 Decimal。
-    # 对账数字是整数,直接转回来,免得调用方到处判类型。
-    node_balances = Repo.one(from n in Node, select: coalesce(sum(n.grain_balance), 0))
-    node_frozen = Repo.one(from n in Node, select: coalesce(sum(n.grain_frozen_balance), 0))
-    balances = to_integer(balances) + to_integer(node_balances)
-    granted = to_integer(granted)
-    frozen = to_integer(frozen) + to_integer(node_frozen)
+    {user_balances, user_frozen} = sum_balances(from u in User, where: is_nil(u.deleted_at))
+    {node_balances, node_frozen} = sum_balances(Node)
+    balances = user_balances + node_balances
+    frozen = user_frozen + node_frozen
+    granted = total_granted()
 
     %{balances: balances, frozen: frozen, granted: granted, ok?: balances + frozen == granted}
   end
 
+  defp sum_balances(query) do
+    {balances, frozen} =
+      Repo.one(
+        from a in query,
+          select: {coalesce(sum(a.grain_balance), 0), coalesce(sum(a.grain_frozen_balance), 0)}
+      )
+
+    {to_integer(balances), to_integer(frozen)}
+  end
+
+  # Postgres 对 bigint 求和返回 numeric,Ecto 映射成 Decimal。
+  # 对账数字是整数,直接转回来,免得调用方到处判类型。
   defp to_integer(%Decimal{} = d), do: Decimal.to_integer(d)
   defp to_integer(n) when is_integer(n), do: n
   defp to_integer(nil), do: 0

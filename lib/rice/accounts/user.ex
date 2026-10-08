@@ -45,50 +45,6 @@ defmodule Rice.Accounts.User do
     |> unique_constraints()
   end
 
-  @doc """
-  从 core 的 `t_user` 建行(`mix rice.import`)。
-
-  和 `registration_changeset/2` 的区别是它接受注册流程里不该由客户端决定的
-  那几样:余额、节点身份、禁用与软删时刻、时间戳。
-
-  **软删的用户必须导入。** 生产实测(§6.4⑤)里有 7 个软删用户,他们与存活用户
-  之间有 1 个 handle 冲突和 5 个手机号冲突 —— 唯一索引带着 `where deleted_at
-  is null`,正是为这件事准备的。不导的话,引用他们的流水和评论就成了断链。
-  """
-  def import_changeset(user, attrs) do
-    user
-    |> cast(attrs, [
-      :legacy_id,
-      :did,
-      :handle,
-      :email,
-      :phone,
-      :phone_region,
-      :nickname,
-      :bio,
-      :avatar_id,
-      :grain_balance,
-      :grain_frozen_balance,
-      :node_member,
-      :can_publish_tasks,
-      :disabled_at,
-      :deleted_at,
-      :inserted_at,
-      :updated_at
-    ])
-    |> validate_required([:legacy_id, :did, :handle])
-    |> validate_length(:handle, max: 256)
-    |> validate_length(:did, max: 128)
-    |> validate_length(:nickname, max: 64)
-    |> validate_length(:bio, max: 512)
-    |> validate_number(:grain_balance, greater_than_or_equal_to: 0)
-    |> validate_number(:grain_frozen_balance, greater_than_or_equal_to: 0)
-    |> normalize_contacts()
-    |> validate_contacts()
-    |> unique_constraints()
-    |> foreign_key_constraint(:avatar_id)
-  end
-
   @doc "用户自己能改的字段。did / handle / 余额 / 禁用状态都不在其中。"
   def profile_changeset(user, attrs) do
     user

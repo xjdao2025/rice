@@ -46,15 +46,5 @@ defmodule Rice.Content do
   end
 
   @doc "取单条公告。`{:ok, announcement}` 或 `{:error, :not_found}`。"
-  def fetch_announcement(id) do
-    if Rice.Tsid.valid?(id) do
-      case Repo.get(from(a in Announcement, preload: [:attachment]), id) do
-        nil -> {:error, :not_found}
-        announcement -> {:ok, announcement}
-      end
-    else
-      # 长度/字符不合法的 id 根本不可能存在,直接当 404,不去打数据库
-      {:error, :not_found}
-    end
-  end
+  def fetch_announcement(id), do: Repo.fetch(from(a in Announcement, preload: [:attachment]), id)
 end

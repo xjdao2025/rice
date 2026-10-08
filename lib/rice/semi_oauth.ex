@@ -18,9 +18,6 @@ defmodule Rice.SemiOAuth do
 
   @scopes "openid profile wallet"
 
-  @doc "Space-delimited scope string requested from Semi."
-  def scopes, do: @scopes
-
   defp config, do: Application.fetch_env!(:rice, :semi)
 
   @doc "True once the OAuth app credentials are configured."
@@ -86,18 +83,6 @@ defmodule Rice.SemiOAuth do
       "client_id" => cfg[:client_id],
       "client_secret" => cfg[:client_secret],
       "code_verifier" => code_verifier
-    })
-  end
-
-  @doc "Exchange a refresh token for a fresh token pair (rotation)."
-  def refresh(refresh_token) do
-    cfg = config()
-
-    post_token(cfg, %{
-      "grant_type" => "refresh_token",
-      "refresh_token" => refresh_token,
-      "client_id" => cfg[:client_id],
-      "client_secret" => cfg[:client_secret]
     })
   end
 

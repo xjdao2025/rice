@@ -30,15 +30,8 @@ defmodule RiceWeb.Api.NodeJSON do
       description: node.description,
       position: node.position,
       logo: AttachmentJSON.embed(node.logo),
-      owner: owner(node.user)
+      owner: UserJSON.embed(node.user)
     }
-  end
-
-  defp owner(%Ecto.Association.NotLoaded{}), do: nil
-  defp owner(nil), do: nil
-
-  defp owner(user) do
-    UserJSON.public(user)
   end
 
   defp data(node, user) do
@@ -64,7 +57,10 @@ defmodule RiceWeb.Api.NodeJSON do
   end
 
   defp members_for(node) do
-    admin = if visible_user?(node.user), do: [%{user: owner(node.user), role: "admin"}], else: []
+    admin =
+      if visible_user?(node.user),
+        do: [%{user: UserJSON.public(node.user), role: "admin"}],
+        else: []
 
     members =
       node.memberships

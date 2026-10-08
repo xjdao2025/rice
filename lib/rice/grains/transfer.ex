@@ -96,6 +96,4 @@ defmodule Rice.Grains.Transfer do
       do: add_error(changeset, user_field, "须指定一个账户"),
       else: changeset
   end
-
-  def kinds, do: @kinds
 end

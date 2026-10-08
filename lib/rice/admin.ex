@@ -37,14 +37,10 @@ defmodule Rice.Admin do
   def create_admin(attrs) do
     password = generate_password()
 
-    changeset =
-      %AdminUser{}
-      |> AdminUser.changeset(Map.put(normalize(attrs), "password", password))
+    changeset = AdminUser.changeset(%AdminUser{}, Map.put(normalize(attrs), "password", password))
 
-    case Repo.insert(changeset) do
-      {:ok, admin} -> {:ok, Repo.preload(admin, :avatar), password}
-      {:error, changeset} -> {:error, changeset}
-    end
+    with {:ok, admin} <- Repo.insert(changeset),
+         do: {:ok, Repo.preload(admin, :avatar), password}
   end
 
   @doc "软删。超管删不掉,自己也删不掉自己。"
@@ -74,10 +70,7 @@ defmodule Rice.Admin do
     admin
     |> AdminUser.profile_changeset(normalize(attrs))
     |> Repo.update()
-    |> case do
-      {:ok, admin} -> {:ok, Repo.preload(admin, :avatar, force: true)}
-      other -> other
-    end
+    |> Repo.preload_ok(:avatar, force: true)
   end
 
   # ── 登录 ────────────────────────────────────────────────────────────────
@@ -174,11 +167,7 @@ defmodule Rice.Admin do
 
   def issue_token(%AdminUser{} = admin, opts \\ []) do
     {plaintext, changeset} = AdminToken.build(admin, opts)
-
-    case Repo.insert(changeset) do
-      {:ok, _} -> {:ok, plaintext}
-      {:error, changeset} -> {:error, changeset}
-    end
+    with {:ok, _} <- Repo.insert(changeset), do: {:ok, plaintext}
   end
 
   @doc "用明文令牌换管理员。过期、被撤销、被停用、被删都返回 nil。"

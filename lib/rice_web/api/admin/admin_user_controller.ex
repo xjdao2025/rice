@@ -15,7 +15,7 @@ defmodule RiceWeb.Api.Admin.AdminUserController do
   end
 
   def delete(conn, %{"id" => id}) do
-    with {:ok, target} <- fetch(id),
+    with {:ok, target} <- Rice.Repo.found(Rice.Admin.get_admin(id)),
          {:ok, _} <- Rice.Admin.delete_admin(conn.assigns.current_admin, target) do
       send_resp(conn, :no_content, "")
     end
@@ -27,13 +27,6 @@ defmodule RiceWeb.Api.Admin.AdminUserController do
   def update_me(conn, params) do
     with {:ok, admin} <- Rice.Admin.update_profile(conn.assigns.current_admin, params) do
       render(conn, :show, admin: admin)
-    end
-  end
-
-  defp fetch(id) do
-    case Rice.Admin.get_admin(id) do
-      nil -> {:error, :not_found}
-      admin -> {:ok, admin}
     end
   end
 end

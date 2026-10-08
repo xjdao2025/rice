@@ -61,46 +61,6 @@ defmodule Rice.Admin.AdminUser do
     |> foreign_key_constraint(:avatar_id)
   end
 
-  @doc """
-  从 core 的 `t_admin_user` 建一行(`mix rice.import`)。
-
-  和 `changeset/2` 只有一处不同:密码摘要是**搬过来的**,不是从明文算出来的。
-  PBKDF2 参数两边逐字节一致,所以管理员不会因为换了后端就得改密码 ——
-  盐一起搬,验证不关心盐当初是怎么生成的。
-
-  时间戳也照搬。管理员列表显示创建时间,重置成导入那天等于把这列信息抹掉。
-
-  校验一条都没少:格式不对的行会带着 changeset 错误进警告清单,而不是被
-  悄悄写成一个登不进去的账号。
-  """
-  def import_changeset(admin, attrs) do
-    admin
-    |> cast(attrs, [
-      :legacy_id,
-      :email,
-      :phone,
-      :phone_region,
-      :nickname,
-      :role,
-      :superuser,
-      :avatar_id,
-      :password_hash,
-      :password_salt,
-      :password_iterations,
-      :inserted_at,
-      :updated_at
-    ])
-    |> validate_inclusion(:role, @roles, message: "只能是 admin 或 operator")
-    |> validate_length(:nickname, max: 64)
-    |> validate_format(:email, ~r/^[^@\s]+@[^@\s]+\.[^@\s]+$/, message: "邮箱格式不正确")
-    |> validate_format(:phone, ~r/^\d{5,20}$/, message: "手机号格式不正确")
-    |> validate_required([:legacy_id, :phone, :role, :password_hash, :password_salt])
-    |> unique_constraint(:legacy_id)
-    |> unique_constraint(:email, name: :admin_users_email_index)
-    |> unique_constraint([:phone_region, :phone], name: :admin_users_phone_index)
-    |> foreign_key_constraint(:avatar_id)
-  end
-
   @doc "只改档案,动不了角色和密码 —— 那两样各有各的入口。"
   def profile_changeset(admin, attrs) do
     admin
@@ -161,6 +121,5 @@ defmodule Rice.Admin.AdminUser do
     false
   end
 
-  def roles, do: @roles
   def iterations, do: @iterations
 end

@@ -91,16 +91,7 @@ defmodule Rice.Governance do
     |> Map.new()
   end
 
-  def fetch_proposal(id) do
-    if Rice.Tsid.valid?(id) do
-      case Repo.one(from p in base(), where: p.id == ^id) do
-        nil -> {:error, :not_found}
-        proposal -> {:ok, proposal}
-      end
-    else
-      {:error, :not_found}
-    end
-  end
+  def fetch_proposal(id), do: Repo.fetch(base(), id)
 
   # 提案和投票都只给节点用户(node_member),和 core 一致:
   # "非节点用户不能提案" / "非节点用户不能投票提案"
@@ -110,10 +101,7 @@ defmodule Rice.Governance do
     %Proposal{user_id: user.id}
     |> Proposal.create_changeset(attrs)
     |> Repo.insert()
-    |> case do
-      {:ok, proposal} -> {:ok, Repo.preload(proposal, [:attachment, user: :avatar])}
-      error -> error
-    end
+    |> Repo.preload_ok([:attachment, user: :avatar])
   end
 
   @doc """
@@ -211,24 +199,14 @@ defmodule Rice.Governance do
     %Comment{}
     |> Comment.changeset(%{proposal_id: proposal.id, user_id: user.id, body: body})
     |> Repo.insert()
-    |> case do
-      {:ok, comment} -> {:ok, Repo.preload(comment, user: :avatar)}
-      error -> error
-    end
+    |> Repo.preload_ok(user: :avatar)
   end
 
   def fetch_comment(%Proposal{id: proposal_id}, id) do
-    if Rice.Tsid.valid?(id) do
-      case Repo.one(
-             from c in Comment,
-               where: c.id == ^id and c.proposal_id == ^proposal_id and is_nil(c.deleted_at)
-           ) do
-        nil -> {:error, :not_found}
-        comment -> {:ok, comment}
-      end
-    else
-      {:error, :not_found}
-    end
+    Repo.fetch(
+      from(c in Comment, where: c.proposal_id == ^proposal_id and is_nil(c.deleted_at)),
+      id
+    )
   end
 
   def delete_comment(%User{id: user_id}, %Comment{} = comment) do
@@ -250,35 +228,9 @@ defmodule Rice.Governance do
     |> filter_status(params["status"])
     |> filter_listed(params["listed"])
     |> filter_title(params["q"])
-    |> filter_since(params["since"])
-    |> filter_until(params["until"])
+    |> Repo.inserted_between(params["since"], params["until"])
     |> Pagination.paginate(Repo, Pagination.params(params))
   end
-
-  # 后台按发布时间筛,和发放记录那边同名同语义。
-  # 解析不了就当没传 —— 一个手滑的日期不该让整个列表 500。
-  defp filter_since(query, value) do
-    case parse_time(value) do
-      {:ok, dt} -> from(p in query, where: p.inserted_at >= ^dt)
-      :error -> query
-    end
-  end
-
-  defp filter_until(query, value) do
-    case parse_time(value) do
-      {:ok, dt} -> from(p in query, where: p.inserted_at <= ^dt)
-      :error -> query
-    end
-  end
-
-  defp parse_time(value) when is_binary(value) do
-    case DateTime.from_iso8601(value) do
-      {:ok, dt, _} -> {:ok, dt}
-      _ -> :error
-    end
-  end
-
-  defp parse_time(_), do: :error
 
   defp filter_listed(query, "true"), do: from(p in query, where: p.listed == true)
   defp filter_listed(query, "false"), do: from(p in query, where: p.listed == false)
@@ -295,26 +247,15 @@ defmodule Rice.Governance do
   defp filter_title(query, _), do: query
 
   @doc "后台取单条 —— 下架的也取得到。"
-  def fetch_any_proposal(id) do
-    if Rice.Tsid.valid?(id) do
-      case Repo.one(from p in Proposal, where: p.id == ^id, preload: [:attachment, user: :avatar]) do
-        nil -> {:error, :not_found}
-        proposal -> {:ok, proposal}
-      end
-    else
-      {:error, :not_found}
-    end
-  end
+  def fetch_any_proposal(id),
+    do: Repo.fetch(from(p in Proposal, preload: [:attachment, user: :avatar]), id)
 
   @doc "下架 / 恢复。core 的 take-off 只能单向下架,没有恢复的入口。"
   def set_listed(%Proposal{} = proposal, listed) when is_boolean(listed) do
     proposal
     |> Ecto.Changeset.change(listed: listed)
     |> Repo.update()
-    |> case do
-      {:ok, proposal} -> {:ok, Repo.preload(proposal, [:attachment, user: :avatar])}
-      other -> other
-    end
+    |> Repo.preload_ok([:attachment, user: :avatar])
   end
 
   def set_listed(_proposal, _), do: {:error, :invalid_listed}

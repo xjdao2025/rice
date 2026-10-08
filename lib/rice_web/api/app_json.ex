@@ -3,7 +3,7 @@ defmodule RiceWeb.Api.AppJSON do
 
   def index(%{apps: apps}), do: %{data: Enum.map(apps, &data/1)}
 
-  defp data(app) do
+  def data(app) do
     %{
       id: app.id,
       name: app.name,

@@ -36,5 +36,4 @@ defmodule Rice.Admin.AdminToken do
   end
 
   def hash(plaintext), do: :crypto.hash(:sha256, plaintext)
-  def default_validity_days, do: @default_validity_days
 end

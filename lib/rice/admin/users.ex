@@ -46,12 +46,7 @@ defmodule Rice.Admin.Users do
   defp filter_disabled(query, "false"), do: from(u in query, where: is_nil(u.disabled_at))
   defp filter_disabled(query, _), do: query
 
-  def fetch_user(id) do
-    case Rice.Accounts.get_user(id) do
-      nil -> {:error, :not_found}
-      user -> {:ok, user}
-    end
-  end
+  def fetch_user(id), do: Repo.found(Rice.Accounts.get_user(id))
 
   @doc """
   改用户的管理位:`disabled`、`node_member` 和 `can_publish_tasks`。

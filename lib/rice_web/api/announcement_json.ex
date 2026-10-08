@@ -10,7 +10,7 @@ defmodule RiceWeb.Api.AnnouncementJSON do
 
   def show(%{announcement: announcement}), do: %{data: data(announcement)}
 
-  defp data(announcement) do
+  def data(announcement) do
     %{
       id: announcement.id,
       title: announcement.title,

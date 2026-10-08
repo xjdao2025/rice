@@ -10,12 +10,10 @@ defmodule Rice.Files.Storage do
   @callback put(key :: String.t(), content :: binary()) :: :ok | {:error, term()}
   @callback get(key :: String.t()) :: {:ok, binary()} | {:error, term()}
   @callback delete(key :: String.t()) :: :ok | {:error, term()}
-  @callback exists?(key :: String.t()) :: boolean()
 
   def impl, do: Application.get_env(:rice, :storage, Rice.Files.Storage.Local)
 
   def put(key, content), do: impl().put(key, content)
   def get(key), do: impl().get(key)
   def delete(key), do: impl().delete(key)
-  def exists?(key), do: impl().exists?(key)
 end

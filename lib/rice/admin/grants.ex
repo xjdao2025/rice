@@ -27,30 +27,18 @@ defmodule Rice.Admin.Grants do
   而发放又常常是粘一列几百个手机号 —— 要是先验码再校验收款人,一个笔误就把码烧掉了,
   还得等 60 秒重发。先校验参数(不写任何东西),码留到真要动账的时候再验。
   """
-  def prepare(recipients, amount)
-
   def prepare(recipients, amount) when is_list(recipients) and recipients != [] do
-    with :ok <- validate_amount(amount), do: resolve_all(recipients)
+    with :ok <- validate_amount(amount) do
+      case Rice.Accounts.find_users(recipients) do
+        {:ok, []} -> {:error, :no_recipients}
+        result -> result
+      end
+    end
   end
 
   def prepare(_, _), do: {:error, :no_recipients}
 
-  @doc """
-  批量发放。`recipients` 是手机号 / 邮箱 / handle / DID / rice id 的数组。
-
-  一个事务:要么每个人都到账,要么一个都不动。
-  """
-  def grant(recipients, amount, opts \\ [])
-
-  def grant(recipients, amount, opts) when is_list(recipients) and recipients != [] do
-    with {:ok, users} <- prepare(recipients, amount) do
-      credit(users, amount, opts)
-    end
-  end
-
-  def grant(_, _, _), do: {:error, :no_recipients}
-
-  @doc "把 `prepare/2` 解析出来的收款人真正入账。"
+  @doc "把 `prepare/2` 解析出来的收款人真正入账。一个事务:要么每个人都到账,要么一个都不动。"
   def credit(users, amount, opts \\ []) do
     memo = Keyword.get(opts, :memo, "") || ""
 
@@ -177,38 +165,6 @@ defmodule Rice.Admin.Grants do
   defp validate_amount(amount) when is_integer(amount) and amount > 0, do: :ok
   defp validate_amount(_), do: {:error, :invalid_amount}
 
-  # 一次查完再比对,不是一个个查 —— 收款人上千的时候差别很大
-  defp resolve_all(recipients) do
-    with {:ok, recipients} <- normalize(recipients) do
-      found = Enum.map(recipients, &{&1, resolve(&1)})
-
-      case Enum.filter(found, fn {_, user} -> is_nil(user) end) do
-        [] -> {:ok, found |> Enum.map(&elem(&1, 1)) |> Enum.uniq_by(& &1.id)}
-        missing -> {:error, {:unknown_recipients, Enum.map(missing, &elem(&1, 0))}}
-      end
-    end
-  end
-
-  # `to` 是 JSON 数组,里面可以是任何东西 —— null、数字、嵌套对象都进得来。
-  # 不先卡类型,`String.trim/1` 会抛,表现是一个 500 而不是 422。
-  #
-  # 空字符串直接丢掉:前端从表格里粘一列手机号,末尾常带几个空行。
-  defp normalize(recipients) do
-    case Enum.reject(recipients, &is_binary/1) do
-      [] ->
-        case recipients |> Enum.map(&String.trim/1) |> Enum.reject(&(&1 == "")) |> Enum.uniq() do
-          [] -> {:error, :no_recipients}
-          list -> {:ok, list}
-        end
-
-      bad ->
-        {:error, {:invalid_recipients, bad}}
-    end
-  end
-
-  # 和发勋章认同一套写法 —— 运营在两个界面里粘的是同一份名单
-  defp resolve(identifier), do: Rice.Accounts.find_user(identifier)
-
   @doc "发放记录。可按收款人和时间范围筛。"
   def list_grants(params \\ %{}) do
     from(t in Transfer,
@@ -216,8 +172,7 @@ defmodule Rice.Admin.Grants do
       preload: [to_user: :avatar, to_node: []]
     )
     |> filter_recipient(params["q"])
-    |> filter_after(params["since"])
-    |> filter_before(params["until"])
+    |> Repo.inserted_between(params["since"], params["until"])
     |> Pagination.paginate(Repo, Pagination.params(params))
   end
 
@@ -233,28 +188,4 @@ defmodule Rice.Admin.Grants do
   end
 
   defp filter_recipient(query, _), do: query
-
-  defp filter_after(query, since) do
-    case parse_time(since) do
-      {:ok, dt} -> from t in query, where: t.inserted_at >= ^dt
-      :error -> query
-    end
-  end
-
-  defp filter_before(query, until) do
-    case parse_time(until) do
-      {:ok, dt} -> from t in query, where: t.inserted_at <= ^dt
-      :error -> query
-    end
-  end
-
-  # 时间参数解析不了就当没传 —— 一个手滑的日期不该让整个列表 500
-  defp parse_time(value) when is_binary(value) do
-    case DateTime.from_iso8601(value) do
-      {:ok, dt, _} -> {:ok, dt}
-      _ -> :error
-    end
-  end
-
-  defp parse_time(_), do: :error
 end

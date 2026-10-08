@@ -26,8 +26,8 @@ defmodule RiceWeb.Api.GrainTransferJSON do
       amount: transfer.amount,
       memo: transfer.memo,
       subject_uri: transfer.subject_uri,
-      from: party(transfer.from_user),
-      to: party(transfer.to_user),
+      from: UserJSON.embed(transfer.from_user),
+      to: UserJSON.embed(transfer.to_user),
       from_node: node_party(transfer.from_node),
       to_node: node_party(transfer.to_node),
       # 相对当前用户的方向:收到是正,付出是负。
@@ -36,10 +36,6 @@ defmodule RiceWeb.Api.GrainTransferJSON do
       inserted_at: transfer.inserted_at
     }
   end
-
-  defp party(%Ecto.Association.NotLoaded{}), do: nil
-  defp party(nil), do: nil
-  defp party(user), do: UserJSON.public(user)
 
   defp node_party(%Rice.Community.Node{} = node), do: %{id: node.id, name: node.name}
   defp node_party(_), do: nil

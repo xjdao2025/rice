@@ -179,6 +179,35 @@ defmodule Rice.Accounts do
 
   def find_user(_), do: nil
 
+  @doc """
+  后台按一份名单找人(发稻米、发勋章),每一项的认法同 `find_user/1`。
+
+  全有或全无:有认不出来的就返回 `{:unknown_recipients, 原文}`。名单是 JSON 数组,
+  里面可以是任何东西 —— 不先卡类型,`String.trim/1` 会抛,表现是 500 而不是 422。
+  空字符串直接丢掉:从表格里粘一列手机号,末尾常带几个空行。
+  """
+  def find_users(identifiers) when is_list(identifiers) do
+    case Enum.reject(identifiers, &is_binary/1) do
+      [] ->
+        found =
+          identifiers
+          |> Enum.map(&String.trim/1)
+          |> Enum.reject(&(&1 == ""))
+          |> Enum.uniq()
+          |> Enum.map(&{&1, find_user(&1)})
+
+        case for {identifier, nil} <- found, do: identifier do
+          [] -> {:ok, found |> Enum.map(&elem(&1, 1)) |> Enum.uniq_by(& &1.id)}
+          missing -> {:error, {:unknown_recipients, missing}}
+        end
+
+      bad ->
+        {:error, {:invalid_recipients, bad}}
+    end
+  end
+
+  def find_users(_), do: {:error, :invalid_recipients}
+
   defp enabled(%User{disabled_at: nil} = user), do: user
   defp enabled(_), do: nil
 
@@ -404,37 +433,26 @@ defmodule Rice.Accounts do
 
     with :ok <- ensure_contact_available(email, phone, phone_region),
          {:ok, session} <-
-           pds().create_account(%{
-             email: pds_email(handle),
-             handle: handle,
-             password: password
-           }) do
-      user_attrs = %{
-        did: session["did"],
-        handle: session["handle"] || handle,
-        email: email,
-        phone: phone,
-        phone_region: phone_region,
-        nickname: attrs[:nickname] || default_nickname(handle)
-      }
-
-      case Repo.insert(User.registration_changeset(%User{}, user_attrs)) do
-        {:ok, user} ->
-          # PDS 公开资料使用同一昵称;资料写入失败不让已创建的账号卡在注册页。
-          case pds().put_profile(session["accessJwt"], user.did, %{"displayName" => user.nickname}) do
-            {:ok, _} ->
-              :ok
-
-            {:error, _} ->
-              Logger.warning("registration: initial profile write failed for #{user.did}")
-          end
-
-          {:ok, token} = issue_token(user)
-          {:ok, %{user: user, token: token, pds_session: session}}
-
-        {:error, changeset} ->
-          {:error, changeset}
+           pds().create_account(%{email: pds_email(handle), handle: handle, password: password}),
+         {:ok, user} <-
+           Repo.insert(
+             User.registration_changeset(%User{}, %{
+               did: session["did"],
+               handle: session["handle"] || handle,
+               email: email,
+               phone: phone,
+               phone_region: phone_region,
+               nickname: attrs[:nickname] || default_nickname(handle)
+             })
+           ) do
+      # PDS 公开资料使用同一昵称;资料写入失败不让已创建的账号卡在注册页。
+      with {:error, _} <-
+             pds().put_profile(session["accessJwt"], user.did, %{"displayName" => user.nickname}) do
+        Logger.warning("registration: initial profile write failed for #{user.did}")
       end
+
+      {:ok, token} = issue_token(user)
+      {:ok, %{user: user, token: token, pds_session: session}}
     end
   end
 
@@ -480,21 +498,18 @@ defmodule Rice.Accounts do
         # 用户不存在时也走一次 PDS,避免用响应时间区分"账号不存在"和"密码错"
         pds().create_session(identifier, password) |> login_failure()
 
-      user ->
-        cond do
-          not is_nil(user.disabled_at) ->
-            {:error, :account_disabled}
+      %User{disabled_at: nil} = user ->
+        case pds().create_session(user.handle, password) do
+          {:ok, session} ->
+            {:ok, token} = issue_token(user)
+            {:ok, %{user: put_semi_wallet(user), token: token, pds_session: session}}
 
-          true ->
-            case pds().create_session(user.handle, password) do
-              {:ok, session} ->
-                {:ok, token} = issue_token(user)
-                {:ok, %{user: put_semi_wallet(user), token: token, pds_session: session}}
-
-              {:error, _} = error ->
-                login_failure(error)
-            end
+          {:error, _} = error ->
+            login_failure(error)
         end
+
+      _disabled ->
+        {:error, :account_disabled}
     end
   end
 
@@ -509,11 +524,7 @@ defmodule Rice.Accounts do
 
   def issue_token(user, opts \\ []) do
     {plaintext, changeset} = ApiToken.build(user, opts)
-
-    case Repo.insert(changeset) do
-      {:ok, _record} -> {:ok, plaintext}
-      {:error, changeset} -> {:error, changeset}
-    end
+    with {:ok, _token} <- Repo.insert(changeset), do: {:ok, plaintext}
   end
 
   @doc "用明文令牌换用户。过期、被撤销、用户被禁用都返回 nil。"

@@ -55,82 +55,57 @@ defmodule RiceWeb.Api.Admin.GrainController do
          {:ok, count} <- Grants.credit(users, amount, memo: params["memo"]) do
       conn |> put_status(:created) |> json(%{data: %{granted: count}})
     else
-      error -> handle(conn, error)
+      error -> grant_error(conn, error)
     end
   end
 
   @doc "向节点独立账户发放，使用与个人发放相同的管理员验证码。"
   def create_node(conn, %{"node_id" => node_id} = params) do
-    case Grants.grant_node(
-           conn.assigns.current_admin,
-           node_id,
-           params["amount"],
-           params["client_request_id"],
-           params["code"],
-           memo: params["memo"]
-         ) do
-      {:ok, transfer, status} ->
-        conn
-        |> put_status(if(status == :created, do: :created, else: :ok))
-        |> json(%{
-          data: %{
-            id: transfer.id,
-            amount: transfer.amount,
-            memo: transfer.memo,
-            to_node_id: transfer.to_node_id,
-            replayed: status == :replayed
-          }
-        })
-
-      error ->
-        handle(conn, error)
+    with {:ok, transfer, status} <-
+           Grants.grant_node(
+             conn.assigns.current_admin,
+             node_id,
+             params["amount"],
+             params["client_request_id"],
+             params["code"],
+             memo: params["memo"]
+           ) do
+      conn
+      |> put_status(if(status == :created, do: :created, else: :ok))
+      |> json(%{
+        data: %{
+          id: transfer.id,
+          amount: transfer.amount,
+          memo: transfer.memo,
+          to_node_id: transfer.to_node_id,
+          replayed: status == :replayed
+        }
+      })
+    else
+      error -> grant_error(conn, error)
     end
   end
 
-  defp handle(conn, error) do
-    case error do
-      # 验证码不对 / 过期,和登录时给的是同一类响应
-      {:error, :too_many_attempts} ->
-        conn
-        |> put_status(:too_many_requests)
-        |> json(%{errors: %{detail: "尝试次数过多,请重新获取验证码"}})
+  # 验证码错误(和登录同一类响应)、金额、冲突等交给 fallback;这里只管发放特有的几种
+  defp grant_error(conn, {:error, :contact_not_set}),
+    do: unprocessable(conn, %{code: ["该管理员没有绑定手机号"]})
 
-      {:error, reason} when reason in [:invalid_code, :code_expired, :contact_not_set] ->
-        conn
-        |> put_status(:unprocessable_entity)
-        |> json(%{errors: %{code: [code_message(reason)]}})
+  defp grant_error(conn, {:error, {:unknown_recipients, missing}}),
+    do: unprocessable(conn, %{to: ["这些收款人不存在: " <> Enum.join(missing, ", ")]})
 
-      {:error, {:unknown_recipients, missing}} ->
-        conn
-        |> put_status(:unprocessable_entity)
-        |> json(%{errors: %{to: ["这些收款人不存在: " <> Enum.join(missing, ", ")]}})
+  defp grant_error(conn, {:error, {:invalid_recipients, bad}}),
+    do:
+      unprocessable(conn, %{
+        to: ["收款人必须是字符串,这些不是: " <> Enum.map_join(bad, ", ", &inspect/1)]
+      })
 
-      {:error, {:invalid_recipients, bad}} ->
-        conn
-        |> put_status(:unprocessable_entity)
-        |> json(%{
-          errors: %{to: ["收款人必须是字符串,这些不是: " <> Enum.map_join(bad, ", ", &inspect/1)]}
-        })
+  defp grant_error(conn, {:error, :no_recipients}),
+    do: unprocessable(conn, %{to: ["至少要有一个收款人"]})
 
-      {:error, :no_recipients} ->
-        conn
-        |> put_status(:unprocessable_entity)
-        |> json(%{errors: %{to: ["至少要有一个收款人"]}})
+  defp grant_error(_conn, error), do: error
 
-      {:error, :invalid_amount} ->
-        {:error, :invalid_amount}
-
-      {:error, reason} when reason in [:not_found, :conflict, :missing_request_id] ->
-        {:error, reason}
-
-      {:error, %Ecto.Changeset{} = cs} ->
-        {:error, cs}
-    end
-  end
-
-  defp code_message(:code_expired), do: "验证码已过期"
-  defp code_message(:contact_not_set), do: "该管理员没有绑定手机号"
-  defp code_message(_), do: "验证码不正确"
+  defp unprocessable(conn, errors),
+    do: conn |> put_status(:unprocessable_entity) |> json(%{errors: errors})
 
   @doc "某个用户的稻米明细。core 是 /admin/score/user-sore-record-page。"
   def transfers(conn, %{"user_id" => user_id} = params) do

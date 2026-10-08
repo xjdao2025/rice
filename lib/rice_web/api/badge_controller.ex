@@ -23,10 +23,5 @@ defmodule RiceWeb.Api.BadgeController do
     end
   end
 
-  defp resolve(_conn, identifier) do
-    case Rice.Accounts.get_public_user(identifier) do
-      nil -> {:error, :not_found}
-      user -> {:ok, user}
-    end
-  end
+  defp resolve(_conn, identifier), do: Rice.Repo.found(Rice.Accounts.get_public_user(identifier))
 end
