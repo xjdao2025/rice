@@ -21,6 +21,7 @@ defmodule Rice.Cors do
   生产环境什么都不放行 —— 宁可让人发现"跨域被挡了"去补配置,
   也不要默默放行一个猜出来的域名。
   """
+  @spec allowed_origins() :: [String.t()]
   def allowed_origins do
     case Application.get_env(:rice, :cors, [])[:origins] do
       nil -> []
@@ -30,6 +31,7 @@ defmodule Rice.Cors do
   end
 
   @doc "把 `a,b` 这样的串拆成列表。空串和多余空格都丢掉。"
+  @spec parse(term()) :: [String.t()]
   def parse(value) when is_binary(value) do
     value
     |> String.split(",")

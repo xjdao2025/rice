@@ -7,6 +7,9 @@ defmodule Rice.Events do
   alias Rice.Events.{Application, Event, EventHistory}
   alias Rice.{Grains, Inbox, Pagination, Repo}
 
+  @type result(reason) :: {:ok, Event.t()} | {:error, reason | Changeset.t()}
+
+  @spec list_events(User.t() | nil, map()) :: Pagination.page(Event.t())
   def list_events(user, params \\ %{}) do
     query = from(e in Event)
 
@@ -97,6 +100,7 @@ defmodule Rice.Events do
     %{page | entries: preload(page.entries)}
   end
 
+  @spec fetch_event(String.t(), User.t() | nil) :: {:ok, Event.t()} | {:error, :not_found}
   def fetch_event(id, user \\ nil) do
     case if(Rice.Tsid.valid?(id), do: Repo.get(Event, id)) do
       nil ->
@@ -109,6 +113,7 @@ defmodule Rice.Events do
     end
   end
 
+  @spec create_event(User.t(), map()) :: result(:unprocessable_entity | :forbidden)
   def create_event(%User{} = user, attrs) do
     attrs = stringify(attrs)
     status = attrs["status"] || "open"
@@ -172,6 +177,14 @@ defmodule Rice.Events do
     end
   end
 
+  @spec update_event(User.t(), Event.t(), map()) ::
+          result(
+            :not_found
+            | :forbidden
+            | :conflict
+            | :capacity_full
+            | :grain_reservation_missing
+          )
   def update_event(user, event, attrs) do
     attrs = stringify(attrs)
 
@@ -293,6 +306,7 @@ defmodule Rice.Events do
     }
   end
 
+  @spec publish_draft(User.t(), Event.t()) :: result(:not_found | :forbidden | :conflict)
   def publish_draft(user, event) do
     with_event(event.id, fn current ->
       require_host!(user, current)
@@ -315,6 +329,8 @@ defmodule Rice.Events do
     end)
   end
 
+  @spec apply(User.t(), Event.t(), map()) ::
+          result(:not_found | :forbidden | :conflict | :capacity_full | :insufficient_balance)
   def apply(user, event, attrs) do
     with_event(event.id, fn current ->
       require!(current.creator_id != user.id and not can_manage?(current, user), :forbidden)
@@ -374,15 +390,23 @@ defmodule Rice.Events do
     end)
   end
 
+  @spec approve_application(User.t(), Event.t(), String.t()) ::
+          result(:not_found | :forbidden | :conflict | :capacity_full)
   def approve_application(user, event, application_id),
     do: change_application(user, event, application_id, "approved")
 
+  @spec reject_application(User.t(), Event.t(), String.t()) ::
+          result(:not_found | :forbidden | :conflict | :grain_reservation_missing)
   def reject_application(user, event, application_id),
     do: change_application(user, event, application_id, "rejected")
 
+  @spec remove_application(User.t(), Event.t(), String.t()) ::
+          result(:not_found | :forbidden | :conflict | :grain_reservation_missing)
   def remove_application(user, event, application_id),
     do: change_application(user, event, application_id, "removed")
 
+  @spec withdraw_application(User.t(), Event.t(), String.t()) ::
+          result(:not_found | :forbidden | :conflict | :grain_reservation_missing)
   def withdraw_application(user, event, application_id),
     do: change_application(user, event, application_id, "withdrawn")
 
@@ -425,6 +449,8 @@ defmodule Rice.Events do
     end)
   end
 
+  @spec cancel(User.t(), Event.t()) ::
+          result(:not_found | :forbidden | :conflict | :grain_reservation_missing)
   def cancel(user, event) do
     with_event(event.id, fn current ->
       require_host!(user, current)
@@ -445,6 +471,14 @@ defmodule Rice.Events do
     end)
   end
 
+  @spec finish(User.t(), Event.t()) ::
+          result(
+            :not_found
+            | :forbidden
+            | :conflict
+            | :grain_reservation_missing
+            | :recipient_not_found
+          )
   def finish(user, event) do
     with_event(event.id, fn current ->
       require_host!(user, current)
@@ -499,6 +533,8 @@ defmodule Rice.Events do
     end)
   end
 
+  @spec start_due_events(DateTime.t()) ::
+          :ok | {:error, :not_found | :conflict | :grain_reservation_missing | Changeset.t()}
   def start_due_events(now \\ DateTime.utc_now()) do
     Repo.all(from(e in Event, where: e.status == "open" and e.starts_at <= ^now, select: e.id))
     |> Enum.reduce(:ok, fn id, result ->
@@ -509,8 +545,11 @@ defmodule Rice.Events do
     end)
   end
 
+  @spec start_event(Rice.Tsid.t(), DateTime.t()) ::
+          result(:not_found | :conflict | :grain_reservation_missing)
   def start_event(id, now \\ DateTime.utc_now()), do: with_event(id, &start_locked!(&1, now))
 
+  @spec allowed_actions(Event.t(), User.t() | nil) :: [String.t()]
   def allowed_actions(_event, nil), do: []
 
   def allowed_actions(event, user) do
@@ -536,6 +575,7 @@ defmodule Rice.Events do
     |> Enum.map(&elem(&1, 0))
   end
 
+  @spec application_actions(Event.t(), Application.t(), User.t() | nil) :: [String.t()]
   def application_actions(_event, _application, nil), do: []
 
   def application_actions(event, application, user) do
@@ -608,15 +648,7 @@ defmodule Rice.Events do
 
     record!(event, actor_id, application.id, "application_#{status}", application.status, status)
 
-    message =
-      %{
-        "rejected" => "活动申请未通过",
-        "removed" => "活动报名已移除",
-        "withdrawn" => "活动申请已撤销",
-        "not_selected" => "活动已开始，本次未入选",
-        "cancelled" => "活动已取消"
-      }[status]
-
+    message = refund_message(status)
     message = if application.fee_amount > 0, do: message <> "，报名费已退回", else: message
 
     notify!(
@@ -627,6 +659,13 @@ defmodule Rice.Events do
       message
     )
   end
+
+  # 不认识的状态直接崩,而不是发一条正文为空的通知
+  defp refund_message("rejected"), do: "活动申请未通过"
+  defp refund_message("removed"), do: "活动报名已移除"
+  defp refund_message("withdrawn"), do: "活动申请已撤销"
+  defp refund_message("not_selected"), do: "活动已开始，本次未入选"
+  defp refund_message("cancelled"), do: "活动已取消"
 
   defp active_applications(event), do: round_applications(event, ["pending", "approved"])
 
@@ -685,6 +724,7 @@ defmodule Rice.Events do
     end
   end
 
+  @spec can_manage?(Event.t(), User.t() | nil) :: boolean()
   def can_manage?(_event, nil), do: false
 
   def can_manage?(%Event{status: "draft", creator_id: creator_id} = event, user),
@@ -695,6 +735,7 @@ defmodule Rice.Events do
 
   def can_manage?(event, user), do: Rice.Community.admin?(node_of(event), user)
 
+  @spec can_edit?(Event.t(), User.t() | nil) :: boolean()
   def can_edit?(%Event{status: "draft"} = event, user), do: can_manage?(event, user)
 
   def can_edit?(%Event{} = event, %User{} = user), do: Rice.Community.admin?(node_of(event), user)

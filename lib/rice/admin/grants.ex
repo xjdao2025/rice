@@ -27,6 +27,13 @@ defmodule Rice.Admin.Grants do
   而发放又常常是粘一列几百个手机号 —— 要是先验码再校验收款人,一个笔误就把码烧掉了,
   还得等 60 秒重发。先校验参数(不写任何东西),码留到真要动账的时候再验。
   """
+  @spec prepare(term(), term()) ::
+          {:ok, [User.t()]}
+          | {:error,
+             :no_recipients
+             | :invalid_amount
+             | {:unknown_recipients, [String.t()]}
+             | {:invalid_recipients, [term()]}}
   def prepare(recipients, amount) when is_list(recipients) and recipients != [] do
     with :ok <- validate_amount(amount) do
       case Rice.Accounts.find_users(recipients) do
@@ -39,6 +46,8 @@ defmodule Rice.Admin.Grants do
   def prepare(_, _), do: {:error, :no_recipients}
 
   @doc "把 `prepare/2` 解析出来的收款人真正入账。一个事务:要么每个人都到账,要么一个都不动。"
+  @spec credit([User.t()], pos_integer(), keyword()) ::
+          {:ok, non_neg_integer()} | {:error, Ecto.Changeset.t()}
   def credit(users, amount, opts \\ []) do
     memo = Keyword.get(opts, :memo, "") || ""
 
@@ -73,6 +82,16 @@ defmodule Rice.Admin.Grants do
   锁住节点后先检查流水，再消费一次性验证码。重试相同请求返回原流水，不会
   再增加余额；同一请求标识对应不同金额或备注则返回冲突。
   """
+  @spec grant_node(AdminUser.t(), String.t(), term(), term(), String.t() | nil, keyword()) ::
+          {:ok, Transfer.t(), :created | :replayed}
+          | {:error,
+             :not_found
+             | :invalid_amount
+             | :missing_request_id
+             | :conflict
+             | :contact_not_set
+             | Rice.Accounts.code_error()
+             | Ecto.Changeset.t()}
   def grant_node(%AdminUser{} = admin, node_id, amount, request_id, code, opts \\ []) do
     memo = Keyword.get(opts, :memo) || ""
 
@@ -166,6 +185,7 @@ defmodule Rice.Admin.Grants do
   defp validate_amount(_), do: {:error, :invalid_amount}
 
   @doc "发放记录。可按收款人和时间范围筛。"
+  @spec list_grants(map()) :: Pagination.page(Transfer.t())
   def list_grants(params \\ %{}) do
     from(t in Transfer,
       where: t.kind == "grant",

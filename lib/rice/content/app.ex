@@ -14,6 +14,7 @@ defmodule Rice.Content.App do
     timestamps()
   end
 
+  @spec changeset(t(), map()) :: Ecto.Changeset.t()
   def changeset(app, attrs) do
     app
     |> cast(attrs, [:legacy_id, :name, :description, :url, :position, :logo_id])

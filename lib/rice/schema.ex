@@ -5,6 +5,7 @@ defmodule Rice.Schema do
     * 主键是 `Rice.Tsid.Type`,自动生成(见 `Rice.Tsid`)
     * 外键同样是 TSID
     * 时间戳是 `inserted_at` / `updated_at`,`utc_datetime_usec`(Phoenix 惯例)
+    * 每个 schema 自带 `@type t :: %__MODULE__{}`,`@spec` 里写 `User.t()`
 
   用法:
 
@@ -27,14 +28,18 @@ defmodule Rice.Schema do
       @primary_key {:id, Rice.Tsid.Type, autogenerate: true}
       @foreign_key_type Rice.Tsid.Type
       @timestamps_opts [type: :utc_datetime_usec]
+
+      @type t :: %__MODULE__{}
     end
   end
 
   @doc "`update_change` 用:去首尾空白,nil 当空串。"
+  @spec trim(term()) :: String.t()
   def trim(value) when is_binary(value), do: String.trim(value)
   def trim(_), do: ""
 
   @doc "`update_change` 用:去首尾空白,空串当 nil。"
+  @spec optional_trim(term()) :: String.t() | nil
   def optional_trim(value) do
     case trim(value) do
       "" -> nil

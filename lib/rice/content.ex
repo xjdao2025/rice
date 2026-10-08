@@ -13,6 +13,7 @@ defmodule Rice.Content do
   # ── 应用入口 ────────────────────────────────────────────────────────────
 
   @doc "按 position 升序列出所有应用。数量是个位数,不分页。"
+  @spec list_apps() :: [App.t()]
   def list_apps do
     Repo.all(from a in App, order_by: [asc: a.position, asc: a.id], preload: [:logo])
   end
@@ -20,6 +21,7 @@ defmodule Rice.Content do
   # ── 轮播位 ──────────────────────────────────────────────────────────────
 
   @doc "按 position 升序列出所有 banner。"
+  @spec list_banners() :: [Banner.t()]
   def list_banners do
     Repo.all(from b in Banner, order_by: [asc: b.position, asc: b.id], preload: [:image])
   end
@@ -37,6 +39,7 @@ defmodule Rice.Content do
   量级,C 端两处调用(大厅取 3 条、列表取 100 条)都是一次取全,不翻页。真要翻页
   得先给 `Pagination` 加按 position 的游标。
   """
+  @spec list_announcements(map()) :: Pagination.page(Announcement.t())
   def list_announcements(params \\ %{}) do
     from(a in Announcement,
       order_by: [asc: a.position, desc: a.inserted_at],
@@ -46,5 +49,6 @@ defmodule Rice.Content do
   end
 
   @doc "取单条公告。`{:ok, announcement}` 或 `{:error, :not_found}`。"
+  @spec fetch_announcement(String.t()) :: {:ok, Announcement.t()} | {:error, :not_found}
   def fetch_announcement(id), do: Repo.fetch(from(a in Announcement, preload: [:attachment]), id)
 end

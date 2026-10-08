@@ -10,12 +10,15 @@ defmodule Rice.Admin.Posts do
 
   @callback label(uri :: String.t(), labels :: [String.t()]) :: :ok | {:error, term()}
 
+  @spec take_down(term()) :: :ok | {:error, :invalid_uri | term()}
   def take_down(uri) when is_binary(uri) and uri != "", do: impl().label(uri, ["blacklist"])
   def take_down(_), do: {:error, :invalid_uri}
 
+  @spec restore(term()) :: :ok | {:error, :invalid_uri | term()}
   def restore(uri) when is_binary(uri) and uri != "", do: impl().label(uri, [])
   def restore(_), do: {:error, :invalid_uri}
 
+  @spec impl() :: module()
   def impl, do: Application.get_env(:rice, :post_client, __MODULE__.Http)
 
   defmodule Http do

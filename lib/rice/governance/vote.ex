@@ -18,6 +18,7 @@ defmodule Rice.Governance.Vote do
     timestamps()
   end
 
+  @spec changeset(t(), map()) :: Ecto.Changeset.t()
   def changeset(vote, attrs) do
     vote
     |> cast(attrs, [:legacy_id, :proposal_id, :user_id, :choice])
@@ -29,5 +30,6 @@ defmodule Rice.Governance.Vote do
     |> unique_constraint(:legacy_id)
   end
 
+  @spec choices() :: [String.t()]
   def choices, do: @choices
 end

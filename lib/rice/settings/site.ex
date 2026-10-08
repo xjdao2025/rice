@@ -14,6 +14,7 @@ defmodule Rice.Settings.Site do
     timestamps()
   end
 
+  @spec changeset(t(), map()) :: Ecto.Changeset.t()
   def changeset(site, attrs) do
     site
     |> cast(attrs, [:fund_scale, :issued_grain_scale, :proposal_approval_votes])

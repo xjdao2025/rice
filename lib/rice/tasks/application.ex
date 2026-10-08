@@ -19,6 +19,7 @@ defmodule Rice.Tasks.Application do
     timestamps()
   end
 
+  @spec create_changeset(t(), map()) :: Ecto.Changeset.t()
   def create_changeset(application, attrs) do
     application
     |> cast(attrs, [:reason, :contact])

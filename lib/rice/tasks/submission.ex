@@ -14,6 +14,7 @@ defmodule Rice.Tasks.Submission do
     timestamps()
   end
 
+  @spec create_changeset(t(), map()) :: Ecto.Changeset.t()
   def create_changeset(submission, attrs) do
     submission
     |> cast(attrs, [:body])
@@ -22,6 +23,7 @@ defmodule Rice.Tasks.Submission do
     |> validate_length(:body, min: 1, max: 4000)
   end
 
+  @spec review_changeset(t(), String.t()) :: Ecto.Changeset.t()
   def review_changeset(submission, reason) do
     submission
     |> change(review_reason: String.trim(reason))

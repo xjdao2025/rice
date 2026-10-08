@@ -23,11 +23,13 @@ defmodule Rice.Notifications.Dispatcher do
   end
 
   @doc "四个必填项全都非空才算配好 —— 少一个签名就算不对,发出去是 400。"
+  @spec configured?(module(), [atom()]) :: boolean()
   def configured?(mod, keys) do
     cfg = Application.get_env(:rice, mod, [])
     Enum.all?(keys, fn key -> cfg[key] not in [nil, ""] end)
   end
 
+  @spec available?(String.t()) :: boolean()
   def available?("sms"),
     do: configured?(AliyunSms, [:access_key_id, :access_key_secret, :sign_name, :template_code])
 

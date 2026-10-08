@@ -23,6 +23,7 @@ defmodule Rice.Files.Attachment do
     timestamps()
   end
 
+  @spec changeset(t(), map()) :: Ecto.Changeset.t()
   def changeset(attachment, attrs) do
     attachment
     |> cast(attrs, [
@@ -47,6 +48,7 @@ defmodule Rice.Files.Attachment do
       iex> Rice.Files.Attachment.parse_legacy_id("1-b656bee8-GU logo 1-512.jpg")
       {:ok, %{kind: "image", filename: "GU logo 1-512.jpg"}}
   """
+  @spec parse_legacy_id(term()) :: {:ok, %{kind: String.t(), filename: String.t()}} | :error
   def parse_legacy_id(file_id) when is_binary(file_id) do
     case String.split(file_id, "-", parts: 3) do
       [code, _guid, filename] when filename != "" ->

@@ -28,6 +28,7 @@ defmodule Rice.Governance.Proposal do
     timestamps()
   end
 
+  @spec changeset(t(), map()) :: Ecto.Changeset.t()
   def changeset(proposal, attrs) do
     proposal
     |> cast(attrs, [
@@ -50,6 +51,7 @@ defmodule Rice.Governance.Proposal do
   end
 
   @doc "用户发起提案。status / 票数 / 上架状态都不由客户端决定。"
+  @spec create_changeset(t(), map()) :: Ecto.Changeset.t()
   def create_changeset(proposal, attrs) do
     proposal
     |> cast(attrs, [:title, :attachment_id, :closes_at])
@@ -71,6 +73,7 @@ defmodule Rice.Governance.Proposal do
     end
   end
 
+  @spec open?(t()) :: boolean()
   def open?(%__MODULE__{status: "open", deleted_at: nil}), do: true
   def open?(%__MODULE__{}), do: false
 end

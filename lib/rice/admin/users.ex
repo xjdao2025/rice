@@ -19,6 +19,7 @@ defmodule Rice.Admin.Users do
     * `node_member` —— `"true"` 只看节点用户,`"false"` 只看非节点用户
     * `disabled` —— `"true"` 只看已停用
   """
+  @spec list_users(map()) :: Pagination.page(User.t())
   def list_users(params \\ %{}) do
     from(u in User, where: is_nil(u.deleted_at), preload: [:avatar])
     |> search(params["q"])
@@ -46,6 +47,7 @@ defmodule Rice.Admin.Users do
   defp filter_disabled(query, "false"), do: from(u in query, where: is_nil(u.disabled_at))
   defp filter_disabled(query, _), do: query
 
+  @spec fetch_user(String.t()) :: {:ok, User.t()} | {:error, :not_found}
   def fetch_user(id), do: Repo.found(Rice.Accounts.get_user(id))
 
   @doc """
@@ -54,6 +56,8 @@ defmodule Rice.Admin.Users do
   停用会**同时撤销该用户的全部令牌** —— core 只改标记,手上的 JWT
   还能用满 30 天,等于"禁用"要等一个月才生效。
   """
+  @spec update_user(User.t(), map()) ::
+          {:ok, User.t()} | {:error, :no_changes | Ecto.Changeset.t()}
   def update_user(%User{} = user, attrs) do
     attrs = Map.new(attrs, fn {k, v} -> {to_string(k), v} end)
 

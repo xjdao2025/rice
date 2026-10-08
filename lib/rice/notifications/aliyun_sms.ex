@@ -42,6 +42,9 @@ defmodule Rice.Notifications.AliyunSms do
   defp target(region, phone), do: "00" <> to_string(region) <> phone
 
   @doc "从短信正文里取出 6 位验证码。正文由 `Rice.Accounts` 拼,格式受控。"
+  # Regex.run 的 spec 含 `capture: :index` 的 `{pos, len}`;不带选项时只会是字符串。
+  @dialyzer {:no_missing_return, extract_code: 1}
+  @spec extract_code(term()) :: String.t() | nil
   def extract_code(text) when is_binary(text) do
     case Regex.run(~r/\d{4,8}/, text) do
       [code] -> code
@@ -84,6 +87,7 @@ defmodule Rice.Notifications.AliyunSms do
   单独导出是为了能测签名本身 —— 签名算错的表现是线上 400,
   本地不测就只能到生产才发现。
   """
+  @spec signed(map(), keyword(), String.t() | nil, String.t() | nil) :: map()
   def signed(params, cfg, nonce \\ nil, timestamp \\ nil) do
     params =
       Map.merge(params, %{

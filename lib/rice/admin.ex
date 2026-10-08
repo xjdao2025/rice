@@ -20,11 +20,13 @@ defmodule Rice.Admin do
 
   # ── 身份 ────────────────────────────────────────────────────────────────
 
+  @spec get_admin(String.t()) :: AdminUser.t() | nil
   def get_admin(id) do
     if Rice.Tsid.valid?(id),
       do: Repo.one(from a in active(), where: a.id == ^id, preload: [:avatar])
   end
 
+  @spec list_admins(map()) :: Pagination.page(AdminUser.t())
   def list_admins(params \\ %{}) do
     from(a in active(), preload: [:avatar])
     |> Pagination.paginate(Repo, Pagination.params(params))
@@ -34,6 +36,7 @@ defmodule Rice.Admin do
   新建管理员。返回 `{:ok, admin, 初始密码}` —— 初始密码只在这一刻可见,
   库里只有摘要。core 也是这个做法。
   """
+  @spec create_admin(map()) :: {:ok, AdminUser.t(), String.t()} | {:error, Ecto.Changeset.t()}
   def create_admin(attrs) do
     password = generate_password()
 
@@ -44,6 +47,9 @@ defmodule Rice.Admin do
   end
 
   @doc "软删。超管删不掉,自己也删不掉自己。"
+  @spec delete_admin(AdminUser.t(), AdminUser.t()) ::
+          {:ok, AdminUser.t()}
+          | {:error, :cannot_delete_superuser | :cannot_delete_self | Ecto.Changeset.t()}
   def delete_admin(%AdminUser{} = actor, %AdminUser{} = target) do
     cond do
       target.superuser -> {:error, :cannot_delete_superuser}
@@ -66,6 +72,8 @@ defmodule Rice.Admin do
     end
   end
 
+  @spec update_profile(AdminUser.t(), map()) ::
+          {:ok, AdminUser.t()} | {:error, Ecto.Changeset.t()}
   def update_profile(%AdminUser{} = admin, attrs) do
     admin
     |> AdminUser.profile_changeset(normalize(attrs))
@@ -85,6 +93,8 @@ defmodule Rice.Admin do
   验证码那边一直有 5 次上限,密码这边原先一次都没数 —— 而这个接口的
   202/401 正好是一个可以无限问的"密码对不对"。
   """
+  @spec start_login(String.t(), String.t(), String.t()) ::
+          Rice.Accounts.send_code_result() | {:error, :too_many_attempts | :invalid_credentials}
   def start_login(region, phone, password) do
     with {:ok, _admin} <- check_password(region, phone, password) do
       Rice.Accounts.send_verification_code(
@@ -154,6 +164,13 @@ defmodule Rice.Admin do
   end
 
   @doc "第二步:密码 + 验证码换令牌。密码要再验一次 —— 只有验证码不够。"
+  @spec login(String.t(), String.t(), String.t(), term()) ::
+          {:ok, AdminUser.t(), String.t()}
+          | {:error,
+             :too_many_attempts
+             | :invalid_credentials
+             | Rice.Accounts.code_error()
+             | Ecto.Changeset.t()}
   def login(region, phone, password, code) do
     target = Rice.Accounts.phone_target(region, phone)
 
@@ -165,12 +182,16 @@ defmodule Rice.Admin do
     end
   end
 
+  @spec issue_token(AdminUser.t(), keyword()) :: {:ok, String.t()} | {:error, Ecto.Changeset.t()}
   def issue_token(%AdminUser{} = admin, opts \\ []) do
     {plaintext, changeset} = AdminToken.build(admin, opts)
     with {:ok, _} <- Repo.insert(changeset), do: {:ok, plaintext}
   end
 
   @doc "用明文令牌换管理员。过期、被撤销、被停用、被删都返回 nil。"
+  # Repo.one 的结果是 term(),Repo.preload 的 spec 因此带上了列表分支;`select: a` 只会是单个管理员。
+  @dialyzer {:no_missing_return, admin_by_token: 1}
+  @spec admin_by_token(term()) :: AdminUser.t() | nil
   def admin_by_token(plaintext) when is_binary(plaintext) do
     hash = AdminToken.hash(plaintext)
     now = DateTime.utc_now()
@@ -197,18 +218,22 @@ defmodule Rice.Admin do
 
   def admin_by_token(_), do: nil
 
+  @spec revoke_token(String.t()) :: :ok | {:error, :not_found}
   def revoke_token(plaintext) when is_binary(plaintext) do
     hash = AdminToken.hash(plaintext)
     {count, _} = Repo.delete_all(from t in AdminToken, where: t.token_hash == ^hash)
     if count > 0, do: :ok, else: {:error, :not_found}
   end
 
+  @spec revoke_all_tokens(AdminUser.t()) :: {:ok, non_neg_integer()}
   def revoke_all_tokens(%AdminUser{id: id}) do
     {count, _} = Repo.delete_all(from t in AdminToken, where: t.admin_user_id == ^id)
     {:ok, count}
   end
 
   @doc "凭手机验证码重置管理员密码。成功后踢掉该管理员的全部会话。"
+  @spec reset_password(String.t(), String.t(), term(), String.t()) ::
+          {:ok, AdminUser.t()} | {:error, Rice.Accounts.code_error() | Ecto.Changeset.t()}
   def reset_password(region, phone, code, new_password) do
     target = Rice.Accounts.phone_target(region, phone)
 
@@ -223,6 +248,7 @@ defmodule Rice.Admin do
     end
   end
 
+  @spec send_reset_code(String.t(), String.t()) :: Rice.Accounts.send_code_result() | {:ok, :sent}
   def send_reset_code(region, phone) do
     # 手机号不是管理员时也返回 :ok,不泄露"这个号是不是管理员"
     if get_admin_by_phone(region, phone) do
@@ -245,6 +271,8 @@ defmodule Rice.Admin do
   (`AdminUserScoreDistribution`)。令牌可能被人从浏览器里捞走,短信在管理员
   自己手上 —— 两者同时到手才发得出去。这一层照搬过来。
   """
+  @spec send_grant_code(AdminUser.t()) ::
+          Rice.Accounts.send_code_result() | {:error, :contact_not_set}
   def send_grant_code(%AdminUser{phone: phone, phone_region: region})
       when is_binary(phone) do
     Rice.Accounts.send_verification_code(
@@ -257,6 +285,8 @@ defmodule Rice.Admin do
   def send_grant_code(_), do: {:error, :contact_not_set}
 
   @doc "校验发放验证码。发给谁就验谁 —— 不能拿别人手机上的码来发。"
+  @spec verify_grant_code(AdminUser.t(), String.t() | nil) ::
+          :ok | {:error, Rice.Accounts.code_error() | :contact_not_set}
   def verify_grant_code(%AdminUser{phone: phone, phone_region: region}, code)
       when is_binary(phone) do
     Rice.Accounts.verify_code(
@@ -269,6 +299,7 @@ defmodule Rice.Admin do
 
   def verify_grant_code(_, _), do: {:error, :contact_not_set}
 
+  @spec code_purposes() :: [String.t()]
   def code_purposes, do: [@code_purpose, @reset_purpose, @grant_purpose]
 
   # ── 内部 ────────────────────────────────────────────────────────────────

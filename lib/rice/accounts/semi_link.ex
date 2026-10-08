@@ -3,6 +3,8 @@ defmodule Rice.Accounts.SemiLink do
   use Ecto.Schema
   import Ecto.Changeset
 
+  @type t :: %__MODULE__{}
+
   schema "semi_links" do
     field :semi_sub, :string
     field :did, :string
@@ -15,6 +17,7 @@ defmodule Rice.Accounts.SemiLink do
     timestamps(type: :utc_datetime_usec)
   end
 
+  @spec changeset(t(), map()) :: Ecto.Changeset.t()
   def changeset(link, attrs) do
     link
     |> cast(attrs, [:semi_sub, :did, :handle, :account_password_ciphertext, :wallet_address])

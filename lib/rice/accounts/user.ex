@@ -34,6 +34,7 @@ defmodule Rice.Accounts.User do
   end
 
   @doc "注册时建档。did/handle 来自 PDS,不可由客户端指定。"
+  @spec registration_changeset(t(), map()) :: Ecto.Changeset.t()
   def registration_changeset(user, attrs) do
     user
     |> cast(attrs, [:did, :handle, :email, :phone, :phone_region, :nickname, :legacy_id])
@@ -46,6 +47,7 @@ defmodule Rice.Accounts.User do
   end
 
   @doc "用户自己能改的字段。did / handle / 余额 / 禁用状态都不在其中。"
+  @spec profile_changeset(t(), map()) :: Ecto.Changeset.t()
   def profile_changeset(user, attrs) do
     user
     |> cast(attrs, [:nickname, :bio, :avatar_id])
@@ -55,6 +57,7 @@ defmodule Rice.Accounts.User do
   end
 
   @doc "改绑手机 / 邮箱。"
+  @spec contact_changeset(t(), map()) :: Ecto.Changeset.t()
   def contact_changeset(user, attrs) do
     user
     |> cast(attrs, [:email, :phone, :phone_region])

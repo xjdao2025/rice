@@ -17,5 +17,6 @@ defmodule Rice.PDS.Api do
   @callback handle_domain() :: String.t()
   @callback email_domain() :: String.t()
 
+  @spec impl() :: module()
   def impl, do: Application.get_env(:rice, :pds_client, Rice.PDS)
 end

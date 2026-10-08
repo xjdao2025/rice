@@ -13,6 +13,7 @@ defmodule Rice.Governance.Comment do
     timestamps()
   end
 
+  @spec changeset(t(), map()) :: Ecto.Changeset.t()
   def changeset(comment, attrs) do
     comment
     |> cast(attrs, [:legacy_id, :proposal_id, :user_id, :body])

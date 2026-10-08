@@ -10,9 +10,11 @@ defmodule Rice.RateLimit do
 
   @table __MODULE__
 
+  @spec start_link(term()) :: GenServer.on_start()
   def start_link(_), do: GenServer.start_link(__MODULE__, nil, name: __MODULE__)
 
   @doc "`window` 秒内的第 `limit` 次以内返回 `:ok`,超过返回 `{:error, :too_many_requests}`。"
+  @spec hit(term(), pos_integer(), pos_integer()) :: :ok | {:error, :too_many_requests}
   def hit(key, limit, window) do
     now = System.system_time(:second)
     bucket = {key, div(now, window)}

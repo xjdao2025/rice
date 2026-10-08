@@ -14,6 +14,7 @@ defmodule Rice.Grains.Receipt do
     timestamps(updated_at: false)
   end
 
+  @spec changeset(t(), map()) :: Ecto.Changeset.t()
   def changeset(receipt, attrs) do
     receipt
     |> cast(attrs, [

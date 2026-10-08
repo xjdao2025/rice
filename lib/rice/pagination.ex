@@ -28,6 +28,15 @@ defmodule Rice.Pagination do
   @default_limit 20
   @max_limit 100
 
+  @typedoc "一页结果。页码模式多 `total` / `page` / `per_page` 三项。"
+  @type page(entry) :: %{
+          required(:entries) => [entry],
+          required(:next_cursor) => String.t() | nil,
+          optional(:total) => non_neg_integer(),
+          optional(:page) => pos_integer(),
+          optional(:per_page) => pos_integer()
+        }
+
   @type opts :: [limit: pos_integer(), before: String.t() | nil, after: String.t() | nil]
 
   @doc """
@@ -56,6 +65,7 @@ defmodule Rice.Pagination do
   统一走这里,免得每个 JSON 视图各拼各的 —— 漏一个 `total`,前端的分页器
   就只剩一页。
   """
+  @spec meta(page(term())) :: map()
   def meta(%{page: page, total: total, per_page: per_page, next_cursor: cursor}) do
     %{next_cursor: cursor, total: total, page: page, per_page: per_page}
   end
@@ -63,10 +73,7 @@ defmodule Rice.Pagination do
   def meta(%{next_cursor: cursor}), do: %{next_cursor: cursor}
 
   @doc "把分页条件套到 query 上。多取一条用来判断还有没有下一页。"
-  @spec paginate(Ecto.Query.t(), Ecto.Repo.t(), map(), keyword()) :: %{
-          entries: list(),
-          next_cursor: String.t() | nil
-        }
+  @spec paginate(Ecto.Query.t(), Ecto.Repo.t(), map(), keyword()) :: page(term())
   def paginate(query, repo, opts, config \\ [])
 
   def paginate(query, repo, %{page: page, limit: per_page}, config) when is_integer(page) do
@@ -187,6 +194,9 @@ defmodule Rice.Pagination do
 
   defp parse_page(_), do: nil
 
+  @spec default_limit() :: pos_integer()
   def default_limit, do: @default_limit
+
+  @spec max_limit() :: pos_integer()
   def max_limit, do: @max_limit
 end

@@ -29,6 +29,8 @@ defmodule Rice.Admin.LoginAttempt do
   @lock_minutes 15
 
   @primary_key false
+  @type t :: %__MODULE__{}
+
   schema "admin_login_attempts" do
     field :phone_region, :string
     field :phone, :string
@@ -38,6 +40,7 @@ defmodule Rice.Admin.LoginAttempt do
     timestamps(type: :utc_datetime_usec)
   end
 
+  @spec changeset(t(), map()) :: Ecto.Changeset.t()
   def changeset(record, attrs) do
     record
     |> cast(attrs, [:phone_region, :phone, :attempts, :locked_until])
@@ -45,6 +48,7 @@ defmodule Rice.Admin.LoginAttempt do
   end
 
   @doc "现在还锁着吗。"
+  @spec locked?(t() | nil, DateTime.t()) :: boolean()
   def locked?(nil, _now), do: false
 
   def locked?(%__MODULE__{locked_until: nil}, _now), do: false
@@ -52,6 +56,8 @@ defmodule Rice.Admin.LoginAttempt do
   def locked?(%__MODULE__{locked_until: until}, now),
     do: DateTime.compare(until, now) == :gt
 
+  @spec max_attempts() :: pos_integer()
   def max_attempts, do: @max_attempts
+  @spec lock_minutes() :: pos_integer()
   def lock_minutes, do: @lock_minutes
 end

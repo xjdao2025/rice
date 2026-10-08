@@ -24,19 +24,25 @@ defmodule Rice.Tasks.ApplicationState do
     "expired" => []
   }
 
+  @spec states() :: [String.t()]
   def states, do: @states
+  @spec appointed_states() :: [String.t()]
   def appointed_states, do: @appointed
+  @spec transitions() :: %{String.t() => [String.t()]}
   def transitions, do: @transitions
 
   @doc "能迁移到 `to` 的来源状态。"
+  @spec sources(String.t()) :: [String.t()]
   def sources(to) do
     for {from, tos} <- @transitions, to in tos, do: from
   end
 
   @doc "是否还占着一个名额。"
+  @spec appointed?(String.t()) :: boolean()
   def appointed?(status), do: status in @appointed
 
   @doc "接口里给老前端看的粗粒度状态:占着名额的都叫 appointed,rejected 叫 not_selected。"
+  @spec legacy(String.t()) :: String.t()
   def legacy("rejected"), do: "not_selected"
   def legacy(status) when status in @appointed, do: "appointed"
   def legacy(status), do: status

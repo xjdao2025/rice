@@ -13,6 +13,9 @@ defmodule Rice.Tasks do
   alias Rice.Tasks.{Application, ApplicationState, Event, Notification, Submission, Task}
   alias Rice.{Grains, Pagination, Repo}
 
+  @type error ::
+          :not_found | :forbidden | :conflict | :grain_reservation_missing | Ecto.Changeset.t()
+
   # 仍占着名额的申请状态。被撤销指派(released)的人留着 appointed_at,
   # 所以"算不算承接者"一律按状态判断,不看 appointed_at。
   @appointed ApplicationState.appointed_states()
@@ -27,6 +30,7 @@ defmodule Rice.Tasks do
     node_id: "已发布任务不能修改所属节点"
   ]
 
+  @spec list_tasks(User.t() | nil, map()) :: Pagination.page(Task.t())
   def list_tasks(user, params \\ %{}) do
     query =
       from(t in Task, as: :task)
@@ -44,6 +48,7 @@ defmodule Rice.Tasks do
     %{page | entries: preload_list(page.entries)}
   end
 
+  @spec fetch_task(String.t(), User.t() | nil) :: {:ok, Task.t()} | {:error, :not_found}
   def fetch_task(id, user \\ nil) do
     with {:ok, task} <- fetch_task_record(id) do
       if visible_to?(task, user), do: {:ok, task}, else: {:error, :not_found}
@@ -59,6 +64,14 @@ defmodule Rice.Tasks do
     end
   end
 
+  @spec create_task(User.t(), map()) ::
+          {:ok, Task.t()}
+          | {:error,
+             :forbidden
+             | :unprocessable_entity
+             | :conflict
+             | :insufficient_balance
+             | Ecto.Changeset.t()}
   def create_task(%User{} = user, attrs) do
     Repo.transaction(fn ->
       Repo.one!(from u in User, where: u.id == ^user.id, lock: "FOR UPDATE")
@@ -84,6 +97,7 @@ defmodule Rice.Tasks do
     end)
   end
 
+  @spec can_manage?(Task.t(), User.t() | nil) :: boolean()
   def can_manage?(_task, nil), do: false
 
   def can_manage?(%Task{status: "draft", creator_id: id} = task, user),
@@ -97,6 +111,7 @@ defmodule Rice.Tasks do
   defp authorize_management(task, user),
     do: if(can_manage?(task, user), do: :ok, else: {:error, :forbidden})
 
+  @spec can_edit?(Task.t(), User.t() | nil) :: boolean()
   def can_edit?(%Task{status: "draft"} = task, user), do: can_manage?(task, user)
   def can_edit?(%Task{funding_node_id: nil} = task, user), do: can_manage?(task, user)
 
@@ -108,6 +123,7 @@ defmodule Rice.Tasks do
   defp node_of(%Task{node: %Rice.Community.Node{} = node}), do: node
   defp node_of(%Task{node_id: id}), do: id && Repo.get(Rice.Community.Node, id)
 
+  @spec appointed_applications(Task.t()) :: [Application.t()]
   def appointed_applications(task) do
     task
     |> Repo.preload(:applications)
@@ -118,6 +134,7 @@ defmodule Rice.Tasks do
     )
   end
 
+  @spec appointed?(Task.t(), User.t() | nil) :: boolean()
   def appointed?(_task, nil), do: false
 
   def appointed?(task, user),
@@ -126,6 +143,7 @@ defmodule Rice.Tasks do
         Enum.any?(appointed_applications(task), &(&1.user_id == user.id))
 
   # 单人任务的个人状态就是任务状态;多人任务每人各自流转
+  @spec my_status(Task.t(), User.t() | nil, DateTime.t()) :: String.t()
   def my_status(task, user, now \\ DateTime.utc_now()) do
     application =
       if is_struct(user, User) and task.capacity > 1 and
@@ -145,6 +163,7 @@ defmodule Rice.Tasks do
     end
   end
 
+  @spec accepting_applications?(Task.t()) :: boolean()
   def accepting_applications?(task) do
     recruiting?(task) and not application_deadline_reached?(task) and
       length(appointed_applications(task)) < task.capacity
@@ -227,6 +246,8 @@ defmodule Rice.Tasks do
     end
   end
 
+  @spec update_task(User.t(), Task.t(), map()) ::
+          {:ok, Task.t()} | {:error, error() | :insufficient_balance}
   def update_task(user, task, attrs) do
     with_locked_task(task.id, fn current ->
       if current.status == "draft",
@@ -495,6 +516,10 @@ defmodule Rice.Tasks do
 
   defp update_current_draft(%User{}, %Task{}, _attrs), do: {:error, :forbidden}
 
+  @spec publish_draft(User.t(), Task.t()) ::
+          {:ok, Task.t()}
+          | {:error,
+             :not_found | :forbidden | :conflict | :insufficient_balance | Ecto.Changeset.t()}
   def publish_draft(user, %Task{} = task) do
     with_locked_task(task.id, &publish_current_draft(user, &1))
   end
@@ -531,6 +556,7 @@ defmodule Rice.Tasks do
 
   defp publish_current_draft(%User{}, %Task{}), do: {:error, :forbidden}
 
+  @spec cancel(User.t(), Task.t()) :: {:ok, Task.t()} | {:error, error()}
   def cancel(user, task), do: with_managed(task, user, &cancel_current(user, &1))
 
   defp cancel_current(%User{id: actor_id}, %Task{status: status} = task)
@@ -546,6 +572,9 @@ defmodule Rice.Tasks do
 
   defp cancel_current(%User{}, %Task{}), do: {:error, :conflict}
 
+  @spec apply(User.t(), Task.t(), map()) ::
+          {:ok, Application.t()}
+          | {:error, :forbidden | :conflict | :capacity_full | Ecto.Changeset.t()}
   def apply(%User{id: user_id}, %Task{creator_id: user_id}, _attrs),
     do: {:error, :forbidden}
 
@@ -608,12 +637,16 @@ defmodule Rice.Tasks do
 
   def apply(%User{}, %Task{}, _attrs), do: {:error, :conflict}
 
+  @spec appoint(User.t(), Task.t(), String.t(), map()) ::
+          {:ok, Task.t()} | {:error, error() | :capacity_full}
   def appoint(user, %Task{} = task, application_id, attrs \\ %{}) do
     with_managed(task, user, {Application, application_id}, fn current, application ->
       appoint_application(user, current, application, attrs)
     end)
   end
 
+  @spec reject_application(User.t(), Task.t(), String.t()) ::
+          {:ok, Task.t()} | {:error, :not_found | :forbidden | :conflict | Ecto.Changeset.t()}
   def reject_application(user, %Task{} = task, application_id) do
     with_managed(task, user, {Application, application_id}, fn current, application ->
       reject_current_application(user, current, application)
@@ -682,6 +715,8 @@ defmodule Rice.Tasks do
   要先验收或退回修改。没有人在承作时任务回到 `open`。
   单人任务没有撤销指派,承接人不干了就提前结束(`close/2`)。
   """
+  @spec release_assignee(User.t(), Task.t(), String.t(), map()) ::
+          {:ok, Task.t()} | {:error, error()}
   def release_assignee(user, %Task{} = task, application_id, attrs \\ %{}) do
     with_managed(task, user, {Application, application_id}, fn current, application ->
       release_current_assignee(user, current, application, attrs)
@@ -721,6 +756,7 @@ defmodule Rice.Tasks do
 
   单人任务也走这里:承接人超期不交、又不能取消时,这是唯一能把冻结的奖励退回去的路。
   """
+  @spec close(User.t(), Task.t()) :: {:ok, Task.t()} | {:error, error()}
   def close(user, %Task{} = task), do: with_managed(task, user, &close_current(user, &1))
 
   defp close_current(%User{id: actor_id}, %Task{status: status} = task)
@@ -776,6 +812,7 @@ defmodule Rice.Tasks do
 
   defp close_current(%User{}, %Task{}), do: {:error, :conflict}
 
+  @spec submit_result(User.t(), Task.t(), map()) :: {:ok, Task.t()} | {:error, error()}
   def submit_result(user, %Task{} = task, attrs),
     do: with_locked_task(task.id, &submit_current_result(user, &1, attrs))
 
@@ -810,6 +847,8 @@ defmodule Rice.Tasks do
 
   defp record_late_overdue(task), do: {:ok, task}
 
+  @spec approve_result(User.t(), Task.t(), String.t()) ::
+          {:ok, Task.t()} | {:error, error() | :recipient_not_found}
   def approve_result(user, %Task{} = task, submission_id) do
     with_managed(task, user, {Submission, submission_id}, fn current, submission ->
       # 被指派后才升成节点管理员的人,不能自己给自己验收发奖
@@ -844,6 +883,8 @@ defmodule Rice.Tasks do
     end
   end
 
+  @spec request_changes(User.t(), Task.t(), String.t(), term()) ::
+          {:ok, Task.t()} | {:error, error()}
   def request_changes(user, %Task{} = task, submission_id, reason) do
     with_managed(task, user, {Submission, submission_id}, fn current, submission ->
       request_submission_changes(user, current, submission, reason)
@@ -872,6 +913,9 @@ defmodule Rice.Tasks do
 
   defp request_submission_changes(_user, _task, _submission, _reason), do: {:error, :conflict}
 
+  @spec check_due_tasks(DateTime.t()) ::
+          {:ok, [Task.t()]}
+          | {:error, :not_found | :conflict | :grain_reservation_missing | Ecto.Changeset.t()}
   def check_due_tasks(now \\ DateTime.utc_now()) do
     # 进行中的任务过了截止仍留在进行中,只在还有事可做时才拿出来:申请截止后还有待处理的申请、
     # 或者所有承作人都已结束(该收尾了);交付截止后还有人没记成超期。
@@ -928,6 +972,7 @@ defmodule Rice.Tasks do
 
   defp transition_due_task(task, now), do: update_status(task, nil, now: now)
 
+  @spec list_notifications(User.t()) :: [Notification.t()]
   def list_notifications(%User{id: user_id}) do
     from(n in Notification,
       where: n.recipient_id == ^user_id and not is_nil(n.task_id),
@@ -1562,6 +1607,8 @@ defmodule Rice.Tasks do
 
   @doc false
   # 申请状态机的唯一入口:只放行 ApplicationState 里允许的迁移,返回真正迁移了的 user_id。
+  @spec move_applications(Ecto.Repo.t(), Ecto.Queryable.t(), String.t(), keyword()) ::
+          {:ok, [Rice.Tsid.t()]}
   def move_applications(repo, scope, to, extra \\ []) do
     sources = ApplicationState.sources(to)
     query = from(a in scope, where: a.status in ^sources, select: a.user_id)

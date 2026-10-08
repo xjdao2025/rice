@@ -28,6 +28,7 @@ defmodule Rice.Grains.Transfer do
     timestamps()
   end
 
+  @spec changeset(t(), map()) :: Ecto.Changeset.t()
   def changeset(transfer, attrs) do
     transfer
     |> cast(attrs, [

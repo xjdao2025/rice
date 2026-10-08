@@ -1,8 +1,17 @@
 defmodule Rice.Inbox do
   @moduledoc "Task, activity and membership messages share the existing private inbox."
   import Ecto.Query
-  alias Rice.{Pagination, Repo, Tasks.Notification}
+  alias Rice.{Accounts.User, Pagination, Repo, Tasks.Notification}
 
+  @spec notify(
+          module(),
+          Rice.Tsid.t(),
+          Rice.Tsid.t(),
+          String.t(),
+          String.t(),
+          String.t(),
+          Rice.Tsid.t()
+        ) :: {:ok, Notification.t()} | {:error, Ecto.Changeset.t()}
   def notify(repo, recipient_id, actor_id, event, detail, type, id) do
     %Notification{}
     |> Notification.create_changeset(%{
@@ -16,8 +25,10 @@ defmodule Rice.Inbox do
     |> repo.insert()
   end
 
+  @spec list(User.t()) :: [map()]
   def list(user), do: list_page(user, %{}).notifications
 
+  @spec list_page(User.t(), map()) :: %{notifications: [map()], cursor: Rice.Tsid.t() | nil}
   def list_page(user, params) do
     %{limit: limit, before: before} =
       params
@@ -89,6 +100,7 @@ defmodule Rice.Inbox do
 
   defp notification_detail(notification, _event), do: notification.detail
 
+  @spec mark_read(User.t()) :: :ok
   def mark_read(user) do
     now = DateTime.utc_now()
 

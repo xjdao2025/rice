@@ -25,6 +25,7 @@ defmodule Rice.Events.Event do
     timestamps()
   end
 
+  @spec changeset(t(), map(), keyword()) :: Ecto.Changeset.t()
   def changeset(event, attrs, opts \\ []) do
     event
     |> cast(attrs, [
@@ -71,6 +72,7 @@ defmodule Rice.Events.Event do
     |> Rice.Files.put_images(attrs, Keyword.get(opts, :editing_user_id, event.creator_id))
   end
 
+  @spec publish_changeset(t()) :: Ecto.Changeset.t()
   def publish_changeset(event),
     do: event |> change() |> validate_required([:organizer_contact]) |> validate_times([])
 

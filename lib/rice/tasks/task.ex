@@ -37,6 +37,7 @@ defmodule Rice.Tasks.Task do
   end
 
   @doc "发布者只能提交任务内容；身份与状态由服务端填写。"
+  @spec create_changeset(t(), map(), keyword()) :: Ecto.Changeset.t()
   def create_changeset(task, attrs, opts \\ []) do
     task
     |> cast(attrs, [
@@ -71,6 +72,7 @@ defmodule Rice.Tasks.Task do
     |> Rice.Files.put_images(attrs, Keyword.get(opts, :editing_user_id, task.creator_id))
   end
 
+  @spec appointment_changeset(t(), map()) :: Ecto.Changeset.t()
   def appointment_changeset(task, attrs) do
     task
     |> cast(attrs, [:appointment_reason])
@@ -78,6 +80,7 @@ defmodule Rice.Tasks.Task do
     |> validate_length(:appointment_reason, max: 512)
   end
 
+  @spec publish_changeset(t()) :: Ecto.Changeset.t()
   def publish_changeset(task) do
     task
     |> change()
@@ -104,7 +107,9 @@ defmodule Rice.Tasks.Task do
        else: changeset
   end
 
+  @spec statuses() :: [String.t()]
   def statuses, do: @statuses
+  @spec max_capacity() :: pos_integer()
   def max_capacity, do: @max_capacity
 
   defp validate_total_reward(changeset) do

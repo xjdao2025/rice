@@ -8,6 +8,7 @@ defmodule Rice.Community do
 
   # ── 节点 ────────────────────────────────────────────────────────────────
 
+  @spec admin?(Node.t() | nil, User.t() | nil) :: boolean()
   def admin?(%Node{user_id: id}, %User{id: id}), do: true
 
   # 预加载了管理员名单(列表、详情渲染)就在内存里判断,不再每条任务 / 活动各查一次
@@ -24,8 +25,10 @@ defmodule Rice.Community do
   def admin?(_node, _user), do: false
 
   @doc "预加载用:节点的管理员名单。配合 `admin?/2` 的内存判断。"
+  @spec admin_memberships() :: Ecto.Query.t()
   def admin_memberships, do: from(m in Membership, where: m.role == "admin")
 
+  @spec managed_node_ids(User.t() | nil) :: [Rice.Tsid.t()]
   def managed_node_ids(%User{id: user_id}) do
     memberships =
       from m in Membership, where: m.user_id == ^user_id and m.role == "admin", select: m.node_id
@@ -37,6 +40,7 @@ defmodule Rice.Community do
 
   def managed_node_ids(_), do: []
 
+  @spec admin_ids(Node.t()) :: [Rice.Tsid.t()]
   def admin_ids(%Node{} = node) do
     members =
       Repo.all(
@@ -48,6 +52,9 @@ defmodule Rice.Community do
     Enum.uniq(Enum.reject([node.user_id | members], &is_nil/1))
   end
 
+  @spec set_member_role(User.t(), Node.t(), String.t(), String.t()) ::
+          {:ok, Membership.t()}
+          | {:error, :forbidden | :not_found | :unprocessable_entity | Ecto.Changeset.t()}
   def set_member_role(%User{} = user, %Node{} = node, user_id, role)
       when role in ~w(admin member) do
     if Rice.Tsid.valid?(user_id) do
@@ -71,6 +78,9 @@ defmodule Rice.Community do
   def set_member_role(_user, _node, _user_id, _role), do: {:error, :unprocessable_entity}
 
   @doc "公开目录附带本人身份；申请读取范围仅本人或本节点管理员。"
+  @spec list_nodes(User.t() | nil, map()) :: [Node.t()]
+  # Repo.preload 的 spec 是 list | struct | nil,传 list 只会回 list
+  @dialyzer {:no_missing_return, list_nodes: 2}
   def list_nodes(user \\ nil, params \\ %{}) do
     from(n in Node, order_by: [asc: n.position, asc: n.id])
     |> filter_node_query(params["q"])
@@ -79,6 +89,7 @@ defmodule Rice.Community do
     |> preload_nodes(user)
   end
 
+  @spec fetch_node(String.t(), User.t() | nil) :: {:ok, Node.t()} | {:error, :not_found}
   def fetch_node(id, user \\ nil) do
     with {:ok, node} <- Repo.fetch(Node, id), do: {:ok, preload_nodes(node, user)}
   end
@@ -146,6 +157,8 @@ defmodule Rice.Community do
 
   @doc "入会申请与审批按节点加锁，重复提交返回原待审记录。"
   # ponytail: serialize joins per node; use per-applicant locks if node traffic grows.
+  @spec apply_to_node(User.t(), Node.t(), map()) ::
+          {:ok, JoinApplication.t()} | {:error, :forbidden | :conflict | Ecto.Changeset.t()}
   def apply_to_node(%User{} = user, %Node{} = node, attrs) do
     Repo.transaction(fn ->
       node = Repo.one!(from n in Node, where: n.id == ^node.id, lock: "FOR UPDATE")
@@ -183,6 +196,9 @@ defmodule Rice.Community do
     application
   end
 
+  @spec review_join_application(User.t(), Node.t(), String.t(), String.t(), map()) ::
+          {:ok, JoinApplication.t()}
+          | {:error, :forbidden | :not_found | :conflict | Ecto.Changeset.t()}
   def review_join_application(%User{} = user, %Node{} = node, application_id, status, attrs)
       when status in ~w(approved rejected) do
     if Rice.Tsid.valid?(application_id) do
@@ -230,6 +246,7 @@ defmodule Rice.Community do
   defp write_result!({:error, reason}), do: Repo.rollback(reason)
 
   @doc "节点用户列表(原 /user/node-user-list)。"
+  @spec list_node_members() :: [User.t()]
   def list_node_members do
     Repo.all(
       from u in Rice.Accounts.User,
@@ -248,6 +265,7 @@ defmodule Rice.Community do
 
   传 nil 就是"谁也不是",全部为 nil。
   """
+  @spec list_badges(User.t() | nil) :: [{Badge.t(), DateTime.t() | nil}]
   def list_badges(user \\ nil) do
     awarded =
       case user do
@@ -271,6 +289,7 @@ defmodule Rice.Community do
   持有人数是一条 `left_join + count` 现算的 —— core 缓存在 `t_medal.quantity`,
   那是一份会和实际发放对不上的副本。
   """
+  @spec list_all_badges(map()) :: Pagination.page(Badge.t())
   def list_all_badges(params \\ %{}) do
     from(b in Badge,
       left_join: a in assoc(b, :awards),
@@ -281,6 +300,7 @@ defmodule Rice.Community do
     |> Pagination.paginate(Repo, Pagination.params(params))
   end
 
+  @spec fetch_badge(String.t()) :: {:ok, Badge.t()} | {:error, :not_found}
   def fetch_badge(id), do: Repo.fetch(from(b in Badge, preload: [:image]), id)
 
   @doc """
@@ -293,6 +313,12 @@ defmodule Rice.Community do
 
   全有或全无:任何一个收款人解析不出来,勋章也不建。
   """
+  @spec create_badge(map() | keyword(), list()) ::
+          {:ok, Badge.t()}
+          | {:error,
+             {:invalid_recipients, list()}
+             | {:unknown_recipients, [String.t()]}
+             | Ecto.Changeset.t()}
   def create_badge(attrs, recipients \\ []) do
     attrs = Map.new(attrs, fn {k, v} -> {to_string(k), v} end)
 
@@ -324,6 +350,12 @@ defmodule Rice.Community do
   同时点了提交"走的是同一条路 —— 数据库的唯一索引说了算,不靠先查后写那个
   会漏的窗口。
   """
+  @spec award_badge_to(Badge.t(), list()) ::
+          {:ok, %{awarded: non_neg_integer(), already_held: integer()}}
+          | {:error,
+             :no_recipients
+             | {:invalid_recipients, list()}
+             | {:unknown_recipients, [String.t()]}}
   def award_badge_to(%Badge{} = badge, recipients) do
     case Rice.Accounts.find_users(recipients) do
       {:ok, []} -> {:error, :no_recipients}
@@ -365,6 +397,7 @@ defmodule Rice.Community do
   end
 
   @doc "持有某枚勋章的人。"
+  @spec list_badge_holders(Badge.t(), map()) :: Pagination.page(BadgeAward.t())
   def list_badge_holders(%Badge{id: id}, params \\ %{}) do
     from(a in BadgeAward,
       where: a.badge_id == ^id,
@@ -387,6 +420,7 @@ defmodule Rice.Community do
   defp filter_holder(query, _), do: query
 
   @doc "发一枚勋章。同一枚勋章不会重复发给同一个人。"
+  @spec award_badge(Badge.t(), User.t()) :: {:ok, BadgeAward.t()} | {:error, Ecto.Changeset.t()}
   def award_badge(%Badge{} = badge, user) do
     %BadgeAward{}
     |> BadgeAward.changeset(%{badge_id: badge.id, user_id: user.id})
@@ -394,6 +428,7 @@ defmodule Rice.Community do
   end
 
   @doc "持有某枚勋章的人数 —— core 把它缓存成 t_medal.quantity,这里现算。"
+  @spec badge_holder_count(Badge.t()) :: non_neg_integer()
   def badge_holder_count(%Badge{id: id}),
     do: Repo.aggregate(from(a in BadgeAward, where: a.badge_id == ^id), :count)
 end

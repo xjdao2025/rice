@@ -11,7 +11,13 @@ defmodule Rice.MixProject do
       aliases: aliases(),
       deps: deps(),
       compilers: [:phoenix_live_view] ++ Mix.compilers(),
-      listeners: [Phoenix.CodeReloader]
+      listeners: [Phoenix.CodeReloader],
+      dialyzer: [
+        plt_add_apps: [:mix, :ex_unit],
+        plt_local_path: "priv/plts",
+        # 让 @spec 必须和实际返回值一致:多写的、漏写的分支都报出来
+        flags: [:extra_return, :missing_return]
+      ]
     ]
   end
 
@@ -72,7 +78,8 @@ defmodule Rice.MixProject do
       # 后台任务(替代 core 的 Hangfire + Redis),任务表与业务表同库同事务
       {:oban, "~> 2.19"},
       # 外部依赖(PDS / 短信 / 邮件)在测试里打桩,不打真实服务
-      {:mox, "~> 1.2", only: :test}
+      {:mox, "~> 1.2", only: :test},
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
     ]
   end
 

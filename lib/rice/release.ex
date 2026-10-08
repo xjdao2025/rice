@@ -5,6 +5,7 @@ defmodule Rice.Release do
   """
   @app :rice
 
+  @spec migrate() :: [{:ok, [integer()], [atom()]}]
   def migrate do
     load_app()
 
@@ -13,6 +14,7 @@ defmodule Rice.Release do
     end
   end
 
+  @spec rollback(module(), integer()) :: {:ok, [integer()], [atom()]}
   def rollback(repo, version) do
     load_app()
     {:ok, _, _} = Ecto.Migrator.with_repo(repo, &Ecto.Migrator.run(&1, :down, to: version))

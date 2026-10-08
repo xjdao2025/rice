@@ -12,6 +12,7 @@ defmodule Rice.Content.Announcement do
     timestamps()
   end
 
+  @spec changeset(t(), map()) :: Ecto.Changeset.t()
   def changeset(announcement, attrs) do
     announcement
     |> cast(attrs, [:legacy_id, :title, :position, :attachment_id])

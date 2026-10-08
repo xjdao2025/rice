@@ -11,6 +11,17 @@ defmodule Rice.Accounts do
   alias Rice.Accounts.{ApiToken, SemiLink, User, VerificationCode}
   alias Rice.{Notifications, Pagination, Repo}
 
+  @type code_error :: :invalid_code | :code_expired | :too_many_attempts
+  @type send_code_result ::
+          {:ok, VerificationCode.t()}
+          | {:error,
+             :invalid_channel
+             | :invalid_purpose
+             | :invalid_target
+             | :too_many_requests
+             | Ecto.Changeset.t()
+             | term()}
+
   defp pds, do: Rice.PDS.Api.impl()
 
   # ── Semi ↔ PDS 账号映射 ─────────────────────────────────────────────────
@@ -18,11 +29,14 @@ defmodule Rice.Accounts do
   # Semi 登录链路(Rice.Bridge)在用,生产已跑。期 3 不动它 ——
   # 等 users 表接管身份之后再考虑把 semi_links 并进来。
 
+  @spec get_link_by_sub(String.t()) :: SemiLink.t() | nil
   def get_link_by_sub(sub) when is_binary(sub), do: Repo.get_by(SemiLink, semi_sub: sub)
 
+  @spec get_link_by_did(term()) :: SemiLink.t() | nil
   def get_link_by_did(did) when is_binary(did), do: Repo.get_by(SemiLink, did: did)
   def get_link_by_did(_), do: nil
 
+  @spec create_link(map()) :: {:ok, SemiLink.t()} | {:error, Ecto.Changeset.t()}
   def create_link(attrs) do
     %SemiLink{}
     |> SemiLink.changeset(attrs)
@@ -35,6 +49,8 @@ defmodule Rice.Accounts do
 
   值没变就不写,避免每次登录都产生一次 UPDATE。
   """
+  @spec update_link_wallet(SemiLink.t(), term()) ::
+          {:ok, SemiLink.t()} | {:error, Ecto.Changeset.t()}
   def update_link_wallet(%SemiLink{} = link, wallet_address) do
     wallet = normalize_wallet(wallet_address)
 
@@ -67,6 +83,7 @@ defmodule Rice.Accounts do
   `where deleted_at is null`,所以注销过的人再用 Semi 登录会得到一份新档案,
   而不是把注销掉的那份挖出来。
   """
+  @spec ensure_user_for_did(map()) :: {:ok, User.t()} | {:error, Ecto.Changeset.t()}
   def ensure_user_for_did(%{did: did, handle: handle} = identity) do
     case get_user_by_did(did) do
       %User{} = user ->
@@ -85,18 +102,21 @@ defmodule Rice.Accounts do
 
   # ── 查询 ────────────────────────────────────────────────────────────────
 
+  @spec get_user(String.t()) :: User.t() | nil
   def get_user(id) do
     if Rice.Tsid.valid?(id) do
       Repo.one(from u in active_users(), where: u.id == ^id, preload: [:avatar])
     end
   end
 
+  @spec get_user_by_did(String.t()) :: User.t() | nil
   def get_user_by_did(did), do: Repo.one(from u in active_users(), where: u.did == ^did)
 
   @doc """
   按 core 的 `t_user.id` 找人 —— 只有老 daoJwt 的兜底认证会用到(它的 `uid`
   claim 就是这个值)。禁用的人不返回,和 `user_by_token/1` 一致。
   """
+  @spec get_user_by_legacy_id(term()) :: User.t() | nil
   def get_user_by_legacy_id(legacy_id) when is_binary(legacy_id) and legacy_id != "" do
     Repo.one(
       from u in active_users(),
@@ -109,6 +129,7 @@ defmodule Rice.Accounts do
   def get_user_by_legacy_id(_), do: nil
 
   @doc "按 handle / 邮箱 / 手机号找人 —— 登录时用。"
+  @spec get_user_by_identifier(term()) :: User.t() | nil
   def get_user_by_identifier(identifier) when is_binary(identifier) do
     normalized = String.downcase(String.trim(identifier))
 
@@ -130,6 +151,7 @@ defmodule Rice.Accounts do
   刻意**不认邮箱和手机号** —— `get_user_by_identifier/1` 认,那是登录用的。
   公开接口上认联系方式就等于送了一个"这个邮箱注册过没有"的探测器。
   """
+  @spec get_public_user(term()) :: User.t() | nil
   def get_public_user(identifier) when is_binary(identifier) do
     identifier = String.trim(identifier)
 
@@ -144,6 +166,7 @@ defmodule Rice.Accounts do
   def get_public_user(_), do: nil
 
   @doc "按昵称或 handle 搜索公开档案；不查询联系方式，也不列出停用或已注销账号。"
+  @spec search_public_users(map()) :: Pagination.page(User.t())
   def search_public_users(params) do
     q = params["q"]
     q = if is_binary(q), do: String.trim(q), else: ""
@@ -171,6 +194,7 @@ defmodule Rice.Accounts do
   `get_public_user/1` 兜底再查联系方式,结果按手机号找不到停用的用户、
   按 DID 却找得到,同一个人两种写法两个结果。
   """
+  @spec find_user(term()) :: User.t() | nil
   def find_user(identifier) when is_binary(identifier) do
     identifier = String.trim(identifier)
 
@@ -186,6 +210,9 @@ defmodule Rice.Accounts do
   里面可以是任何东西 —— 不先卡类型,`String.trim/1` 会抛,表现是 500 而不是 422。
   空字符串直接丢掉:从表格里粘一列手机号,末尾常带几个空行。
   """
+  @spec find_users(list()) ::
+          {:ok, [User.t()]}
+          | {:error, {:unknown_recipients, [String.t()]} | {:invalid_recipients, [term()]}}
   def find_users(identifiers) when is_list(identifiers) do
     case Enum.reject(identifiers, &is_binary/1) do
       [] ->
@@ -205,8 +232,6 @@ defmodule Rice.Accounts do
         {:error, {:invalid_recipients, bad}}
     end
   end
-
-  def find_users(_), do: {:error, :invalid_recipients}
 
   defp enabled(%User{disabled_at: nil} = user), do: user
   defp enabled(_), do: nil
@@ -242,6 +267,7 @@ defmodule Rice.Accounts do
   带频率限制 —— core 完全没有这层,同一个手机号可以被无限次轰炸。
   同一联系方式 60 秒一条、每天封顶。
   """
+  @spec send_verification_code(String.t(), String.t(), String.t()) :: send_code_result()
   def send_verification_code(channel, target, purpose) do
     with :ok <- validate_code_request(channel, target, purpose),
          code = VerificationCode.generate_code(),
@@ -306,6 +332,7 @@ defmodule Rice.Accounts do
   end
 
   @doc "同一联系方式距离下次允许发码的秒数,包括已消费的验证码。"
+  @spec verification_retry_after(String.t(), String.t()) :: non_neg_integer()
   def verification_retry_after(channel, target) do
     sent_at =
       Repo.one(
@@ -345,6 +372,7 @@ defmodule Rice.Accounts do
   end
 
   # sms 的 target 存成 `<区号>-<号码>`,这样同号不同区号不会互相顶掉
+  @spec phone_target(String.t(), String.t()) :: String.t()
   def phone_target(region, phone), do: "#{region}-#{phone}"
 
   defp split_phone(target) do
@@ -359,6 +387,7 @@ defmodule Rice.Accounts do
 
   失败时累加 `attempts`,超过上限就锁死这条记录 —— core 那边 6 位码可以无限次猜。
   """
+  @spec verify_code(String.t(), String.t(), String.t(), term()) :: :ok | {:error, code_error()}
   def verify_code(channel, target, purpose, code) when is_binary(code) do
     now = DateTime.utc_now()
 
@@ -404,6 +433,7 @@ defmodule Rice.Accounts do
   所以消费这一步是带条件的 UPDATE(`consumed_at IS NULL`),靠数据库判胜负:
   受影响行数是 1 的那个才算验过。这是 compare-and-set,不是先查后写。
   """
+  @spec consume_code(VerificationCode.t(), DateTime.t()) :: :ok | {:error, :invalid_code}
   def consume_code(%VerificationCode{} = record, now \\ DateTime.utc_now()) do
     {count, _} =
       Repo.update_all(
@@ -430,6 +460,9 @@ defmodule Rice.Accounts do
   不做补偿删除(`deleteAccount` 需要管理员凭据,而且删错了不可逆)。
   同一 handle 重试会命中 PDS 的 HandleNotAvailable,不会静默产生第二个账号。
   """
+  @spec register(map()) ::
+          {:ok, %{user: User.t(), token: String.t(), pds_session: map()}}
+          | {:error, :contact_taken | Ecto.Changeset.t() | term()}
   def register(%{handle: handle, password: password} = attrs) do
     email = attrs[:email]
     phone = attrs[:phone]
@@ -496,6 +529,9 @@ defmodule Rice.Accounts do
   # ── 登录 ────────────────────────────────────────────────────────────────
 
   @doc "登录。密码由 PDS 校验,rice 只发自己的令牌。"
+  @spec login(term(), String.t()) ::
+          {:ok, %{user: User.t(), token: String.t(), pds_session: map()}}
+          | {:error, :invalid_credentials | :login_unavailable | :account_disabled}
   def login(identifier, password) do
     case get_user_by_identifier(identifier) do
       nil ->
@@ -526,12 +562,14 @@ defmodule Rice.Accounts do
 
   # ── 令牌 ────────────────────────────────────────────────────────────────
 
+  @spec issue_token(User.t(), keyword()) :: {:ok, String.t()} | {:error, Ecto.Changeset.t()}
   def issue_token(user, opts \\ []) do
     {plaintext, changeset} = ApiToken.build(user, opts)
     with {:ok, _token} <- Repo.insert(changeset), do: {:ok, plaintext}
   end
 
   @doc "用明文令牌换用户。过期、被撤销、用户被禁用都返回 nil。"
+  @spec user_by_token(term()) :: User.t() | nil
   def user_by_token(plaintext) when is_binary(plaintext) do
     hash = ApiToken.hash(plaintext)
     now = DateTime.utc_now()
@@ -566,6 +604,7 @@ defmodule Rice.Accounts do
 
   非 Semi 用户查不到链接,字段保持 nil。
   """
+  @spec put_semi_wallet(User.t() | nil) :: User.t() | nil
   def put_semi_wallet(%User{} = user) do
     case get_link_by_did(user.did) do
       %SemiLink{wallet_address: wallet} -> %{user | wallet_address: wallet}
@@ -584,6 +623,7 @@ defmodule Rice.Accounts do
     end
   end
 
+  @spec revoke_token(String.t()) :: :ok | {:error, :not_found}
   def revoke_token(plaintext) when is_binary(plaintext) do
     hash = ApiToken.hash(plaintext)
     {count, _} = Repo.delete_all(from t in ApiToken, where: t.token_hash == ^hash)
@@ -591,6 +631,7 @@ defmodule Rice.Accounts do
   end
 
   @doc "撤销一个用户的全部令牌 —— 禁用/删号/改密码时用。JWT 做不到这件事。"
+  @spec revoke_all_tokens(User.t()) :: {:ok, non_neg_integer()}
   def revoke_all_tokens(%User{id: id}) do
     {count, _} = Repo.delete_all(from t in ApiToken, where: t.user_id == ^id)
     {:ok, count}
@@ -604,6 +645,8 @@ defmodule Rice.Accounts do
   密码在 PDS,所以这里调 `com.atproto.admin.updateAccountPassword`。
   成功后撤销该用户的全部令牌:改了密码就该把别处的登录踢掉。
   """
+  @spec reset_password(String.t(), String.t(), term(), term()) ::
+          {:ok, User.t()} | {:error, :weak_password | code_error() | :user_not_found | term()}
   def reset_password(channel, target, code, new_password) do
     with :ok <- validate_password(new_password),
          :ok <- verify_code(channel, target, "reset_password", code),
@@ -615,6 +658,8 @@ defmodule Rice.Accounts do
   end
 
   @doc "改绑手机。需要新号码的验证码。"
+  @spec change_phone(User.t(), String.t(), String.t(), term()) ::
+          {:ok, User.t()} | {:error, code_error() | Ecto.Changeset.t()}
   def change_phone(%User{} = user, region, phone, code) do
     target = phone_target(region, phone)
 
@@ -624,6 +669,8 @@ defmodule Rice.Accounts do
   end
 
   @doc "改绑邮箱。需要新邮箱的验证码。"
+  @spec change_email(User.t(), String.t(), term()) ::
+          {:ok, User.t()} | {:error, code_error() | Ecto.Changeset.t()}
   def change_email(%User{} = user, email, code) do
     with :ok <- verify_code("email", email, "modify_email", code) do
       update_contact(user, %{email: email})
@@ -663,11 +710,13 @@ defmodule Rice.Accounts do
 
   # ── 档案 ────────────────────────────────────────────────────────────────
 
+  @spec update_profile(User.t(), map()) :: {:ok, User.t()} | {:error, Ecto.Changeset.t()}
   def update_profile(%User{} = user, attrs) do
     user |> User.profile_changeset(attrs) |> Repo.update()
   end
 
   @doc "改绑手机 / 邮箱,必须先过验证码。"
+  @spec update_contact(User.t(), map()) :: {:ok, User.t()} | {:error, Ecto.Changeset.t()}
   def update_contact(%User{} = user, attrs) do
     user |> User.contact_changeset(attrs) |> Repo.update()
   end
@@ -678,6 +727,10 @@ defmodule Rice.Accounts do
   注销是不可逆的,所以和改绑一样要求当场验证一次联系方式 —— 光有一个
   可能被偷走的令牌不够。验证码发到账号自己的手机或邮箱,别人的不算。
   """
+  @spec delete_user_with_code(User.t(), String.t(), term()) ::
+          {:ok, %{user: User.t(), tokens: {non_neg_integer(), nil}}}
+          | {:error, :contact_not_set | code_error()}
+          | {:error, :user, Ecto.Changeset.t(), %{}}
   def delete_user_with_code(%User{} = user, channel, code) do
     with {:ok, target} <- own_contact_target(user, channel),
          :ok <- verify_code(channel, target, "delete_account", code) do
@@ -695,6 +748,9 @@ defmodule Rice.Accounts do
   defp own_contact_target(_, _), do: {:error, :contact_not_set}
 
   @doc "软删账号,同时撤销全部令牌。"
+  @spec delete_user(User.t()) ::
+          {:ok, %{user: User.t(), tokens: {non_neg_integer(), nil}}}
+          | {:error, :user, Ecto.Changeset.t(), %{}}
   def delete_user(%User{} = user) do
     Multi.new()
     |> Multi.update(:user, Ecto.Changeset.change(user, deleted_at: DateTime.utc_now()))

@@ -16,6 +16,9 @@ defmodule Rice.Admin.Catalog do
   alias Rice.Content.{Announcement, App, Banner}
   alias Rice.Repo
 
+  @type kind :: :apps | :banners | :announcements | :nodes
+  @type item :: App.t() | Banner.t() | Announcement.t() | Node.t()
+
   @resources %{
     apps: {App, [:logo]},
     banners: {Banner, [:image]},
@@ -23,17 +26,20 @@ defmodule Rice.Admin.Catalog do
     nodes: {Node, [:logo, user: :avatar]}
   }
 
+  @spec list(kind()) :: [item()]
   def list(kind) do
     {schema, preloads} = fetch_resource(kind)
 
     Repo.all(from r in schema, order_by: [asc: r.position, asc: r.id], preload: ^preloads)
   end
 
+  @spec fetch(kind(), String.t()) :: {:ok, item()} | {:error, :not_found}
   def fetch(kind, id) do
     {schema, preloads} = fetch_resource(kind)
     Repo.fetch(from(r in schema, preload: ^preloads), id)
   end
 
+  @spec create(kind(), map()) :: {:ok, item()} | {:error, Ecto.Changeset.t()}
   def create(kind, attrs) do
     {schema, preloads} = fetch_resource(kind)
 
@@ -43,6 +49,8 @@ defmodule Rice.Admin.Catalog do
     |> Repo.preload_ok(preloads)
   end
 
+  @spec update(kind(), String.t(), map()) ::
+          {:ok, item()} | {:error, :not_found | Ecto.Changeset.t()}
   def update(kind, id, attrs) do
     {schema, preloads} = fetch_resource(kind)
 
@@ -51,6 +59,7 @@ defmodule Rice.Admin.Catalog do
     end
   end
 
+  @spec delete(kind(), String.t()) :: {:ok, item()} | {:error, :not_found | Ecto.Changeset.t()}
   def delete(kind, id) do
     with {:ok, record} <- fetch(kind, id), do: Repo.delete(record)
   end
@@ -61,6 +70,8 @@ defmodule Rice.Admin.Catalog do
 
   没出现在列表里的记录不动;列表里不存在的 id 直接报错,免得静默吞掉笔误。
   """
+  @spec reorder(kind(), term()) ::
+          {:ok, :ok} | {:error, :invalid_ids | {:unknown_ids, [String.t()]}}
   def reorder(kind, ids) when is_list(ids) do
     {schema, _} = fetch_resource(kind)
 

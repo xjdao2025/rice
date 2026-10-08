@@ -15,6 +15,16 @@ defmodule Rice.Bridge do
   # 和 Rice.Accounts 一样走可替换实现 —— 测试里换成 Mox,不依赖跑着的 PDS。
   defp pds, do: Rice.PDS.Api.impl()
 
+  @spec session_for(map()) ::
+          {:ok,
+           %{
+             did: String.t(),
+             handle: String.t(),
+             access_jwt: String.t(),
+             refresh_jwt: String.t(),
+             rice_token: String.t() | nil
+           }}
+          | {:error, {:login | :provision, term()}}
   def session_for(%{"sub" => sub} = userinfo) when is_binary(sub) do
     result =
       case Accounts.get_link_by_sub(sub) do

@@ -28,6 +28,7 @@ defmodule Rice.Accounts.VerificationCode do
     timestamps()
   end
 
+  @spec build(String.t(), String.t(), String.t(), String.t()) :: Ecto.Changeset.t()
   def build(channel, target, purpose, code) do
     change(%__MODULE__{},
       channel: channel,
@@ -38,6 +39,7 @@ defmodule Rice.Accounts.VerificationCode do
     )
   end
 
+  @spec changeset(t(), map()) :: Ecto.Changeset.t()
   def changeset(code, attrs) do
     code
     |> cast(attrs, [:channel, :target, :purpose, :attempts, :consumed_at])
@@ -45,9 +47,11 @@ defmodule Rice.Accounts.VerificationCode do
     |> validate_inclusion(:purpose, @purposes)
   end
 
+  @spec hash(String.t()) :: binary()
   def hash(code), do: :crypto.hash(:sha256, code)
 
   @doc "6 位数字码。用 strong_rand_bytes 而不是 :rand —— 后者可预测。"
+  @spec generate_code() :: String.t()
   def generate_code do
     :crypto.strong_rand_bytes(4)
     |> :binary.decode_unsigned()
@@ -56,10 +60,16 @@ defmodule Rice.Accounts.VerificationCode do
     |> String.pad_leading(6, "0")
   end
 
+  @spec purposes() :: [String.t()]
   def purposes, do: @purposes
+  @spec channels() :: [String.t()]
   def channels, do: @channels
+  @spec max_attempts() :: pos_integer()
   def max_attempts, do: @max_attempts
+  @spec validity_minutes() :: pos_integer()
   def validity_minutes, do: @validity_minutes
+  @spec resend_interval_seconds() :: pos_integer()
   def resend_interval_seconds, do: @resend_interval_seconds
+  @spec daily_per_target() :: pos_integer()
   def daily_per_target, do: @daily_per_target
 end

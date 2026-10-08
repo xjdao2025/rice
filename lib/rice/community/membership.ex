@@ -9,6 +9,7 @@ defmodule Rice.Community.Membership do
     timestamps()
   end
 
+  @spec changeset(t() | Ecto.Changeset.t()) :: Ecto.Changeset.t()
   def changeset(membership) do
     membership
     |> change()

@@ -16,6 +16,7 @@ defmodule Rice.Tasks.Notification do
     timestamps()
   end
 
+  @spec create_changeset(t(), map()) :: Ecto.Changeset.t()
   def create_changeset(notification, attrs) do
     notification
     |> cast(attrs, [

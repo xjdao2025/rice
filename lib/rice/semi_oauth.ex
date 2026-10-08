@@ -21,6 +21,7 @@ defmodule Rice.SemiOAuth do
   defp config, do: Application.fetch_env!(:rice, :semi)
 
   @doc "True once the OAuth app credentials are configured."
+  @spec configured?() :: boolean()
   def configured? do
     cfg = config()
 
@@ -32,14 +33,17 @@ defmodule Rice.SemiOAuth do
   # ── PKCE ────────────────────────────────────────────────────────────────
 
   @doc "Random 32-byte base64url code_verifier (kept by the caller, secret)."
+  @spec gen_code_verifier() :: String.t()
   def gen_code_verifier, do: random_b64(32)
 
   @doc "S256 challenge = base64url(sha256(verifier))."
+  @spec code_challenge(String.t()) :: String.t()
   def code_challenge(verifier) do
     :crypto.hash(:sha256, verifier) |> Base.url_encode64(padding: false)
   end
 
   @doc "Random anti-CSRF state value."
+  @spec gen_state() :: String.t()
   def gen_state, do: random_b64(16)
 
   defp random_b64(n), do: :crypto.strong_rand_bytes(n) |> Base.url_encode64(padding: false)
@@ -47,6 +51,7 @@ defmodule Rice.SemiOAuth do
   # ── Authorize URL ───────────────────────────────────────────────────────
 
   @doc "Build the Semi authorize URL to redirect the browser to."
+  @spec authorize_url(String.t(), String.t()) :: String.t()
   def authorize_url(state, code_challenge) do
     cfg = config()
 
@@ -73,6 +78,9 @@ defmodule Rice.SemiOAuth do
   Returns `{:ok, %{"access_token" => _, "refresh_token" => _, ...}}` or
   `{:error, reason}`.
   """
+  @spec exchange_code(String.t(), String.t()) ::
+          {:ok, map()}
+          | {:error, {:token_endpoint, non_neg_integer(), term()} | {:transport, Exception.t()}}
   def exchange_code(code, code_verifier) do
     cfg = config()
 
@@ -109,6 +117,9 @@ defmodule Rice.SemiOAuth do
   (`sub`, `handle`, `wallet_address`, verified flags, `scopes_granted`, ...)
   or `{:error, reason}`.
   """
+  @spec fetch_userinfo(String.t()) ::
+          {:ok, map()}
+          | {:error, {:userinfo, non_neg_integer(), term()} | {:transport, Exception.t()}}
   def fetch_userinfo(access_token) do
     cfg = config()
 

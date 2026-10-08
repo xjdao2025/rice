@@ -22,6 +22,7 @@ defmodule Rice.Accounts.ApiToken do
   end
 
   @doc "生成 `{明文, changeset}`。明文只此一次,之后无法从库里还原。"
+  @spec build(Rice.Accounts.User.t(), keyword()) :: {String.t(), Ecto.Changeset.t()}
   def build(user, opts \\ []) do
     plaintext = :crypto.strong_rand_bytes(@rand_bytes) |> Base.url_encode64(padding: false)
     days = Keyword.get(opts, :validity_days, @default_validity_days)
@@ -37,5 +38,6 @@ defmodule Rice.Accounts.ApiToken do
     {plaintext, changeset}
   end
 
+  @spec hash(String.t()) :: binary()
   def hash(plaintext), do: :crypto.hash(:sha256, plaintext)
 end

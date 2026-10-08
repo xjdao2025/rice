@@ -20,6 +20,9 @@ defmodule Rice.Grains do
   alias Rice.Grains.Transfer
   alias Rice.{Pagination, Repo}
 
+  @typedoc "个人账户是用户 id,节点账户是 `{:node, id}`。"
+  @type account :: Rice.Tsid.t() | {:node, Rice.Tsid.t()}
+
   @doc """
   转账。`kind` 是 `reward` 或 `gift`。
 
@@ -27,8 +30,19 @@ defmodule Rice.Grains do
   返回原来那笔,不一致返回 `:conflict`。
 
   返回 `{:ok, transfer}`,或 `{:error, :insufficient_balance | :recipient_not_found |
-  :recipient_disabled | :conflict | changeset}`。
+  :recipient_disabled | :cannot_transfer_to_self | :invalid_reward_post | :conflict |
+  changeset}`。
   """
+  @spec transfer(User.t(), User.t() | String.t(), integer(), keyword()) ::
+          {:ok, Transfer.t()}
+          | {:error,
+             :recipient_not_found
+             | :recipient_disabled
+             | :cannot_transfer_to_self
+             | :invalid_reward_post
+             | :insufficient_balance
+             | :conflict
+             | Ecto.Changeset.t()}
   def transfer(%User{} = from, to_identifier, amount, opts \\ []) do
     kind = Keyword.get(opts, :kind, "gift")
     subject_uri = Keyword.get(opts, :subject_uri)
@@ -69,6 +83,8 @@ defmodule Rice.Grains do
   end
 
   @doc "后台发放(增发)。没有付款方,总量增加。"
+  @spec grant(User.t(), integer(), keyword()) ::
+          {:ok, Transfer.t()} | {:error, :recipient_not_found | Ecto.Changeset.t()}
   def grant(%User{} = to, amount, opts \\ []) do
     attrs = %{
       kind: "grant",
@@ -88,6 +104,9 @@ defmodule Rice.Grains do
   end
 
   @doc "Reserve against a personal ID or {:node, id} inside the business transaction."
+  @spec reserve_business(Ecto.Repo.t(), account(), pos_integer(), String.t()) ::
+          {:ok, Rice.Grains.Receipt.t()}
+          | {:error, :conflict | :insufficient_balance | Ecto.Changeset.t()}
   def reserve_business(repo, account, amount, uri) when is_integer(amount) and amount > 0 do
     lock_business_accounts(repo, [account])
 
@@ -104,14 +123,22 @@ defmodule Rice.Grains do
     end
   end
 
+  @spec refund_business(Ecto.Repo.t(), account(), integer(), String.t()) ::
+          {:ok, Rice.Grains.Receipt.t()}
+          | {:error, :conflict | :grain_reservation_missing | Ecto.Changeset.t()}
   def refund_business(repo, account, amount, uri),
     do: finish_business(repo, account, nil, amount, uri, "refunded")
 
+  @spec settle_business(Ecto.Repo.t(), account(), account(), integer(), String.t()) ::
+          {:ok, Rice.Grains.Receipt.t()}
+          | {:error,
+             :conflict | :grain_reservation_missing | :recipient_not_found | Ecto.Changeset.t()}
   def settle_business(repo, account, recipient, amount, uri),
     do: finish_business(repo, account, recipient, amount, uri, "settled")
 
   # All users, then all nodes, sorted by ID. Callers settling multiple applications
   # acquire the complete set first, so opposite transfers cannot reverse lock order.
+  @spec lock_business_accounts(Ecto.Repo.t(), [account() | nil]) :: [[User.t() | Node.t()]]
   def lock_business_accounts(repo, accounts) do
     accounts = accounts |> Enum.reject(&is_nil/1) |> Enum.map(&account/1)
 
@@ -231,6 +258,16 @@ defmodule Rice.Grains do
   end
 
   @doc "Explicit, retry-safe personal contribution; never automatically migrates a balance."
+  @spec fund_node(User.t(), Node.t(), term(), term()) ::
+          {:ok, Transfer.t()}
+          | {:error,
+             :invalid_amount
+             | :missing_request_id
+             | :forbidden
+             | :conflict
+             | :insufficient_balance
+             | :recipient_not_found
+             | Ecto.Changeset.t()}
   def fund_node(%User{} = user, %Node{} = node, amount, request_id) do
     cond do
       not is_integer(amount) or amount <= 0 or amount > 999_999_999 ->
@@ -275,6 +312,13 @@ defmodule Rice.Grains do
     end
   end
 
+  @spec wallet(User.t() | Node.t(), map()) :: %{
+          balance: integer(),
+          frozen: integer(),
+          earned: integer(),
+          entries: [map()],
+          next_cursor: Rice.Tsid.t() | nil
+        }
   def wallet(owner, params \\ %{}) do
     {schema, from_field, to_field} =
       case owner do
@@ -370,6 +414,8 @@ defmodule Rice.Grains do
   end
 
   @doc "解析转账收款人，不扣款或创建流水；联系方式查询只供认证后的转账流程使用。"
+  @spec resolve_recipient(term()) ::
+          {:ok, User.t()} | {:error, :recipient_not_found | :recipient_disabled}
   def resolve_recipient(%User{} = user), do: {:ok, user}
 
   # 收款方可以用 rice 的 id、DID、handle、邮箱或手机号指定 —— 转账界面只有
@@ -394,6 +440,7 @@ defmodule Rice.Grains do
   def resolve_recipient(_), do: {:error, :recipient_not_found}
 
   @doc "是不是按手机号 / 邮箱找人 —— 这类查询等于问\"这个号是谁\",调用方要限流。"
+  @spec contact_identifier?(term()) :: boolean()
   def contact_identifier?(identifier) when is_binary(identifier) do
     identifier = String.trim(identifier)
     String.contains?(identifier, "@") or Regex.match?(~r/^\d{5,20}$/, identifier)
@@ -449,6 +496,7 @@ defmodule Rice.Grains do
   # ── 查询 ────────────────────────────────────────────────────────────────
 
   @doc "我的稻米明细:收和付都算。按 id 倒序 —— TSID 的字典序就是时间序。"
+  @spec list_transfers(User.t(), map()) :: Pagination.page(Transfer.t())
   def list_transfers(%User{id: id}, params \\ %{}) do
     from(t in Transfer,
       where: t.from_user_id == ^id or t.to_user_id == ^id,
@@ -458,18 +506,26 @@ defmodule Rice.Grains do
   end
 
   @doc "后台发放记录(全站公开,原 /score-distribute-record/page)。"
+  @spec list_grants(map()) :: Pagination.page(Transfer.t())
   def list_grants(params \\ %{}) do
     from(t in Transfer, where: t.kind == "grant", preload: [:to_user, :to_node])
     |> Pagination.paginate(Repo, Pagination.params(params))
   end
 
   @doc "已发行稻米总量，以发放流水为准。"
+  @spec total_granted() :: integer()
   def total_granted do
     Repo.one(from t in Transfer, where: t.kind == "grant", select: coalesce(sum(t.amount), 0))
     |> to_integer()
   end
 
   @doc "对账用:全站可用与冻结余额之和应当等于发放总额。"
+  @spec reconcile() :: %{
+          balances: integer(),
+          frozen: integer(),
+          granted: integer(),
+          ok?: boolean()
+        }
   def reconcile do
     {user_balances, user_frozen} = sum_balances(from u in User, where: is_nil(u.deleted_at))
     {node_balances, node_frozen} = sum_balances(Node)

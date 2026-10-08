@@ -30,6 +30,24 @@ defmodule Rice.Dao do
   issuer/audience 那边就没校验,这里也不校验 —— 校验了反而会把 core 签的票
   挡在外面。
   """
+  @spec verify_jwt(term()) ::
+          {:ok, String.t()}
+          | {:error,
+             :malformed
+             | :bad_signature
+             | :unsupported_alg
+             | :jwks_not_configured
+             | :jwks_empty
+             | :jwks_unexpected
+             | Jason.DecodeError.t()
+             | :jwk_without_private_key
+             | :bad_private_key_base64
+             | {:bad_private_key, Exception.t()}
+             | {:unsupported_key, term()}
+             | :no_exp
+             | :expired
+             | :not_yet_valid
+             | :not_client_token}
   def verify_jwt("Bearer " <> rest), do: verify_jwt(String.trim(rest))
 
   def verify_jwt(token) when is_binary(token) do
@@ -78,7 +96,6 @@ defmodule Rice.Dao do
     else
       {:ok, _} -> {:error, :jwks_unexpected}
       {:error, _} = err -> err
-      _ -> {:error, :jwks_not_configured}
     end
   end
 

@@ -18,6 +18,7 @@ defmodule Rice.Community.Node do
     timestamps()
   end
 
+  @spec changeset(t(), map()) :: Ecto.Changeset.t()
   def changeset(node, attrs) do
     node
     |> cast(attrs, [:legacy_id, :name, :description, :position, :user_id, :logo_id])

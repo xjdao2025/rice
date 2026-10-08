@@ -29,14 +29,18 @@ defmodule Rice.Files do
 
   @max_byte_size 20 * 1024 * 1024
 
+  @spec max_byte_size() :: pos_integer()
   def max_byte_size, do: @max_byte_size
+  @spec allowed_content_types(String.t() | nil) :: [String.t()]
   def allowed_content_types(kind), do: Map.get(@allowed_content_types, kind, [])
 
   # ── 读 ──────────────────────────────────────────────────────────────────
 
+  @spec fetch_attachment(String.t()) :: {:ok, Attachment.t()} | {:error, :not_found}
   def fetch_attachment(id), do: Repo.fetch(Attachment, id)
 
   @doc "读出附件的字节。元数据存在但字节还没回填时返回 `{:error, :not_stored}`。"
+  @spec read(Attachment.t()) :: {:ok, binary()} | {:error, :not_stored | term()}
   def read(%Attachment{storage_key: nil}), do: {:error, :not_stored}
 
   def read(%Attachment{storage_key: key}) do
@@ -48,6 +52,7 @@ defmodule Rice.Files do
   end
 
   @doc "TSID 对应的落盘 key。分两级目录,避免单目录堆几十万文件。"
+  @spec storage_key(Rice.Tsid.t()) :: String.t()
   def storage_key(<<prefix::binary-size(2), _rest::binary>> = id), do: prefix <> "/" <> id
 
   # ── 写 ──────────────────────────────────────────────────────────────────
@@ -58,6 +63,8 @@ defmodule Rice.Files do
   顺序是刻意的 —— 先写库再落盘的话,落盘失败会留下一条指向不存在文件的记录;
   反过来,写库失败最多留下一个孤儿文件,由清理任务回收,不会让接口返回坏数据。
   """
+  @spec create_attachment(binary(), map(), Rice.Tsid.t() | nil) ::
+          {:ok, Attachment.t()} | {:error, Ecto.Changeset.t() | {:storage, term()}}
   def create_attachment(content, attrs, user_id \\ nil) when is_binary(content) do
     id = Rice.Tsid.generate()
     key = storage_key(id)
@@ -84,6 +91,7 @@ defmodule Rice.Files do
   end
 
   @doc "按提交顺序替换业务图片；省略字段保留，空数组移除，最多九张。"
+  @spec put_images(Ecto.Changeset.t(), map(), Rice.Tsid.t() | nil) :: Ecto.Changeset.t()
   def put_images(changeset, attrs, user_id) do
     ids = Map.fetch(attrs, "attachment_ids")
     ids = if ids == :error, do: Map.fetch(attrs, :attachment_ids), else: ids

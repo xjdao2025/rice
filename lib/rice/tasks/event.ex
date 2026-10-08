@@ -15,6 +15,7 @@ defmodule Rice.Tasks.Event do
     timestamps(updated_at: false)
   end
 
+  @spec create_changeset(t(), map()) :: Ecto.Changeset.t()
   def create_changeset(event, attrs) do
     event
     |> cast(attrs, [:task_id, :actor_id, :from_status, :to_status, :detail, :before, :after])

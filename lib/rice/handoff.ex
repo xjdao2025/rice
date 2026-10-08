@@ -15,9 +15,11 @@ defmodule Rice.Handoff do
 
   # ── API ─────────────────────────────────────────────────────────────────
 
+  @spec start_link(term()) :: GenServer.on_start()
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
 
   @doc "Store a session payload, return an opaque single-use ticket."
+  @spec put(map()) :: String.t()
   def put(payload) when is_map(payload) do
     ticket = :crypto.strong_rand_bytes(24) |> Base.url_encode64(padding: false)
     GenServer.call(__MODULE__, {:put, ticket, payload})
@@ -25,6 +27,7 @@ defmodule Rice.Handoff do
   end
 
   @doc "Redeem a ticket exactly once. `{:ok, payload}` or `:error`."
+  @spec take(term()) :: {:ok, map()} | :error
   def take(ticket) when is_binary(ticket), do: GenServer.call(__MODULE__, {:take, ticket})
   def take(_), do: :error
 

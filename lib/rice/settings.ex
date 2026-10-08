@@ -9,6 +9,7 @@ defmodule Rice.Settings do
   取全站配置。库里没有行时返回一个全零的默认值,而不是 nil ——
   这样 `GET /api/settings/foundation` 在全新部署上也是 200 而不是 500。
   """
+  @spec get_site() :: Site.t()
   def get_site do
     Repo.one(from s in Site, limit: 1, preload: [documents: :attachment]) ||
       %Site{documents: []}
@@ -21,6 +22,7 @@ defmodule Rice.Settings do
   `document_ids` 给了就整份替换基金会公开文件的清单(顺序即展示顺序);
   不给就不动。库里还没有配置行时自动建一行,新部署不用先手动插数据。
   """
+  @spec update_site(map()) :: {:ok, Site.t()} | {:error, Ecto.Changeset.t()}
   def update_site(attrs) do
     attrs = Map.new(attrs, fn {k, v} -> {to_string(k), v} end)
     site = Repo.one(from s in Site, limit: 1) || %Site{}

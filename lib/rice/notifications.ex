@@ -9,8 +9,11 @@ defmodule Rice.Notifications do
   @callback send_email(address :: String.t(), subject :: String.t(), body :: String.t()) ::
               :ok | {:error, term()}
 
+  @spec impl() :: module()
   def impl, do: Application.get_env(:rice, :notifications, Rice.Notifications.Log)
 
+  @spec send_sms(String.t(), String.t(), String.t()) :: :ok | {:error, term()}
   def send_sms(region, phone, text), do: impl().send_sms(region, phone, text)
+  @spec send_email(String.t(), String.t(), String.t()) :: :ok | {:error, term()}
   def send_email(address, subject, body), do: impl().send_email(address, subject, body)
 end

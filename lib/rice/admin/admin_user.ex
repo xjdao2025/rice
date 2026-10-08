@@ -47,6 +47,7 @@ defmodule Rice.Admin.AdminUser do
     timestamps()
   end
 
+  @spec changeset(t(), map()) :: Ecto.Changeset.t()
   def changeset(admin, attrs) do
     admin
     |> cast(attrs, [:email, :phone, :phone_region, :nickname, :role, :avatar_id, :password])
@@ -62,6 +63,7 @@ defmodule Rice.Admin.AdminUser do
   end
 
   @doc "只改档案,动不了角色和密码 —— 那两样各有各的入口。"
+  @spec profile_changeset(t(), map()) :: Ecto.Changeset.t()
   def profile_changeset(admin, attrs) do
     admin
     |> cast(attrs, [:nickname, :avatar_id])
@@ -69,6 +71,7 @@ defmodule Rice.Admin.AdminUser do
     |> foreign_key_constraint(:avatar_id)
   end
 
+  @spec password_changeset(t(), String.t()) :: Ecto.Changeset.t()
   def password_changeset(admin, password) do
     admin |> change(password: password) |> put_password()
   end
@@ -93,6 +96,7 @@ defmodule Rice.Admin.AdminUser do
   end
 
   @doc "算摘要。导出是为了能对着 core 的实现做交叉验证。"
+  @spec hash(String.t(), String.t(), pos_integer()) :: String.t()
   def hash(password, salt, iterations \\ @iterations) do
     :crypto.pbkdf2_hmac(:sha256, password, Base.decode64!(salt), iterations, @key_bytes)
     |> Base.encode64()
@@ -102,6 +106,7 @@ defmodule Rice.Admin.AdminUser do
   验证密码。用 `:crypto.hash_equals/2` 定长比较 —— 普通的 `==` 会在第一个
   不同的字节就返回,时间差能被用来一位一位地猜出摘要。
   """
+  @spec valid_password?(t(), term()) :: boolean()
   def valid_password?(%__MODULE__{password_hash: h, password_salt: s, password_iterations: i}, pw)
       when is_binary(h) and is_binary(s) and is_binary(pw) do
     :crypto.hash_equals(hash(pw, s, i), h)
@@ -121,5 +126,6 @@ defmodule Rice.Admin.AdminUser do
     false
   end
 
+  @spec iterations() :: pos_integer()
   def iterations, do: @iterations
 end

@@ -11,9 +11,13 @@ defmodule Rice.Files.Storage do
   @callback get(key :: String.t()) :: {:ok, binary()} | {:error, term()}
   @callback delete(key :: String.t()) :: :ok | {:error, term()}
 
+  @spec impl() :: module()
   def impl, do: Application.get_env(:rice, :storage, Rice.Files.Storage.Local)
 
+  @spec put(String.t(), binary()) :: :ok | {:error, term()}
   def put(key, content), do: impl().put(key, content)
+  @spec get(String.t()) :: {:ok, binary()} | {:error, term()}
   def get(key), do: impl().get(key)
+  @spec delete(String.t()) :: :ok | {:error, term()}
   def delete(key), do: impl().delete(key)
 end

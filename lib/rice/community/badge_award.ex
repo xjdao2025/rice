@@ -17,6 +17,7 @@ defmodule Rice.Community.BadgeAward do
     timestamps()
   end
 
+  @spec changeset(t(), map()) :: Ecto.Changeset.t()
   def changeset(award, attrs) do
     award
     |> cast(attrs, [:legacy_id, :badge_id, :user_id, :awarded_at])

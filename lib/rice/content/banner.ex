@@ -12,6 +12,7 @@ defmodule Rice.Content.Banner do
     timestamps()
   end
 
+  @spec changeset(t(), map()) :: Ecto.Changeset.t()
   def changeset(banner, attrs) do
     banner
     |> cast(attrs, [:legacy_id, :url, :position, :image_id])

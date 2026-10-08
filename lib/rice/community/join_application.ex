@@ -13,6 +13,7 @@ defmodule Rice.Community.JoinApplication do
     timestamps()
   end
 
+  @spec create_changeset(t(), map()) :: Ecto.Changeset.t()
   def create_changeset(application, attrs) do
     application
     |> cast(attrs, [:reason])
@@ -23,6 +24,7 @@ defmodule Rice.Community.JoinApplication do
     |> foreign_key_constraint(:user_id)
   end
 
+  @spec review_changeset(t(), Rice.Accounts.User.t(), String.t(), map()) :: Ecto.Changeset.t()
   def review_changeset(application, reviewer, status, attrs) do
     application
     |> cast(attrs, [:review_reason])
