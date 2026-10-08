@@ -84,8 +84,9 @@ defmodule Rice.Tasks do
 
   def can_manage?(%Task{status: "draft", creator_id: id} = task, user),
     do:
-      id == user.id and not is_nil(task.node_id) and
-        Rice.Community.admin?(Repo.get(Rice.Community.Node, task.node_id), user)
+      id == user.id and
+        (is_nil(task.node_id) or
+           Rice.Community.admin?(Repo.get(Rice.Community.Node, task.node_id), user))
 
   def can_manage?(%Task{funding_node_id: nil, creator_id: id}, %User{id: user_id}),
     do: id == user_id
@@ -99,6 +100,7 @@ defmodule Rice.Tasks do
     do: if(can_manage?(task, user), do: :ok, else: {:error, :forbidden})
 
   def can_edit?(%Task{status: "draft"} = task, user), do: can_manage?(task, user)
+  def can_edit?(%Task{funding_node_id: nil} = task, user), do: can_manage?(task, user)
 
   def can_edit?(%Task{node_id: node_id}, %User{} = user),
     do: Rice.Community.admin?(Repo.get(Rice.Community.Node, node_id), user)
@@ -148,11 +150,14 @@ defmodule Rice.Tasks do
       length(appointed_applications(task)) < task.capacity
   end
 
+  # 发任务的资格是"或":节点管理员用节点的稻米;没有可管节点、但平台给了
+  # `can_publish_tasks` 的人用自己的稻米(返回 nil 节点,即个人出资)。
   defp publishing_node(user, nil) do
     ids = Rice.Community.managed_node_ids(user)
 
     case Repo.all(from n in Rice.Community.Node, where: n.id in ^ids, limit: 2) do
       [node] -> {:ok, node}
+      [] -> personal_publisher(user)
       _ -> {:error, :forbidden}
     end
   end
@@ -164,6 +169,10 @@ defmodule Rice.Tasks do
     else
       {:error, :forbidden}
     end
+  end
+
+  defp personal_publisher(user) do
+    if Repo.get!(User, user.id).can_publish_tasks, do: {:ok, nil}, else: {:error, :forbidden}
   end
 
   defp create_new_task(user, node, attrs) do
@@ -181,7 +190,12 @@ defmodule Rice.Tasks do
       end
 
       task_changeset =
-        %Task{creator_id: user.id, node_id: node.id, funding_node_id: node.id, status: status}
+        %Task{
+          creator_id: user.id,
+          node_id: node && node.id,
+          funding_node_id: node && node.id,
+          status: status
+        }
         |> Task.create_changeset(attrs)
 
       reward_amount = Ecto.Changeset.get_field(task_changeset, :reward_amount) || 0
@@ -593,7 +607,12 @@ defmodule Rice.Tasks do
          %User{id: creator_id},
          %Task{creator_id: creator_id, status: "draft"} = task
        ) do
-    with {:ok, _node} <- publishing_node(%User{id: creator_id}, task.node_id) do
+    publisher =
+      if task.node_id,
+        do: publishing_node(%User{id: creator_id}, task.node_id),
+        else: personal_publisher(%User{id: creator_id})
+
+    with {:ok, _node} <- publisher do
       case Task.publish_changeset(task) do
         %{valid?: true} ->
           {updates, detail, reward_step} = reserve_reward(task)
@@ -1010,7 +1029,8 @@ defmodule Rice.Tasks do
 
       detail =
         if task.reward_amount > 0 and unused != [],
-          do: "已提前结束，向节点退回 #{task.reward_amount * length(unused)} 稻米",
+          do:
+            "已提前结束，向#{if(task.funding_node_id, do: "节点", else: "发布者")}退回 #{task.reward_amount * length(unused)} 稻米",
           else: "已提前结束"
 
       with {:ok, released} <- move_applications(Repo, scope, "released", reward_slot: nil),

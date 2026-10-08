@@ -81,6 +81,14 @@ pending ──指派──▶ appointed ──提交──▶ under_review ─�
 | `grain_receipts` | 每个名额一条冻结/结算/退款记录,`subject_uri` 形如 `rice://tasks/<id>/slots/<n>` |
 | `tasks` | `capacity`、汇总状态;单人任务另有 `assignee_id` |
 
+## 谁能发任务
+
+节点管理员,**或**平台在后台给了 `can_publish_tasks` 的用户,满足其一即可:
+
+- 节点管理员发的任务由节点出奖励(`funding_node_id` = 节点)。
+- 没有可管节点、但有 `can_publish_tasks` 的人发的任务没有节点,奖励从**自己的**
+  稻米冻结(`funding_node_id` 为 nil),由本人管理。不能借这个授权动用任何节点的稻米。
+
 ## 奖励
 
 - `reward_amount` 是**每人**的奖励。发布时从**节点账户**(`funding_node_id`)一次性冻结

@@ -1,6 +1,40 @@
 defmodule RiceWeb.Api.TaskControllerTest do
   use RiceWeb.ConnCase, async: true
 
+  # 发任务是"节点管理员 或 平台授权"。只有授权、没有节点的人用自己的稻米出奖励
+  test "没有节点但有发任务授权的人,用自己的稻米发任务;两样都没有的发不了" do
+    {_plain, plain_token} = user_with_token()
+    {person, token} = user_with_token()
+    Rice.Repo.update!(Ecto.Changeset.change(person, can_publish_tasks: true))
+    Rice.Grains.grant(person, 50)
+
+    attrs = %{
+      title: "帮忙搬书",
+      description: "个人发起",
+      organizer_contact: "我的电话",
+      reward_amount: 20,
+      client_request_id: "personal-task"
+    }
+
+    assert build_conn() |> authed(plain_token) |> post(~p"/api/tasks", attrs) |> response(403)
+
+    created = build_conn() |> authed(token) |> post(~p"/api/tasks", attrs) |> json_response(201)
+    assert created["data"]["node"] == nil
+    assert created["data"]["funding_node_id"] == nil
+    assert "cancel" in created["data"]["allowed_actions"]
+
+    assert %{grain_balance: 30, grain_frozen_balance: 20} =
+             Rice.Repo.get!(Rice.Accounts.User, person.id)
+
+    build_conn()
+    |> authed(token)
+    |> post(~p"/api/tasks/#{created["data"]["id"]}/cancel")
+    |> json_response(200)
+
+    assert %{grain_balance: 50, grain_frozen_balance: 0} =
+             Rice.Repo.get!(Rice.Accounts.User, person.id)
+  end
+
   test "多人任务公开承作人及每人奖励，个人仅能查看自己的申请和成果" do
     publisher = task_publisher_fixture()
     {:ok, publisher_token} = Rice.Accounts.issue_token(publisher)
