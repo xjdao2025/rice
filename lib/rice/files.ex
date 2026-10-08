@@ -57,13 +57,6 @@ defmodule Rice.Files do
     end
   end
 
-  @doc "按 core 的 fileId 找附件 —— 导入和回填时解析用。"
-  def get_by_legacy_id(nil), do: nil
-  def get_by_legacy_id(""), do: nil
-
-  def get_by_legacy_id(legacy_id),
-    do: Repo.one(from a in Attachment, where: a.legacy_id == ^legacy_id)
-
   @doc "TSID 对应的落盘 key。分两级目录,避免单目录堆几十万文件。"
   def storage_key(<<prefix::binary-size(2), _rest::binary>> = id), do: prefix <> "/" <> id
 
@@ -182,26 +175,5 @@ defmodule Rice.Files do
     else
       Ecto.Changeset.validate_inclusion(changeset, :content_type, allowed, message: "不支持的文件类型")
     end
-  end
-
-  @doc "把已存在的附件行补上字节和校验信息 —— 从 core 回填时用。"
-  def attach_content(%Attachment{} = attachment, content, content_type) do
-    key = storage_key(attachment.id)
-
-    with :ok <- Storage.put(key, content) do
-      attachment
-      |> Attachment.changeset(%{
-        byte_size: byte_size(content),
-        checksum: :crypto.hash(:sha256, content) |> Base.encode16(case: :lower),
-        storage_key: key,
-        content_type: content_type
-      })
-      |> Repo.update()
-    end
-  end
-
-  @doc "还没有字节的附件 —— 回填任务的工作清单。"
-  def list_unstored do
-    Repo.all(from a in Attachment, where: is_nil(a.storage_key), order_by: [asc: a.id])
   end
 end

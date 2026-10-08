@@ -57,31 +57,6 @@ defmodule Rice.FilesTest do
     end
   end
 
-  describe "get_by_legacy_id/1" do
-    test "按 core 的 fileId 找到" do
-      legacy = "1-2301a9c291aa4c86b7731a12e2f03744-banner.png"
-      attachment = attachment_fixture(%{legacy_id: legacy})
-      assert Files.get_by_legacy_id(legacy).id == attachment.id
-    end
-
-    test "空值不查库" do
-      assert Files.get_by_legacy_id(nil) == nil
-      assert Files.get_by_legacy_id("") == nil
-    end
-
-    test "同一个 legacy_id 不能导入两次" do
-      legacy = "1-abc-x.png"
-      attachment_fixture(%{legacy_id: legacy})
-
-      assert {:error, changeset} =
-               %Attachment{}
-               |> Attachment.changeset(%{kind: "image", filename: "x.png", legacy_id: legacy})
-               |> Rice.Repo.insert()
-
-      assert "has already been taken" in errors_on(changeset).legacy_id
-    end
-  end
-
   describe "create_attachment/2" do
     test "算出大小和 sha256,落盘 key 由 id 决定" do
       content = "hello"
@@ -212,21 +187,6 @@ defmodule Rice.FilesTest do
       expect(Rice.Files.StorageMock, :get, fn _ -> {:error, :enoent} end)
 
       assert Files.read(attachment) == {:error, :not_stored}
-    end
-  end
-
-  describe "attach_content/3 与 list_unstored/0" do
-    test "回填后不再出现在待办清单里" do
-      attachment = attachment_fixture()
-      assert [%{id: id}] = Files.list_unstored()
-      assert id == attachment.id
-
-      expect(Rice.Files.StorageMock, :put, fn _key, "字节" -> :ok end)
-      assert {:ok, updated} = Files.attach_content(attachment, "字节", "image/png")
-
-      assert updated.byte_size == byte_size("字节")
-      assert updated.storage_key == Files.storage_key(attachment.id)
-      assert Files.list_unstored() == []
     end
   end
 end

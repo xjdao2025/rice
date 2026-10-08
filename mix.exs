@@ -44,7 +44,6 @@ defmodule Rice.MixProject do
       {:phoenix_ecto, "~> 4.5"},
       {:ecto_sql, "~> 3.13"},
       {:postgrex, ">= 0.0.0"},
-      {:myxql, "~> 0.7"},
       # C 端 app 和 rice 不同源(app 在 xjdao.xyz,rice 在 rice.xjdao.xyz),
       # 浏览器要 CORS 才让请求出去。允许的来源在配置里列白名单。
       {:cors_plug, "~> 3.0"},

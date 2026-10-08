@@ -2,12 +2,9 @@ import Config
 
 # Configure your database
 #
-# `DATABASE_URL` 可以覆盖 —— 给 `mix rice.import` 这类要连别的库的任务用
-# (典型用法:SSH 隧道连测试环境的 rice_dev,`ssh -L 15432:127.0.0.1:5432`)。
-#
-# 加这个覆盖是因为**本机和测试环境的库重名**,都叫 `rice_dev`:不显式指定的话,
-# 导入会静悄悄地写进本机那个库,看起来一切正常,只是导错了地方 ——
-# 而这台机器上还会因此留下一份生产用户的手机号和邮箱。
+# `DATABASE_URL` 可以覆盖,用来连别的库(典型用法:SSH 隧道连测试环境的 rice_dev,
+# `ssh -L 15432:127.0.0.1:5432`)。**本机和测试环境的库重名**,都叫 `rice_dev`,
+# 不显式指定就会静悄悄地落在本机那个库上。
 db_config =
   case System.get_env("DATABASE_URL") do
     # 空串当没设 —— `export DATABASE_URL=` 或者 `DATABASE_URL= mix …` 很常见,
@@ -31,8 +28,8 @@ config :rice,
 # 指着别的库跑的时候,**不要在这台机器上起后台任务**。
 #
 # `:dev` 默认把 Oban 全开着,包括每分钟一次的结票 Cron。用 DATABASE_URL 指向
-# 测试环境去跑 `mix rice.import` 时,这台开发机就会变成那个库的一个 Oban 节点,
-# 一边导数据一边把导进来的过期提案结掉 —— 而人在本机,根本不会去看那边的日志。
+# 测试环境时,这台开发机就会变成那个库的一个 Oban 节点,替它结提案、过期任务 ——
+# 而人在本机,根本不会去看那边的日志。
 #
 # 判据就用 DATABASE_URL 有没有设:设了就意味着"这不是我自己的库"。
 if System.get_env("DATABASE_URL") not in [nil, ""] do
