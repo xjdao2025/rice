@@ -1,0 +1,25 @@
+lib/rice/tasks.ex
+  s_8c80ad8d2af680::t_6ce1149b0e1789 87-89,103,153-154,160,193-198,610-615,1032-1033
+  s_8c80ad8d2af680::t_2ac48a4a1596d8 174-175
+  s_8c80ad8d2af680::t_b896615698ec89 176-177
+test/rice_web/api/task_controller_test.exs
+  s_8c80ad8d2af680::t_1acf8ee1155af1 4-37
+docs/tasks.md
+  s_8c80ad8d2af680::t_0e306b668c2ac9 84-91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "272c815c147a159def14b086e8fd2e16b51da464",
+  "prompts": {},
+  "sessions": {
+    "s_8c80ad8d2af680": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1cacbb5-9264-4c9e-8d1e-0245a530ded4",
+        "model": "unknown"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
