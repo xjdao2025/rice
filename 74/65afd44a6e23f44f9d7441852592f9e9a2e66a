@@ -1,0 +1,23 @@
+test/rice_web/api/governance_flow_test.exs
+  s_8c80ad8d2af680::t_d5790a78fd4326 25-26
+test/rice/pagination_test.exs
+  s_8c80ad8d2af680::t_cabd538851e3ea 177-182
+test/rice/task_application_state_test.exs
+  s_8c80ad8d2af680::t_d5790a78fd4326 5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7465afd44a6e23f44f9d7441852592f9e9a2e66a",
+  "prompts": {},
+  "sessions": {
+    "s_8c80ad8d2af680": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1cacbb5-9264-4c9e-8d1e-0245a530ded4",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
