@@ -89,5 +89,14 @@ defmodule Rice.Inbox do
 
   defp notification_detail(notification, _event), do: notification.detail
 
-  def mark_read(user), do: Rice.Tasks.mark_notifications_read(user)
+  def mark_read(user) do
+    now = DateTime.utc_now()
+
+    Repo.update_all(
+      from(n in Notification, where: n.recipient_id == ^user.id and is_nil(n.read_at)),
+      set: [read_at: now, updated_at: now]
+    )
+
+    :ok
+  end
 end

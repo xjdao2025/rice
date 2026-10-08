@@ -139,7 +139,4 @@ defmodule Rice.Accounts.User do
     |> unique_constraint(:phone, name: :users_phone_idx, message: "该手机号已被使用")
     |> unique_constraint(:legacy_id)
   end
-
-  def active?(%__MODULE__{disabled_at: nil, deleted_at: nil}), do: true
-  def active?(%__MODULE__{}), do: false
 end

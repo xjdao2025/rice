@@ -394,7 +394,7 @@ defmodule Rice.TasksTest do
         reward_amount: 80
       })
 
-    assert {:ok, _} = Tasks.update_draft(publisher, stale_draft, %{reward_amount: 120})
+    assert {:ok, _} = Tasks.update_task(publisher, stale_draft, %{reward_amount: 120})
 
     assert {:ok, published} = Tasks.publish_draft(publisher, stale_draft)
     assert published.reward_amount == 120
@@ -526,7 +526,7 @@ defmodule Rice.TasksTest do
     assert [%{event: "application_not_selected"}] = Tasks.list_notifications(other)
     assert [not_selected] = Tasks.list_tasks(other, %{"mine" => "applied"}).entries
     assert not_selected.id == completed.id
-    assert :ok = Tasks.mark_notifications_read(worker)
+    assert :ok = Rice.Inbox.mark_read(worker)
     assert Enum.all?(Tasks.list_notifications(worker), &match?(%DateTime{}, &1.read_at))
   end
 
@@ -724,10 +724,10 @@ defmodule Rice.TasksTest do
     assert mine.id == draft.id
 
     assert {:error, :forbidden} =
-             Tasks.update_draft(viewer, draft, %{title: "不该被修改"})
+             Tasks.update_task(viewer, draft, %{title: "不该被修改"})
 
     assert {:ok, updated} =
-             Tasks.update_draft(publisher, draft, %{
+             Tasks.update_task(publisher, draft, %{
                title: "更新后的草稿",
                description: "仍然只对发布者可见"
              })
@@ -739,7 +739,6 @@ defmodule Rice.TasksTest do
     assert published.status == "open"
     assert [public] = Tasks.list_tasks(nil).entries
     assert public.id == draft.id
-    assert {:error, :conflict} = Tasks.update_draft(publisher, published, %{title: "太晚了"})
   end
 
   test "发布者只能在任命前取消任务" do

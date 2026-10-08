@@ -22,7 +22,6 @@ defmodule Rice.EventsTest do
     assert {:ok, again} = Events.publish_draft(ctx.host, draft)
     assert again.id == event.id
     assert event.status == "open"
-    assert {:error, :conflict} = Events.update_draft(ctx.host, draft, %{fee_amount: 1})
     assert {:error, :forbidden} = Events.create_event(ctx.first, attrs(ctx.node))
     direct = attrs(ctx.node)
     assert {:ok, once} = Events.create_event(ctx.host, direct)

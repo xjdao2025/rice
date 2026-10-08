@@ -24,9 +24,6 @@ defmodule Rice.Tasks.ApplicationState do
   # 仍占着名额的被指派状态
   @appointed ~w(appointed overdue under_review completed)
 
-  # 被指派过的状态:必须有 appointed_at
-  @after_appointment @appointed ++ ["released"]
-
   @transitions %{
     "pending" => ~w(appointed rejected not_selected cancelled expired),
     "appointed" => ~w(overdue under_review released),
@@ -42,15 +39,12 @@ defmodule Rice.Tasks.ApplicationState do
 
   def states, do: @states
   def appointed_states, do: @appointed
-  def after_appointment_states, do: @after_appointment
   def transitions, do: @transitions
 
   @doc "能迁移到 `to` 的来源状态。"
   def sources(to) do
     for {from, tos} <- @transitions, to in tos, do: from
   end
-
-  def can?(from, to), do: to in Map.get(@transitions, from, [])
 
   @doc "是否还占着一个名额。"
   def appointed?(status), do: status in @appointed

@@ -14,21 +14,6 @@ defmodule RiceWeb.Api.TaskJSON do
   def show(%{task: task} = assigns),
     do: %{data: data(task, assigns[:current_user], true)}
 
-  def notifications(%{notifications: notifications}),
-    do: %{notifications: Enum.map(notifications, &notification/1)}
-
-  defp notification(item) do
-    %{
-      uri: "task-notification:#{item.id}",
-      reason: "task-#{item.event}",
-      record: %{text: Enum.join(Enum.reject([item.task.title, item.detail], &is_nil/1), " · ")},
-      isRead: not is_nil(item.read_at),
-      indexedAt: item.inserted_at,
-      author: %{handle: item.actor.handle, displayName: item.actor.nickname},
-      taskId: item.task.id
-    }
-  end
-
   defp data(task, current_user, detail?) do
     all_applications = loaded(task.applications)
     applications = Enum.filter(all_applications, &(&1.round == task.round))

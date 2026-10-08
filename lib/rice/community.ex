@@ -255,15 +255,6 @@ defmodule Rice.Community do
 
   # ── 勋章 ────────────────────────────────────────────────────────────────
 
-  @doc "某人获得的勋章。"
-  def list_badge_awards(user, params \\ %{}) do
-    from(a in BadgeAward,
-      where: a.user_id == ^user.id,
-      preload: [badge: :image]
-    )
-    |> Pagination.paginate(Repo, Pagination.params(params))
-  end
-
   @doc """
   勋章全集,附上**指定用户**的获得时间(没获得就是 nil)。勋章墙要把没拿到的
   也灰着显示出来 —— core 是让 `/user-medal/page` 同时返回已获得和未获得,

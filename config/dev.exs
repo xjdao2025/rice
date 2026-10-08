@@ -98,8 +98,6 @@ config :rice, RiceWeb.Endpoint,
     patterns: [
       # Static assets, except user uploads
       ~r"priv/static/(?!uploads/).*\.(js|css|png|jpeg|jpg|gif|svg)$"E,
-      # Gettext translations
-      ~r"priv/gettext/.*\.po$"E,
       # Router, Controllers, LiveViews and LiveComponents
       ~r"lib/rice_web/router\.ex$"E,
       ~r"lib/rice_web/(controllers|live|components)/.*\.(ex|heex)$"E

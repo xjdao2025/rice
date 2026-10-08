@@ -287,9 +287,6 @@ defmodule RiceWeb.Router do
          TaskController,
          :request_changes
 
-    get "/task_notifications", TaskController, :notifications
-    post "/task_notifications/read", TaskController, :read_notifications
-
     # core 的 /file/upload 是匿名的;这里必须登录
     post "/attachments", AttachmentController, :create
   end

@@ -172,25 +172,6 @@ defmodule Rice.Events do
     end
   end
 
-  def update_draft(user, event, attrs) do
-    attrs = stringify(attrs)
-
-    with_event(event.id, fn current ->
-      require_host!(user, current)
-      require!(current.status == "draft")
-      node_id = attrs["node_id"] || current.node_id
-      require_node!(user, node_id)
-
-      changeset =
-        current
-        |> Event.changeset(attrs)
-        |> Changeset.put_change(:node_id, node_id)
-        |> Changeset.put_change(:settlement_node_id, node_id)
-
-      unwrap!(Repo.update(changeset))
-    end)
-  end
-
   def update_event(user, event, attrs) do
     attrs = stringify(attrs)
 

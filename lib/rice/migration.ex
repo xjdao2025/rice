@@ -40,7 +40,4 @@ defmodule Rice.Migration do
       references(unquote(table), Keyword.merge([type: :tsid, column: :id], unquote(opts)))
     end
   end
-
-  @doc "TSID 的字符宽度。"
-  def tsid_size, do: 13
 end

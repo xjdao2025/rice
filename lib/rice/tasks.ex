@@ -214,10 +214,6 @@ defmodule Rice.Tasks do
     end
   end
 
-  def update_draft(user, task, attrs) do
-    with_locked_task(task.id, &update_current_draft(user, &1, attrs))
-  end
-
   def update_task(user, task, attrs) do
     with_locked_task(task.id, fn current ->
       if current.status == "draft",
@@ -1432,15 +1428,6 @@ defmodule Rice.Tasks do
       preload: [actor: :avatar, task: []]
     )
     |> Repo.all()
-  end
-
-  def mark_notifications_read(%User{id: user_id}) do
-    Repo.update_all(
-      from(n in Notification, where: n.recipient_id == ^user_id and is_nil(n.read_at)),
-      set: [read_at: DateTime.utc_now(), updated_at: DateTime.utc_now()]
-    )
-
-    :ok
   end
 
   defp initial_status(attrs) do
