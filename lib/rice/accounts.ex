@@ -211,6 +211,7 @@ defmodule Rice.Accounts do
   发一个验证码。
 
   带频率限制 —— core 完全没有这层,同一个手机号可以被无限次轰炸。
+  同一联系方式 60 秒一条、每天封顶;同一通道全站每小时封顶。
   """
   def send_verification_code(channel, target, purpose) do
     with :ok <- validate_code_request(channel, target, purpose),
@@ -222,7 +223,7 @@ defmodule Rice.Accounts do
                "verification:#{channel}:#{String.downcase(target)}"
              ])
 
-             if verification_retry_after(channel, target) > 0,
+             if verification_retry_after(channel, target) > 0 or over_quota?(channel, target),
                do: Repo.rollback(:too_many_requests)
 
              case Repo.insert(VerificationCode.build(channel, target, purpose, code)) do
@@ -259,6 +260,25 @@ defmodule Rice.Accounts do
     do: Regex.match?(~r/^[^@\s]+@[^@\s]+\.[^@\s]+$/, target) and byte_size(target) <= 255
 
   defp valid_target?(_, _), do: false
+
+  defp over_quota?(channel, target) do
+    now = DateTime.utc_now()
+    sent = from c in VerificationCode, where: c.channel == ^channel
+
+    Repo.aggregate(
+      from(c in sent,
+        where:
+          fragment("lower(?)", c.target) == ^String.downcase(target) and
+            c.inserted_at > ^DateTime.add(now, -1, :day)
+      ),
+      :count
+    ) >= VerificationCode.daily_per_target() or
+      Repo.aggregate(
+        from(c in sent, where: c.inserted_at > ^DateTime.add(now, -1, :hour)),
+        :count
+      ) >=
+        VerificationCode.hourly_per_channel()
+  end
 
   @doc "同一联系方式距离下次允许发码的秒数,包括已消费的验证码。"
   def verification_retry_after(channel, target) do

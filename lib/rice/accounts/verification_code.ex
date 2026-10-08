@@ -13,6 +13,9 @@ defmodule Rice.Accounts.VerificationCode do
   @max_attempts 5
   @validity_minutes 30
   @resend_interval_seconds 60
+  # 短信按条计费:同一联系方式每天封顶,全站每小时也封顶 —— 换着号码刷也有个上限
+  @daily_per_target 10
+  @hourly_per_channel 300
 
   schema "verification_codes" do
     field :channel, :string
@@ -59,4 +62,6 @@ defmodule Rice.Accounts.VerificationCode do
   def max_attempts, do: @max_attempts
   def validity_minutes, do: @validity_minutes
   def resend_interval_seconds, do: @resend_interval_seconds
+  def daily_per_target, do: @daily_per_target
+  def hourly_per_channel, do: @hourly_per_channel
 end

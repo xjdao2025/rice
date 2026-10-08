@@ -20,6 +20,7 @@ defmodule Rice.Application do
       {Oban, Application.fetch_env!(:rice, Oban)},
       # One-time session-handoff ticket store (Semi → social-app login).
       Rice.Handoff,
+      Rice.RateLimit,
       # Start to serve requests, typically the last entry
       RiceWeb.Endpoint
     ]

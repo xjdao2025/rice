@@ -38,6 +38,10 @@ defmodule RiceWeb.Api.FallbackController do
     |> json(%{errors: %{detail: "资源状态已经变化，请刷新后重试"}})
   end
 
+  def call(conn, {:error, :too_many_requests}) do
+    conn |> put_status(:too_many_requests) |> json(%{errors: %{detail: "操作太频繁，请稍后再试"}})
+  end
+
   def call(conn, {:error, :capacity_full}) do
     conn |> put_status(:conflict) |> json(%{errors: %{detail: "人数已满，暂无可用名额"}})
   end

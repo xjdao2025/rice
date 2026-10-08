@@ -21,6 +21,20 @@ defmodule RiceWeb.Api.GrainTransferControllerTest do
   end
 
   describe "POST /api/grain_transfers/recipient" do
+    # 能拿手机号查人,就要防脚本挨个号码试
+    test "每人每小时最多查 30 次" do
+      {_me, token} = user_with_token()
+
+      lookup = fn ->
+        build_conn()
+        |> authed(token)
+        |> post(~p"/api/grain_transfers/recipient", %{to: "13800009999"})
+      end
+
+      for _ <- 1..30, do: assert(lookup.() |> json_response(422))
+      assert lookup.() |> json_response(429)
+    end
+
     test "手机号预览只返回公开资料，核对后用 id 转账", %{conn: conn} do
       {sender, token} = user_with_token()
       {:ok, _} = Rice.Grains.grant(sender, 100)

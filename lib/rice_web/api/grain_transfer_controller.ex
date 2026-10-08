@@ -14,8 +14,15 @@ defmodule RiceWeb.Api.GrainTransferController do
     render(conn, :index, page: page, viewer: conn.assigns.current_user)
   end
 
+  # 可以拿手机号 / 邮箱查人,等于一个"这个号是谁"的查询口 —— 按用户限流
   def recipient(conn, params) do
-    case Grains.resolve_recipient(params["to"]) do
+    with :ok <- Rice.RateLimit.hit({:recipient, conn.assigns.current_user.id}, 30, 3600) do
+      show_recipient(conn, params["to"])
+    end
+  end
+
+  defp show_recipient(conn, identifier) do
+    case Grains.resolve_recipient(identifier) do
       {:ok, user} ->
         user = Rice.Repo.preload(user, :avatar)
         json(conn, %{data: RiceWeb.Api.UserJSON.public(user)})

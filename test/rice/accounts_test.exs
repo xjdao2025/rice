@@ -149,9 +149,14 @@ defmodule Rice.AccountsTest do
         assert Enum.count(results, &match?({:ok, _}, &1)) == 1
         assert Enum.count(results, &(&1 == {:error, :too_many_requests})) == 1
       after
-        Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
-          Repo.delete_all(from c in VerificationCode, where: c.target == ^target)
+        # 清理要在独立进程里做:测试进程自己持有沙箱连接,在这里删会跟着沙箱回滚,
+        # 真写进库的那条验证码就漏到了下一次运行(发码的每小时上限会数到它)
+        Task.async(fn ->
+          Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
+            Repo.delete_all(from c in VerificationCode, where: c.target == ^target)
+          end)
         end)
+        |> Task.await()
       end
     end
 

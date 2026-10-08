@@ -53,6 +53,29 @@ defmodule RiceWeb.Api.RegistrationControllerTest do
       refute Rice.Repo.get_by(VerificationCode, target: "86-13900000001")
     end
 
+    # 短信按条计费:同一号码每天封顶,全站每小时也封顶
+    test "同一号码当天发满、或全站这一小时发满,都是 429 且不再发短信", %{conn: conn} do
+      earlier = DateTime.add(DateTime.utc_now(), -120, :second)
+
+      seed = fn target, n ->
+        row =
+          VerificationCode.build("sms", target, "register", "000000").changes
+          |> Map.merge(%{inserted_at: earlier, updated_at: earlier})
+
+        rows = for _ <- 1..n, do: Map.put(row, :id, Rice.Tsid.generate())
+
+        Rice.Repo.insert_all(VerificationCode, rows)
+      end
+
+      seed.("86-13700000001", VerificationCode.daily_per_target())
+      params = %{channel: "sms", phone: "13700000001", purpose: "register"}
+      assert conn |> post(~p"/api/verification_codes", params) |> json_response(429)
+
+      seed.("86-13700000002", VerificationCode.hourly_per_channel())
+      params = %{params | phone: "13700000003"}
+      assert build_conn() |> post(~p"/api/verification_codes", params) |> json_response(429)
+    end
+
     test "发邮件验证码返回 204", %{conn: conn} do
       expect(Rice.NotificationsMock, :send_email, fn "a@example.com", _, _ -> :ok end)
 
