@@ -208,17 +208,17 @@ defmodule RiceWeb.Api.TaskJSON do
            (task.capacity > 1 and task.status in ~w(in_progress overdue under_review) and
               Enum.any?(submissions, &(is_nil(&1.review_reason) and is_nil(&1.final_status)))))
 
-    multi_running? =
-      manager? and task.capacity > 1 and task.status in ~w(in_progress overdue under_review)
+    running? = manager? and task.status in ~w(in_progress overdue under_review)
 
     []
     |> maybe_add(task.status == "draft" and manager?, "publish")
     |> maybe_add(
-      multi_running? and Enum.any?(applications, &(&1.status in ~w(appointed overdue))),
+      running? and task.capacity > 1 and
+        Enum.any?(applications, &(&1.status in ~w(appointed overdue))),
       "release_assignee"
     )
     |> maybe_add(
-      multi_running? and not Enum.any?(applications, &(&1.status == "under_review")),
+      running? and not Enum.any?(applications, &(&1.status == "under_review")),
       "close"
     )
     |> maybe_add(

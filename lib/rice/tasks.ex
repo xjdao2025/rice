@@ -976,9 +976,11 @@ defmodule Rice.Tasks do
   end
 
   @doc """
-  多人任务:提前结束。还在承作的人撤销指派,待处理的申请落选,没发出去的奖励退回节点。
+  提前结束进行中的任务。还在承作的人撤销指派,待处理的申请落选,没发出去的奖励退回节点。
   有人已通过验收就记为 `completed`,一个都没有则记为 `cancelled`。
   有成果等待验收时不能结束,要先验收或退回修改。
+
+  单人任务也走这里:承接人超期不交、又不能取消时,这是唯一能把冻结的奖励退回去的路。
   """
   def close(user, %Task{} = task) do
     with_locked_task(task.id, fn current ->
@@ -986,8 +988,8 @@ defmodule Rice.Tasks do
     end)
   end
 
-  defp close_current(%User{id: actor_id}, %Task{capacity: capacity, status: status} = task)
-       when capacity > 1 and status in ~w(in_progress overdue under_review) do
+  defp close_current(%User{id: actor_id}, %Task{status: status} = task)
+       when status in ~w(in_progress overdue under_review) do
     scope = round_applications(task)
 
     if Repo.exists?(from(a in scope, where: a.status == "under_review")) do
@@ -1015,7 +1017,14 @@ defmodule Rice.Tasks do
            {:ok, not_selected} <- move_applications(Repo, scope, "not_selected"),
            {:ok, _} <- refund_reward_slots(Repo, task, unused),
            {:ok, saved} <-
-             Repo.update(Ecto.Changeset.change(task, status: next, reward_status: reward_status)),
+             Repo.update(
+               Ecto.Changeset.change(task,
+                 status: next,
+                 reward_status: reward_status,
+                 assignee_id: nil,
+                 appointed_at: nil
+               )
+             ),
            {:ok, _} <- Repo.insert(event_changeset(task.id, actor_id, task.status, next, detail)),
            :ok <-
              notify_each(task, actor_id, [
@@ -1863,6 +1872,9 @@ defmodule Rice.Tasks do
     do: refund_reward_slots(repo, task, Enum.to_list(1..task.capacity))
 
   defp refund_reward_slots(_repo, %Task{reward_amount: 0}, _slots), do: {:ok, nil}
+  # 单人任务的冻结记在任务本身,不分名额
+  defp refund_reward_slots(repo, %Task{capacity: 1} = task, [1]),
+    do: refund_task_reward(repo, task)
 
   defp refund_reward_slots(repo, task, slots) do
     Enum.reduce_while(slots, {:ok, nil}, fn slot, _ ->

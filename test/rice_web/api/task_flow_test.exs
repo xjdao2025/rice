@@ -50,6 +50,51 @@ defmodule RiceWeb.Api.TaskFlowTest do
 
   defp balance(%User{id: id}), do: Repo.get!(User, id).grain_balance
 
+  # 单人任务原来没有退路:超期不交就既不能取消、也不能撤销,冻结的奖励只能等人改库
+  test "单人任务承接人超期不交,管理员提前结束,冻结的稻米退回节点" do
+    {manager, manager_token} = actor("manager")
+    {worker, token} = actor("worker_a")
+    funded_node_fixture(manager, 100)
+    now = DateTime.utc_now()
+
+    task_id =
+      post_as(manager_token, ~p"/api/tasks", %{
+        client_request_id: "single-overdue",
+        title: "修门楼",
+        description: "一个人做",
+        organizer_contact: "节点服务台",
+        reward_amount: 30,
+        application_deadline: DateTime.add(now, 60),
+        execution_deadline: DateTime.add(now, 120)
+      })
+      |> json_response(201)
+      |> get_in(["data", "id"])
+
+    application_id =
+      post_as(token, ~p"/api/tasks/#{task_id}/applications", %{contact: "电话"})
+      |> json_response(201)
+      |> get_in(["data", "my_application", "id"])
+
+    post_as(manager_token, ~p"/api/tasks/#{task_id}/applications/#{application_id}/appoint")
+    |> json_response(200)
+
+    {:ok, [_]} = Rice.Tasks.check_due_tasks(DateTime.add(now, 300))
+    overdue = detail(manager_token, task_id) |> json_response(200)
+    assert overdue["data"]["status"] == "overdue"
+    assert "close" in overdue["data"]["allowed_actions"]
+    assert node_balance(manager) == {70, 30}
+
+    closed = post_as(manager_token, ~p"/api/tasks/#{task_id}/close") |> json_response(200)
+    assert closed["data"]["status"] == "cancelled"
+    assert closed["data"]["assignee"] == nil
+    assert node_balance(manager) == {100, 0}
+    assert balance(worker) == 0
+
+    mine = detail(token, task_id) |> json_response(200)
+    assert mine["data"]["my_application"]["state"] == "released"
+    assert Rice.Grains.reconcile().ok?
+  end
+
   test "多人任务:发布、申请、指派、撤销、补位、交付、验收、提前结束,五个身份各自看到什么" do
     actors = Map.new(@labels, &{&1, actor(&1)})
     {manager, manager_token} = actors["manager"]

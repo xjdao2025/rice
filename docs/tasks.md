@@ -68,6 +68,10 @@ pending ──指派──▶ appointed ──提交──▶ under_review ─�
   `pending` 的变 `not_selected`,所有没结算的名额退回节点。有人通过验收记为 `completed`,
   一个都没有记为 `cancelled`。有成果等待验收时拒绝(409),先验收或退回修改。
 
+**单人任务**也可以提前结束:承接人超期不交时,这是唯一能把冻结的奖励退回节点的路
+(取消只允许 `open`)。结果是 `cancelled`,承接人变 `released`,任务上的
+`assignee_id` / `appointed_at` 清空。单人任务没有撤销指派。
+
 ## 多人承接的数据在哪
 
 | 表 | 内容 |
