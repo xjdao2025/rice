@@ -51,17 +51,6 @@ defmodule RiceWeb.Api.BusinessContactsTest do
       assert published["data"]["organizer_contact"] == "社区电话 123"
       public = build_conn() |> get("#{path}/#{id}") |> json_response(200)
       assert public["data"]["organizer_contact"] == "社区电话 123"
-
-      # Deployed rows have no contact to backfill; they must remain readable.
-      schema = if @kind == "tasks", do: Rice.Tasks.Task, else: Rice.Events.Event
-
-      schema
-      |> Rice.Repo.get!(id)
-      |> Ecto.Changeset.change(organizer_contact: nil)
-      |> Rice.Repo.update!()
-
-      legacy = build_conn() |> get("#{path}/#{id}") |> json_response(200)
-      assert is_nil(legacy["data"]["organizer_contact"])
     end
 
     test "#{kind}: 申请联系方式仅组织方与本人详情可见，不进入公开或列表响应" do

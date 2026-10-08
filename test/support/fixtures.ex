@@ -56,14 +56,13 @@ defmodule Rice.Fixtures do
         organizer_contact: "社区服务台"
       })
 
-    node_id =
-      attrs[:node_id] ||
-        (Repo.one(from n in Rice.Community.Node, where: n.user_id == ^creator.id, limit: 1) ||
-           node_fixture(%{user_id: creator.id})).id
+    # 走正式的发布路径(出资节点、初始事件、奖励冻结都和接口一致),不直接插表。
+    unless attrs[:node_id] ||
+             Repo.exists?(from n in Rice.Community.Node, where: n.user_id == ^creator.id),
+           do: node_fixture(%{user_id: creator.id})
 
-    %Rice.Tasks.Task{creator_id: creator.id, node_id: node_id}
-    |> Rice.Tasks.Task.create_changeset(attrs)
-    |> Repo.insert!()
+    {:ok, task} = Rice.Tasks.create_task(creator, attrs)
+    task
   end
 
   def authed(conn, token), do: Plug.Conn.put_req_header(conn, "authorization", "Bearer " <> token)

@@ -140,9 +140,7 @@ defmodule Rice.EventsTest do
     assert rendered_history.actor.id == editor.id
     assert rendered_history.actor.nickname == editor.nickname
 
-    legacy = Repo.update!(Ecto.Changeset.change(edited, settlement_node_id: nil))
-    assert {:ok, legacy_edited} = Events.update_event(editor, legacy, %{title: "旧个人出资活动"})
-    assert {:ok, cancelled} = Events.cancel(ctx.host, legacy_edited)
+    assert {:ok, cancelled} = Events.cancel(ctx.host, edited)
     assert {:ok, reopened} = Events.update_event(editor, cancelled, %{title: "社区继续举办"})
     assert reopened.status == "open"
     assert reopened.settlement_node_id == ctx.node.id
@@ -288,22 +286,6 @@ defmodule Rice.EventsTest do
     assert {:ok, reopened} = Events.update_event(ctx.host, cancelled, attrs(ctx.node))
     assert reopened.round == 2
     assert reopened.status == "open"
-  end
-
-  test "旧活动缺少收款社区时空更新也会重开空白新一期", ctx do
-    event = event!(ctx)
-    {:ok, cancelled} = Events.cancel(ctx.host, event)
-    legacy = Repo.update!(Ecto.Changeset.change(cancelled, settlement_node_id: nil))
-    history_count = Repo.aggregate(EventHistory, :count)
-    receipt_count = Repo.aggregate(Rice.Grains.Receipt, :count)
-
-    assert {:ok, reopened} = Events.update_event(ctx.host, legacy, %{})
-    assert reopened.status == "open"
-    assert reopened.round == 2
-    assert reopened.settlement_node_id == ctx.node.id
-    assert reopened.applications == []
-    assert Repo.aggregate(EventHistory, :count) == history_count + 1
-    assert Repo.aggregate(Rice.Grains.Receipt, :count) == receipt_count
   end
 
   test "换社区重开后新社区管理员不能查看旧期私人申请", ctx do

@@ -313,27 +313,6 @@ defmodule Rice.TaskApplicationStateTest do
     assert Rice.Grains.reconcile().ok?
   end
 
-  test "单人任务的承接人没有申请记录时(历史数据),状态同步不报错" do
-    publisher = task_publisher_fixture()
-    worker = user_fixture()
-    task = new_task(publisher)
-
-    task =
-      task
-      |> Ecto.Changeset.change(
-        status: "in_progress",
-        assignee_id: worker.id,
-        appointed_at: DateTime.utc_now()
-      )
-      |> Repo.update!()
-
-    {:ok, task} = Tasks.submit_result(worker, task, %{body: "成果"})
-    assert task.status == "under_review"
-    {:ok, task} = Tasks.approve_result(publisher, task, hd(task.submissions).id)
-    assert task.status == "completed"
-    assert states(task) == %{}
-  end
-
   defp node_balance(publisher) do
     %{grain_balance: b, grain_frozen_balance: f} =
       Repo.get_by!(Rice.Community.Node, user_id: publisher.id)

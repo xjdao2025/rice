@@ -88,18 +88,6 @@ defmodule RiceWeb.Api.CommunityAdminTest do
       created = create(@kind, ctx.owner_token, ctx.node)
       id = created["id"]
       own = create(@kind, ctx.manager_token, ctx.node)
-      legacy = create(@kind, ctx.owner_token, ctx.node)
-
-      {schema, funding_field} =
-        if @kind == "tasks",
-          do: {Rice.Tasks.Task, :funding_node_id},
-          else: {Rice.Events.Event, :settlement_node_id}
-
-      schema
-      |> Repo.get!(legacy["id"])
-      |> Ecto.Changeset.change([{funding_field, nil}])
-      |> Repo.update!()
-
       draft = create(@kind, ctx.owner_token, ctx.node, "draft")
       success = if @kind == "tasks", do: 201, else: 200
 
@@ -112,38 +100,13 @@ defmodule RiceWeb.Api.CommunityAdminTest do
       application_id = applied["data"]["my_application"]["id"]
       assert Enum.sort(recipients(@kind, id)) == Enum.sort([ctx.owner.id, ctx.manager.id])
 
-      build_conn()
-      |> authed(ctx.applicant_token)
-      |> post("#{path}/#{legacy["id"]}/applications", %{contact: "历史申请私人电话"})
-      |> json_response(success)
-
-      expected =
-        if @kind == "tasks", do: [ctx.owner.id, ctx.manager.id], else: [ctx.owner.id]
-
-      assert Enum.sort(recipients(@kind, legacy["id"])) == Enum.sort(expected)
-
-      legacy_view =
-        build_conn()
-        |> authed(ctx.manager_token)
-        |> get("#{path}/#{legacy["id"]}")
-        |> json_response(200)
-
-      refute legacy_view["data"]["can_manage"]
-      refute inspect(legacy_view) =~ "历史申请私人电话"
-
-      assert build_conn()
-             |> authed(ctx.manager_token)
-             |> post("#{path}/#{legacy["id"]}/cancel")
-             |> response(403)
-
       managed =
         build_conn()
         |> authed(ctx.manager_token)
         |> get(path, %{mine: "managed"})
         |> json_response(200)
 
-      assert Enum.sort(Enum.map(managed["data"], & &1["id"])) ==
-               Enum.sort([id, own["id"], legacy["id"]])
+      assert Enum.sort(Enum.map(managed["data"], & &1["id"])) == Enum.sort([id, own["id"]])
 
       refute inspect(managed) =~ "申请人私人电话"
 

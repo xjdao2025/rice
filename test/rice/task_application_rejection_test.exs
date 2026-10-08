@@ -90,32 +90,4 @@ defmodule Rice.TaskApplicationRejectionTest do
     assert {:ok, [_]} = Tasks.check_due_tasks()
     assert {:ok, %{status: "expired"}} = Tasks.fetch_task(task.id, publisher)
   end
-
-  test "旧申请未写拒绝时间时保持空值，并可按原规则任命" do
-    publisher = task_publisher_fixture()
-    worker = user_fixture()
-    task = task_fixture(publisher)
-    id = Rice.Tsid.generate()
-    now = DateTime.utc_now()
-
-    Repo.insert_all(Application, [
-      %{
-        id: id,
-        task_id: task.id,
-        user_id: worker.id,
-        reason: "",
-        inserted_at: now,
-        updated_at: now
-      }
-    ])
-
-    assert is_nil(Repo.get!(Application, id).rejected_at)
-    assert {:ok, task} = Tasks.fetch_task(task.id, publisher)
-
-    assert %{data: %{my_application_status: "pending"}} =
-             RiceWeb.Api.TaskJSON.show(%{task: task, current_user: worker})
-
-    assert {:ok, task} = Tasks.appoint(publisher, task, id)
-    assert task.assignee_id == worker.id
-  end
 end

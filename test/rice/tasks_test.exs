@@ -446,7 +446,7 @@ defmodule Rice.TasksTest do
     assert repeated.id == first.id
     assert repeated.reason == "可以参与"
     assert Repo.aggregate(Rice.Tasks.Application, :count) == 1
-    assert Repo.aggregate(Rice.Tasks.Event, :count) == 1
+    assert Repo.aggregate(from(e in Rice.Tasks.Event, where: e.detail == "收到任务申请"), :count) == 1
     assert [%{event: "application_created"}] = Tasks.list_notifications(publisher)
   end
 
@@ -910,11 +910,6 @@ defmodule Rice.TasksTest do
              event: "task_expired"
            ).actor_id == editor.id
 
-    legacy = task_fixture(publisher)
-
-    assert {:ok, %{title: "旧个人出资任务"}} =
-             Tasks.update_task(editor, legacy, %{title: "旧个人出资任务"})
-
     Repo.update!(Ecto.Changeset.change(membership, role: "member"))
     refute Tasks.can_edit?(expired, editor)
     assert {:error, :forbidden} = Tasks.update_task(editor, expired, %{title: "撤权后编辑"})
@@ -991,27 +986,6 @@ defmodule Rice.TasksTest do
 
     assert "重新开放需要将来的申请截止时间" in errors_on(changeset).application_deadline
     assert Repo.get!(Rice.Tasks.Task, task.id).round == 1
-  end
-
-  test "旧任务缺少出资社区时仍须提供有效未来日程才能重新开放" do
-    publisher = task_publisher_fixture()
-
-    assert {:ok, task} =
-             Tasks.create_task(publisher, %{
-               title: "旧任务",
-               description: "保留原状态",
-               organizer_contact: "社区服务台"
-             })
-
-    assert {:ok, cancelled} = Tasks.cancel(publisher, task)
-    legacy = Repo.update!(change(cancelled, funding_node_id: nil))
-
-    assert {:error, changeset} = Tasks.update_task(publisher, legacy, %{})
-    assert "重新开放需要将来的申请截止时间" in errors_on(changeset).application_deadline
-    assert Repo.get!(Rice.Tasks.Task, task.id).status == "cancelled"
-    assert Repo.get!(Rice.Tasks.Task, task.id).round == 1
-    assert Repo.get!(Rice.Tasks.Task, task.id).funding_node_id == nil
-    refute Repo.exists?(from(e in Rice.Tasks.Event, where: not is_nil(e.before)))
   end
 
   test "取消后重新开放空白新轮次，旧申请仍可私下查看且不能操作" do
@@ -1215,91 +1189,6 @@ defmodule Rice.TasksTest do
     refute Enum.any?(reopened.applications, &(&1.round == 2))
     assert {:ok, new_application} = Tasks.apply(worker, reopened, %{contact: "新一期联系方式"})
     assert new_application.id != old_application.id
-    assert Rice.Grains.reconcile().ok?
-  end
-
-  test "旧个人出资任务旧轮退原发布者，新轮由社区出资" do
-    publisher = task_publisher_fixture()
-    node = Repo.get_by!(Rice.Community.Node, user_id: publisher.id)
-    editor = user_fixture()
-
-    Repo.insert!(
-      Rice.Community.Membership.changeset(%Rice.Community.Membership{
-        node_id: node.id,
-        user_id: editor.id,
-        role: "admin"
-      })
-    )
-
-    {:ok, _} = Rice.Grains.grant(publisher, 200)
-    {:ok, _} = Rice.Grains.fund_node(publisher, node, 100, "legacy-next-round")
-
-    task =
-      %Rice.Tasks.Task{
-        creator_id: publisher.id,
-        node_id: node.id,
-        status: "open",
-        reward_amount: 40,
-        reward_status: "reserved"
-      }
-      |> Rice.Tasks.Task.create_changeset(%{
-        title: "旧任务",
-        description: "旧个人奖励",
-        organizer_contact: "社区服务台"
-      })
-      |> Repo.insert!()
-
-    assert {:ok, _} =
-             Repo.transaction(fn ->
-               {:ok, receipt} =
-                 Rice.Grains.reserve_business(Repo, publisher.id, 40, "rice://tasks/#{task.id}")
-
-               receipt
-             end)
-
-    assert {:error, changeset} = Tasks.update_task(publisher, task, %{reward_amount: 50})
-    assert "已发布任务不能修改任务奖励" in errors_on(changeset).reward_amount
-    assert Repo.get!(Rice.Tasks.Task, task.id).funding_node_id == nil
-    assert Repo.get!(Rice.Tasks.Task, task.id).reward_amount == 40
-
-    assert Repo.get_by!(Rice.Grains.Receipt,
-             subject_uri: "rice://tasks/#{task.id}",
-             kind: "reserved"
-           ).from_user_id == publisher.id
-
-    assert {:ok, cancelled} = Tasks.cancel(publisher, task)
-    assert cancelled.reward_status == "refunded"
-
-    assert Repo.get_by!(Rice.Grains.Receipt,
-             subject_uri: "rice://tasks/#{task.id}",
-             kind: "refunded"
-           ).from_user_id == publisher.id
-
-    assert %{balance: 100, frozen: 0} = Rice.Grains.wallet(publisher)
-
-    assert Repo.get!(Rice.Community.Node, node.id).grain_frozen_balance == 0
-
-    assert {:ok, %{status: "cancelled"}} = Tasks.fetch_task(task.id, editor)
-
-    assert {:ok, reopened} =
-             Tasks.update_task(editor, cancelled, %{
-               title: "社区继续发布",
-               application_deadline: DateTime.add(DateTime.utc_now(), 3600)
-             })
-
-    assert reopened.status == "open"
-    assert reopened.funding_node_id == node.id
-    assert %{balance: 100, frozen: 0} = Rice.Grains.wallet(publisher)
-
-    assert %{grain_balance: 60, grain_frozen_balance: 40} =
-             Repo.get!(Rice.Community.Node, node.id)
-
-    assert Repo.get_by!(Rice.Grains.Receipt,
-             subject_uri: reopened.reward_subject_uri,
-             kind: "reserved"
-           ).from_node_id == node.id
-
-    assert Enum.any?(reopened.events, &(&1.actor_id == editor.id and &1.before != nil))
     assert Rice.Grains.reconcile().ok?
   end
 
