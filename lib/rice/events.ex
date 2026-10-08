@@ -713,19 +713,21 @@ defmodule Rice.Events do
   def can_manage?(_event, nil), do: false
 
   def can_manage?(%Event{status: "draft", creator_id: creator_id} = event, user),
-    do: creator_id == user.id and Rice.Community.admin?(Repo.get(Node, event.node_id), user)
+    do: creator_id == user.id and Rice.Community.admin?(node_of(event), user)
 
   def can_manage?(%Event{settlement_node_id: nil, creator_id: id}, %User{id: user_id}),
     do: id == user_id
 
-  def can_manage?(event, user), do: Rice.Community.admin?(Repo.get(Node, event.node_id), user)
+  def can_manage?(event, user), do: Rice.Community.admin?(node_of(event), user)
 
   def can_edit?(%Event{status: "draft"} = event, user), do: can_manage?(event, user)
 
-  def can_edit?(%Event{node_id: node_id}, %User{} = user),
-    do: Rice.Community.admin?(Repo.get(Node, node_id), user)
-
+  def can_edit?(%Event{} = event, %User{} = user), do: Rice.Community.admin?(node_of(event), user)
   def can_edit?(_, _), do: false
+
+  # 同 `Rice.Tasks`:渲染用预加载的节点和管理员名单,加锁新读的活动走查询
+  defp node_of(%Event{node: %Node{} = node}), do: node
+  defp node_of(%Event{node_id: id}), do: Repo.get(Node, id)
 
   defp require_host!(user, event), do: require!(can_manage?(event, user), :forbidden)
 
@@ -779,7 +781,7 @@ defmodule Rice.Events do
         [
           image_links: :attachment,
           creator: :avatar,
-          node: :logo,
+          node: [:logo, memberships: Rice.Community.admin_memberships()],
           applications: {from(a in Application, order_by: a.id), [user: :avatar]},
           history: {from(h in EventHistory, order_by: h.id), [actor: :avatar]}
         ],

@@ -1,6 +1,64 @@
 defmodule RiceWeb.Api.TaskControllerTest do
   use RiceWeb.ConnCase, async: true
 
+  # 权限判断原来每条任务要查 8 次库(4 次判断 × 读节点 + 查管理员);
+  # 现在管理员名单随节点预加载,一页的查询数和条数无关
+  test "任务列表的查询次数不随条数增长" do
+    publisher = task_publisher_fixture()
+    funded_node_fixture(publisher, 1_000)
+    {admin, admin_token} = user_with_token()
+    node = Rice.Repo.get_by!(Rice.Community.Node, user_id: publisher.id)
+
+    Rice.Repo.insert!(%Rice.Community.Membership{
+      node_id: node.id,
+      user_id: admin.id,
+      role: "admin"
+    })
+
+    create = fn n ->
+      for i <- 1..n do
+        {:ok, _} =
+          Rice.Tasks.create_task(publisher, %{
+            title: "任务#{i}",
+            description: "说明",
+            organizer_contact: "服务台",
+            reward_amount: 1,
+            client_request_id: "count-#{System.unique_integer()}"
+          })
+      end
+    end
+
+    queries = fn ->
+      id = "count-#{System.unique_integer()}"
+      me = self()
+
+      :telemetry.attach(
+        id,
+        [:rice, :repo, :query],
+        fn _, _, _, _ -> if self() == me, do: send(me, :query) end,
+        nil
+      )
+
+      build_conn()
+      |> authed(admin_token)
+      |> get(~p"/api/tasks?mine=managed")
+      |> json_response(200)
+
+      :telemetry.detach(id)
+
+      Stream.repeatedly(fn -> receive do: (:query -> 1), after: (0 -> nil) end)
+      |> Enum.take_while(& &1)
+      |> length()
+    end
+
+    create.(2)
+    # 第一次请求会顺带记令牌的最后使用时间,先跑一遍再数
+    queries.()
+    few = queries.()
+    create.(4)
+    assert queries.() == few
+  end
+
   # 发任务是"节点管理员 或 平台授权"。只有授权、没有节点的人用自己的稻米出奖励
   test "没有节点但有发任务授权的人,用自己的稻米发任务;两样都没有的发不了" do
     {_plain, plain_token} = user_with_token()

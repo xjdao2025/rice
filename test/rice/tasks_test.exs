@@ -910,6 +910,7 @@ defmodule Rice.TasksTest do
            ).actor_id == editor.id
 
     Repo.update!(Ecto.Changeset.change(membership, role: "member"))
+    {:ok, expired} = Tasks.fetch_task(expired.id, editor)
     refute Tasks.can_edit?(expired, editor)
     assert {:error, :forbidden} = Tasks.update_task(editor, expired, %{title: "撤权后编辑"})
   end

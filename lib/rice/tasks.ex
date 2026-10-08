@@ -83,18 +83,12 @@ defmodule Rice.Tasks do
   def can_manage?(_task, nil), do: false
 
   def can_manage?(%Task{status: "draft", creator_id: id} = task, user),
-    do:
-      id == user.id and
-        (is_nil(task.node_id) or
-           Rice.Community.admin?(Repo.get(Rice.Community.Node, task.node_id), user))
+    do: id == user.id and (is_nil(task.node_id) or Rice.Community.admin?(node_of(task), user))
 
   def can_manage?(%Task{funding_node_id: nil, creator_id: id}, %User{id: user_id}),
     do: id == user_id
 
-  def can_manage?(task, user),
-    do:
-      not is_nil(task.node_id) and
-        Rice.Community.admin?(Repo.get(Rice.Community.Node, task.node_id), user)
+  def can_manage?(task, user), do: Rice.Community.admin?(node_of(task), user)
 
   defp authorize_management(task, user),
     do: if(can_manage?(task, user), do: :ok, else: {:error, :forbidden})
@@ -102,10 +96,13 @@ defmodule Rice.Tasks do
   def can_edit?(%Task{status: "draft"} = task, user), do: can_manage?(task, user)
   def can_edit?(%Task{funding_node_id: nil} = task, user), do: can_manage?(task, user)
 
-  def can_edit?(%Task{node_id: node_id}, %User{} = user),
-    do: Rice.Community.admin?(Repo.get(Rice.Community.Node, node_id), user)
-
+  def can_edit?(%Task{} = task, %User{} = user), do: Rice.Community.admin?(node_of(task), user)
   def can_edit?(_, _), do: false
+
+  # 渲染时任务带着预加载的节点和管理员名单;写操作拿的是加锁新读的任务,没有预加载,
+  # 走查询 —— 刚被撤掉的管理员不会因为旧数据还能操作
+  defp node_of(%Task{node: %Rice.Community.Node{} = node}), do: node
+  defp node_of(%Task{node_id: id}), do: id && Repo.get(Rice.Community.Node, id)
 
   def appointed_applications(task) do
     task
@@ -2150,7 +2147,7 @@ defmodule Rice.Tasks do
   defp preload_list(tasks) do
     Repo.preload(tasks,
       image_links: :attachment,
-      node: [:logo, user: :avatar],
+      node: [:logo, user: :avatar, memberships: Rice.Community.admin_memberships()],
       creator: :avatar,
       assignee: :avatar,
       applications: [user: :avatar],
@@ -2237,7 +2234,7 @@ defmodule Rice.Tasks do
   defp preload_detail(task) do
     Repo.preload(task,
       image_links: :attachment,
-      node: [:logo, user: :avatar],
+      node: [:logo, user: :avatar, memberships: Rice.Community.admin_memberships()],
       creator: :avatar,
       assignee: :avatar,
       applications: [user: :avatar],

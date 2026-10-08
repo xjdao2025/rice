@@ -146,6 +146,7 @@ defmodule Rice.EventsTest do
     assert Enum.any?(reopened.history, &(&1.actor_id == editor.id and &1.action == "edited"))
 
     Repo.update!(Ecto.Changeset.change(membership, role: "member"))
+    {:ok, published} = Events.fetch_event(published.id, editor)
     refute Events.can_edit?(published, editor)
     assert {:error, :forbidden} = Events.update_event(editor, published, %{title: "撤权后编辑"})
   end
@@ -313,7 +314,11 @@ defmodule Rice.EventsTest do
     {:ok, event} = Events.apply(ctx.first, event, %{contact: "旧期私人联系方式"})
     {:ok, cancelled} = Events.cancel(creator, event)
     {:ok, reopened} = Events.update_event(creator, cancelled, attrs(ctx.node))
-    view = fn -> RiceWeb.Api.EventJSON.show(%{event: reopened, current_user: creator}).data end
+    # 每次都重新读,和真实请求一样
+    view = fn ->
+      {:ok, event} = Events.fetch_event(reopened.id, creator)
+      RiceWeb.Api.EventJSON.show(%{event: event, current_user: creator}).data
+    end
 
     assert [%{contact: "旧期私人联系方式"}] = view.().past_applications
 

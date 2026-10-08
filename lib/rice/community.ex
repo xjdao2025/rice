@@ -10,6 +10,10 @@ defmodule Rice.Community do
 
   def admin?(%Node{user_id: id}, %User{id: id}), do: true
 
+  # 预加载了管理员名单(列表、详情渲染)就在内存里判断,不再每条任务 / 活动各查一次
+  def admin?(%Node{memberships: memberships}, %User{id: user_id}) when is_list(memberships),
+    do: Enum.any?(memberships, &(&1.user_id == user_id and &1.role == "admin"))
+
   def admin?(%Node{id: node_id}, %User{id: user_id}),
     do:
       Repo.exists?(
@@ -18,6 +22,9 @@ defmodule Rice.Community do
       )
 
   def admin?(_node, _user), do: false
+
+  @doc "预加载用:节点的管理员名单。配合 `admin?/2` 的内存判断。"
+  def admin_memberships, do: from(m in Membership, where: m.role == "admin")
 
   def managed_node_ids(%User{id: user_id}) do
     memberships =
