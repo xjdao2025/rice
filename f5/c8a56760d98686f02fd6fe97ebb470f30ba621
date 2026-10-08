@@ -1,0 +1,43 @@
+priv/repo/migrations/20261009000000_add_task_capacity_and_application_status.exs
+  s_8c80ad8d2af680::t_1e290eb5c42617 1-129
+lib/rice/tasks/application_state.ex
+  s_8c80ad8d2af680::t_2575786c277ab8 1-54
+lib/rice/tasks/application.ex
+  s_8c80ad8d2af680::t_3752d12ea3929d 14
+lib/rice_web/api/task_json.ex
+  s_8c80ad8d2af680::t_6da044e95cc2fe 142,269,273-277,279-280
+priv/repo/migrations/20260901000000_add_business_schema.exs
+  s_8c80ad8d2af680::t_6da044e95cc2fe 271
+test/rice_web/api/node_controller_test.exs
+  s_8c80ad8d2af680::t_6da044e95cc2fe 80-83
+lib/rice/tasks.ex
+  s_8c80ad8d2af680::t_a7477d8e98dcb4 11,758-764,775-777,814-821,835-837,879-905
+  s_8c80ad8d2af680::t_3e8e32fa47680e 109-110,122,126-129,132-136,938-939,943-945,1057-1058,1073-1075,1127-1128,1605,1756,1778,1821-1823,1825,1827,1832-1835,2003-2030,2033-2034,2037-2050,2052-2053
+  s_8c80ad8d2af680::t_973404409d7c46 130-131
+  s_8c80ad8d2af680::t_7f98dd7f6347ed 2051
+  s_8c80ad8d2af680::t_032e11b1fdce1a 982-984,1174-1176,1603-1604
+  s_8c80ad8d2af680::t_97cc335f37e51c 123-125
+  s_8c80ad8d2af680::t_6da044e95cc2fe 279-280,1980-2002,2031-2032,2035-2036
+  s_8c80ad8d2af680::t_24c840471350a7 2054
+test/rice_web/api/task_controller_test.exs
+  s_8c80ad8d2af680::t_85e3c8835a94e9 585-619
+test/rice/task_application_state_test.exs
+  s_8c80ad8d2af680::t_c0682edd5943fd 45-47,54,72,74-174
+  s_8c80ad8d2af680::t_8e4705ccb43b61 1-44,48-53,55-71,73,175-176
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f5c8a56760d98686f02fd6fe97ebb470f30ba621",
+  "prompts": {},
+  "sessions": {
+    "s_8c80ad8d2af680": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1cacbb5-9264-4c9e-8d1e-0245a530ded4",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
