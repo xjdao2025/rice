@@ -174,6 +174,166 @@ defmodule Rice.TaskApplicationStateTest do
     assert task.status == "in_progress"
   end
 
+  test "单人任务:编辑把申请截止改到过去,任务过期,待处理申请跟着 expired" do
+    publisher = task_publisher_fixture()
+    funded_node_fixture(publisher, 10)
+    [first, second] = for _ <- 1..2, do: user_fixture()
+    task = new_task(publisher, %{reward_amount: 10})
+    for u <- [first, second], do: apply!(u, task)
+
+    {:ok, task} =
+      Tasks.update_task(publisher, task, %{
+        application_deadline: DateTime.add(DateTime.utc_now(), -60)
+      })
+
+    assert task.status == "expired"
+    assert task.reward_status == "refunded"
+    assert states(task) == %{first.id => "expired", second.id => "expired"}
+    assert node_balance(publisher) == {10, 0}
+  end
+
+  test "单人任务:定时任务记超期后申请 overdue,延期恢复后回到 appointed" do
+    publisher = task_publisher_fixture()
+    worker = user_fixture()
+    now = DateTime.utc_now()
+
+    task =
+      new_task(publisher, %{
+        application_deadline: DateTime.add(now, 50),
+        execution_deadline: DateTime.add(now, 100)
+      })
+
+    a = apply!(worker, task)
+    {:ok, task} = Tasks.appoint(publisher, task, a.id)
+
+    assert {:ok, [%{status: "overdue"}]} = Tasks.check_due_tasks(DateTime.add(now, 200))
+    assert states(task)[worker.id] == "overdue"
+    assert {:ok, []} = Tasks.check_due_tasks(DateTime.add(now, 200))
+
+    {:ok, task} =
+      Tasks.update_task(publisher, task, %{execution_deadline: DateTime.add(now, 9000)})
+
+    assert task.status == "in_progress"
+    assert states(task)[worker.id] == "appointed"
+
+    {:ok, task} = Tasks.submit_result(worker, task, %{body: "成果"})
+    assert states(task)[worker.id] == "under_review"
+    {:ok, task} = Tasks.approve_result(publisher, task, hd(task.submissions).id)
+    assert states(task)[worker.id] == "completed"
+  end
+
+  test "多人任务:拒绝是终态,名额空出来也不会复活;落选的会" do
+    publisher = task_publisher_fixture()
+    [first, second, third] = for _ <- 1..3, do: user_fixture()
+    task = new_task(publisher, %{capacity: 1 + 1})
+    [a, b, c] = for u <- [first, second, third], do: apply!(u, task)
+
+    {:ok, task} = Tasks.reject_application(publisher, task, c.id)
+    assert states(task)[third.id] == "rejected"
+    {:ok, task} = Tasks.appoint(publisher, task, a.id)
+    {:ok, task} = Tasks.appoint(publisher, task, b.id)
+    # 名额已满,再拒绝一个已指派的人不行
+    assert {:error, :conflict} = Tasks.reject_application(publisher, task, a.id)
+
+    {:ok, task} = Tasks.release_assignee(publisher, task, b.id)
+
+    assert states(task) == %{
+             first.id => "appointed",
+             second.id => "released",
+             third.id => "rejected"
+           }
+
+    assert {:error, :conflict} = Tasks.appoint(publisher, task, c.id)
+  end
+
+  test "多人任务:申请截止后落选,延期后重新排队,再截止再落选" do
+    publisher = task_publisher_fixture()
+    [first, second] = for _ <- 1..2, do: user_fixture()
+    now = DateTime.utc_now()
+
+    task =
+      new_task(publisher, %{
+        capacity: 3,
+        application_deadline: DateTime.add(now, 100),
+        execution_deadline: DateTime.add(now, 20_000)
+      })
+
+    [a, _b] = for u <- [first, second], do: apply!(u, task)
+    {:ok, task} = Tasks.appoint(publisher, task, a.id)
+
+    {:ok, _} = Tasks.check_due_tasks(DateTime.add(now, 200))
+    assert states(task)[second.id] == "not_selected"
+
+    assert Enum.count(Tasks.list_notifications(second), &(&1.event == "application_not_selected")) ==
+             1
+
+    {:ok, task} =
+      Tasks.update_task(publisher, task, %{application_deadline: DateTime.add(now, 9000)})
+
+    assert states(task)[second.id] == "pending"
+    assert Tasks.accepting_applications?(task)
+
+    {:ok, task} =
+      Tasks.update_task(publisher, task, %{application_deadline: DateTime.add(now, 100)})
+
+    {:ok, _} = Tasks.check_due_tasks(DateTime.add(now, 200))
+    assert states(task)[second.id] == "not_selected"
+
+    assert Enum.count(Tasks.list_notifications(second), &(&1.event == "application_not_selected")) ==
+             2
+  end
+
+  test "重新开放进入下一轮:旧轮次申请保留终态,新轮次从空开始" do
+    publisher = task_publisher_fixture()
+    funded_node_fixture(publisher, 100)
+    worker = user_fixture()
+    task = new_task(publisher, %{capacity: 2, reward_amount: 10})
+    apply!(worker, task)
+    {:ok, task} = Tasks.cancel(publisher, task)
+    assert states(task)[worker.id] == "cancelled"
+    assert node_balance(publisher) == {100, 0}
+
+    {:ok, reopened} =
+      Tasks.update_task(publisher, task, %{
+        application_deadline: DateTime.add(DateTime.utc_now(), 3600),
+        reward_amount: 20
+      })
+
+    assert reopened.round == 2 and reopened.status == "open"
+    assert states(reopened) == %{}
+    assert node_balance(publisher) == {60, 40}
+
+    old = Repo.one!(from a in Application, where: a.task_id == ^task.id and a.round == 1)
+    assert {old.status, old.final_status} == {"cancelled", "cancelled"}
+
+    b = apply!(worker, reopened)
+    {:ok, reopened} = Tasks.appoint(publisher, reopened, b.id)
+    assert Repo.get!(Application, b.id).reward_slot == 1
+    assert states(reopened) == %{worker.id => "appointed"}
+    assert Rice.Grains.reconcile().ok?
+  end
+
+  test "单人任务的承接人没有申请记录时(历史数据),状态同步不报错" do
+    publisher = task_publisher_fixture()
+    worker = user_fixture()
+    task = new_task(publisher)
+
+    task =
+      task
+      |> Ecto.Changeset.change(
+        status: "in_progress",
+        assignee_id: worker.id,
+        appointed_at: DateTime.utc_now()
+      )
+      |> Repo.update!()
+
+    {:ok, task} = Tasks.submit_result(worker, task, %{body: "成果"})
+    assert task.status == "under_review"
+    {:ok, task} = Tasks.approve_result(publisher, task, hd(task.submissions).id)
+    assert task.status == "completed"
+    assert states(task) == %{}
+  end
+
   defp node_balance(publisher) do
     %{grain_balance: b, grain_frozen_balance: f} =
       Repo.get_by!(Rice.Community.Node, user_id: publisher.id)

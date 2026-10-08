@@ -789,53 +789,52 @@ defmodule Rice.Tasks do
        )
        when capacity > 1 do
     changeset = Task.appointment_changeset(task, attrs)
+    appointed = appointed_applications(task)
 
     cond do
-      application.appointed_at ->
+      ApplicationState.appointed?(application.status) ->
         {:ok, preload_detail(task)}
 
-      not is_nil(application.rejected_at) or application_deadline_reached?(task) ->
+      task.status not in ~w(open in_progress overdue under_review) ->
         {:error, :conflict}
 
-      task.status not in ~w(open in_progress overdue under_review) ->
+      length(appointed) >= capacity ->
+        {:error, :capacity_full}
+
+      # released / rejected / cancelled 等都不能再指派
+      application.status != "pending" or application_deadline_reached?(task) ->
         {:error, :conflict}
 
       not changeset.valid? ->
         {:error, changeset}
 
       true ->
-        appointed = appointed_applications(task)
+        reason = Ecto.Changeset.get_field(changeset, :appointment_reason)
 
-        if length(appointed) >= capacity do
-          {:error, :capacity_full}
+        with {:ok, [_]} <-
+               move_applications(
+                 Repo,
+                 from(a in Application, where: a.id == ^application.id),
+                 "appointed",
+                 appointed_at: DateTime.utc_now(),
+                 appointment_reason: reason,
+                 reward_slot: next_reward_slot(task, appointed)
+               ),
+             {:ok, _} <-
+               Repo.insert(
+                 notification_changeset(
+                   task,
+                   application.user_id,
+                   user.id,
+                   "assignee_appointed",
+                   reason
+                 )
+               ),
+             {:ok, updated} <- update_multi_status(task, user.id, reason) do
+          {:ok, updated}
         else
-          reason = Ecto.Changeset.get_field(changeset, :appointment_reason)
-
-          with {:ok, [_]} <-
-                 move_applications(
-                   Repo,
-                   from(a in Application, where: a.id == ^application.id),
-                   "appointed",
-                   appointed_at: DateTime.utc_now(),
-                   appointment_reason: reason,
-                   reward_slot: next_reward_slot(task, appointed)
-                 ),
-               {:ok, _} <-
-                 Repo.insert(
-                   notification_changeset(
-                     task,
-                     application.user_id,
-                     user.id,
-                     "assignee_appointed",
-                     reason
-                   )
-                 ),
-               {:ok, updated} <- update_multi_status(task, user.id, reason) do
-            {:ok, updated}
-          else
-            {:ok, _} -> {:error, :conflict}
-            error -> error
-          end
+          {:ok, _} -> {:error, :conflict}
+          error -> error
         end
     end
   end
