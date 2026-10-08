@@ -1,0 +1,45 @@
+lib/rice_web/api/verification_code_controller.ex
+  s_8c80ad8d2af680::t_f2de3520cb8762 11
+  s_8c80ad8d2af680::t_9315c3e207da25 9-10,12-13,38,50-51
+  s_8c80ad8d2af680::t_673ffa88c7f955 52
+lib/rice/admin.ex
+  s_8c80ad8d2af680::t_f2de3520cb8762 96-107,110,116-119,121-122,167
+test/rice_web/api/admin/session_controller_test.exs
+  s_8c80ad8d2af680::t_307190a385bc31 137,139-150,152-153,179-196,198
+  s_8c80ad8d2af680::t_20a8c45b213455 138,151
+  s_8c80ad8d2af680::t_bd6ddf6cce86c8 197,199
+config/runtime.exs
+  s_8c80ad8d2af680::t_6fd388b1221440 70
+  s_8c80ad8d2af680::t_3b3e0375faf3d6 90
+lib/rice_web/api/auth.ex
+  s_8c80ad8d2af680::t_3b3e0375faf3d6 39
+lib/rice_web/router.ex
+  s_8c80ad8d2af680::t_abf8d82ebd8d42 134
+  s_8c80ad8d2af680::t_2088ed8c64b293 141-146
+lib/rice/dao.ex
+  s_8c80ad8d2af680::t_6fd388b1221440 3,5-7,10-11,13
+  s_8c80ad8d2af680::t_3b3e0375faf3d6 27
+test/rice_web/api/admin/grain_controller_test.exs
+  s_8c80ad8d2af680::t_307190a385bc31 30-43
+  s_8c80ad8d2af680::t_414ab8d0281f0d 44-46
+test/rice_web/api/admin/moderation_controller_test.exs
+  s_8c80ad8d2af680::t_307190a385bc31 436-452
+lib/rice_web/api/admin/settings_controller.ex
+  s_8c80ad8d2af680::t_65ac6798f6f856 12,14-20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f8e0fac0038140d593e64b0c84c263eb10f5a3b2",
+  "prompts": {},
+  "sessions": {
+    "s_8c80ad8d2af680": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1cacbb5-9264-4c9e-8d1e-0245a530ded4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
