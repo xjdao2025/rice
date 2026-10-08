@@ -223,8 +223,19 @@ defmodule RiceWeb.Api.TaskJSON do
            (task.capacity > 1 and task.status in ~w(in_progress overdue under_review) and
               Enum.any?(submissions, &(is_nil(&1.review_reason) and is_nil(&1.final_status)))))
 
+    multi_running? =
+      manager? and task.capacity > 1 and task.status in ~w(in_progress overdue under_review)
+
     []
     |> maybe_add(task.status == "draft" and manager?, "publish")
+    |> maybe_add(
+      multi_running? and Enum.any?(applications, &(&1.status in ~w(appointed overdue))),
+      "release_assignee"
+    )
+    |> maybe_add(
+      multi_running? and not Enum.any?(applications, &(&1.status == "under_review")),
+      "close"
+    )
     |> maybe_add(
       task.status in ~w(draft open in_progress overdue under_review expired cancelled) and
         Rice.Tasks.can_edit?(task, user),
@@ -275,6 +286,11 @@ defmodule RiceWeb.Api.TaskJSON do
          application_deadline: deadline
        }),
        do: if(past?(deadline), do: "expired", else: "pending")
+
+  # 多人任务申请截止后、定时任务还没把 pending 迁成 not_selected 之前,先按截止算
+  defp application_status(%Application{status: "pending"}, %{capacity: capacity} = task)
+       when capacity > 1,
+       do: if(Rice.Tasks.accepting_applications?(task), do: "pending", else: "not_selected")
 
   defp application_status(%Application{status: status}, _task),
     do: Rice.Tasks.ApplicationState.legacy(status)

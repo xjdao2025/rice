@@ -228,7 +228,8 @@ defmodule Rice.TasksTest do
     assert {:ok, [overdue]} = Tasks.check_due_tasks(now)
     assert overdue.status == "overdue"
     before = Repo.get!(Rice.Tasks.Task, task.id).updated_at
-    assert {:ok, [_]} = Tasks.check_due_tasks(now)
+    # 已经记成超期的任务不再被定时任务拿出来
+    assert {:ok, []} = Tasks.check_due_tasks(now)
     assert Repo.get!(Rice.Tasks.Task, task.id).updated_at == before
     assert Repo.aggregate(Rice.Grains.Receipt, :count) == 0
     assert Enum.count(Tasks.list_notifications(worker), &(&1.event == "task_overdue")) == 1

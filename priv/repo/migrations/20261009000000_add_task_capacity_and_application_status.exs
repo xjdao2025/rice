@@ -50,14 +50,15 @@ defmodule Rice.Repo.Migrations.AddTaskCapacityAndApplicationStatus do
            )
 
     # ── 申请状态机 ────────────────────────────────────────────────────────
-    # 回填:被指派的申请(appointed_at 非空,或单人任务里就是 assignee)。
+    # 回填:被指派的申请(归档轮次里 final_status = appointed,或当前轮次里就是 assignee)。
+    # 只认当前轮次的 assignee:任务重开后同一个人再申请、再被指派,旧轮次那行仍是落选。
     execute """
     UPDATE task_applications a
        SET appointed_at = COALESCE(a.appointed_at, t.appointed_at, a.updated_at)
       FROM tasks t
      WHERE t.id = a.task_id
        AND a.appointed_at IS NULL
-       AND (a.user_id = t.assignee_id OR a.final_status = 'appointed')
+       AND ((a.round = t.round AND a.user_id = t.assignee_id) OR a.final_status = 'appointed')
     """
 
     execute """
@@ -108,12 +109,12 @@ defmodule Rice.Repo.Migrations.AddTaskCapacityAndApplicationStatus do
     create constraint(:task_applications, :task_applications_status,
              check:
                "status IN ('pending', 'appointed', 'overdue', 'under_review', 'completed', " <>
-                 "'rejected', 'not_selected', 'cancelled', 'expired')"
+                 "'released', 'rejected', 'not_selected', 'cancelled', 'expired')"
            )
 
     create constraint(:task_applications, :task_applications_status_fields,
              check:
-               "(status IN ('appointed', 'overdue', 'under_review', 'completed') " <>
+               "(status IN ('appointed', 'overdue', 'under_review', 'completed', 'released') " <>
                  "AND appointed_at IS NOT NULL) OR " <>
                  "(status = 'rejected' AND rejected_at IS NOT NULL AND appointed_at IS NULL) OR " <>
                  "(status IN ('pending', 'not_selected', 'cancelled', 'expired') " <>

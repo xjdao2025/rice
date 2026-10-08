@@ -173,4 +173,161 @@ defmodule Rice.TaskApplicationStateTest do
     assert states(task)[worker.id] == "appointed"
     assert task.status == "in_progress"
   end
+
+  defp node_balance(publisher) do
+    %{grain_balance: b, grain_frozen_balance: f} =
+      Repo.get_by!(Rice.Community.Node, user_id: publisher.id)
+
+    {b, f}
+  end
+
+  test "多人任务:撤销指派让出名额,编号和冻结留给下一个人;没人承作时回到 open" do
+    publisher = task_publisher_fixture()
+    funded_node_fixture(publisher, 90)
+    [first, second, third] = for _ <- 1..3, do: user_fixture()
+    task = new_task(publisher, %{capacity: 2, reward_amount: 30})
+    assert node_balance(publisher) == {30, 60}
+
+    [a, b, c] = for u <- [first, second, third], do: apply!(u, task)
+    {:ok, task} = Tasks.appoint(publisher, task, a.id)
+    {:ok, task} = Tasks.appoint(publisher, task, b.id)
+    assert states(task)[third.id] == "not_selected"
+
+    # 等待验收的不能撤
+    {:ok, task} = Tasks.submit_result(second, task, %{body: "B"})
+    assert {:error, :conflict} = Tasks.release_assignee(publisher, task, b.id)
+
+    {:ok, task} = Tasks.release_assignee(publisher, task, a.id, %{"reason" => "联系不上"})
+    assert states(task)[first.id] == "released"
+    assert states(task)[third.id] == "pending"
+    assert Repo.get!(Application, a.id).reward_slot == nil
+    # 冻结不动,名额让出来
+    assert node_balance(publisher) == {30, 60}
+    assert task.status == "under_review"
+
+    {:ok, task} = Tasks.appoint(publisher, task, c.id)
+    assert Repo.get!(Application, c.id).reward_slot == 1
+    assert {:error, :conflict} = Tasks.release_assignee(publisher, task, a.id)
+
+    sub = Enum.find(task.submissions, &(&1.user_id == second.id))
+    {:ok, task} = Tasks.approve_result(publisher, task, sub.id)
+    {:ok, task} = Tasks.release_assignee(publisher, task, c.id)
+    assert task.status == "in_progress"
+
+    # 把唯一还在承作的人撤掉:已完成的还占着名额,任务继续;再把名额填满就能完成
+    assert states(task) == %{
+             first.id => "released",
+             second.id => "completed",
+             third.id => "released"
+           }
+
+    assert Rice.Grains.reconcile().ok?
+  end
+
+  test "多人任务:全部撤销后回到 open,过了申请截止由定时任务退款过期" do
+    publisher = task_publisher_fixture()
+    funded_node_fixture(publisher, 60)
+    worker = user_fixture()
+    now = DateTime.utc_now()
+    task = new_task(publisher, %{capacity: 2, reward_amount: 30})
+
+    a = apply!(worker, task)
+    {:ok, task} = Tasks.appoint(publisher, task, a.id)
+    {:ok, task} = Tasks.release_assignee(publisher, task, a.id)
+    assert task.status == "open"
+    assert node_balance(publisher) == {0, 60}
+
+    {:ok, _} = Tasks.check_due_tasks(DateTime.add(now, 4000))
+    task = Repo.get!(Rice.Tasks.Task, task.id)
+    assert task.status == "expired"
+    assert task.reward_status == "refunded"
+    assert node_balance(publisher) == {60, 0}
+    assert Rice.Grains.reconcile().ok?
+  end
+
+  test "多人任务:提前结束,已验收的算完成,其余撤销并退回冻结" do
+    publisher = task_publisher_fixture()
+    funded_node_fixture(publisher, 100)
+    [first, second, third, fourth] = for _ <- 1..4, do: user_fixture()
+    task = new_task(publisher, %{capacity: 3, reward_amount: 30})
+    assert node_balance(publisher) == {10, 90}
+
+    [a, b, _c, _d] = for u <- [first, second, third, fourth], do: apply!(u, task)
+    {:ok, task} = Tasks.appoint(publisher, task, a.id)
+    {:ok, task} = Tasks.appoint(publisher, task, b.id)
+    {:ok, task} = Tasks.submit_result(first, task, %{body: "A"})
+
+    # 有成果等待验收时不能结束
+    assert {:error, :conflict} = Tasks.close(publisher, task)
+    {:ok, task} = Tasks.approve_result(publisher, task, hd(task.submissions).id)
+    assert node_balance(publisher) == {10, 60}
+
+    {:ok, task} = Tasks.close(publisher, task)
+    assert task.status == "completed"
+    assert task.reward_status == "settled"
+
+    assert states(task) == %{
+             first.id => "completed",
+             second.id => "released",
+             third.id => "not_selected",
+             fourth.id => "not_selected"
+           }
+
+    assert node_balance(publisher) == {70, 0}
+    assert Rice.Grains.reconcile().ok?
+    assert {:error, :conflict} = Tasks.close(publisher, task)
+  end
+
+  test "多人任务:一个都没验收就提前结束,记为 cancelled 并全额退回" do
+    publisher = task_publisher_fixture()
+    funded_node_fixture(publisher, 60)
+    worker = user_fixture()
+    task = new_task(publisher, %{capacity: 2, reward_amount: 30})
+
+    a = apply!(worker, task)
+    {:ok, task} = Tasks.appoint(publisher, task, a.id)
+    assert {:error, :forbidden} = Tasks.close(worker, task)
+
+    {:ok, task} = Tasks.close(publisher, task)
+    assert task.status == "cancelled"
+    assert task.reward_status == "refunded"
+    assert states(task)[worker.id] == "released"
+    assert node_balance(publisher) == {60, 0}
+    assert Rice.Grains.reconcile().ok?
+  end
+
+  test "定时任务只在多人任务还有事可做时处理它" do
+    publisher = task_publisher_fixture()
+    [first, second] = for _ <- 1..2, do: user_fixture()
+    now = DateTime.utc_now()
+
+    task =
+      new_task(publisher, %{
+        capacity: 3,
+        application_deadline: DateTime.add(now, 100),
+        execution_deadline: DateTime.add(now, 200)
+      })
+
+    [a, _b] = for u <- [first, second], do: apply!(u, task)
+    {:ok, task} = Tasks.appoint(publisher, task, a.id)
+
+    # 申请截止:把 pending 迁成 not_selected
+    assert {:ok, [%{id: id}]} = Tasks.check_due_tasks(DateTime.add(now, 150))
+    assert id == task.id
+    assert states(task)[second.id] == "not_selected"
+    # 再跑一次没事可做
+    assert {:ok, []} = Tasks.check_due_tasks(DateTime.add(now, 150))
+
+    # 交付截止:把 appointed 记成 overdue,再跑一次同样空转
+    assert {:ok, [%{status: "overdue"}]} = Tasks.check_due_tasks(DateTime.add(now, 250))
+    assert {:ok, []} = Tasks.check_due_tasks(DateTime.add(now, 250))
+
+    # 唯一承作人交付并通过(真实时间里申请还没截止,任务仍在进行中);
+    # 到了申请截止,人没满也该收尾:定时任务把它记成 completed,之后不再碰
+    {:ok, task} = Tasks.submit_result(first, task, %{body: "A"})
+    {:ok, task} = Tasks.approve_result(publisher, task, hd(task.submissions).id)
+    assert task.status == "in_progress"
+    assert {:ok, [%{status: "completed"}]} = Tasks.check_due_tasks(DateTime.add(now, 300))
+    assert {:ok, []} = Tasks.check_due_tasks(DateTime.add(now, 300))
+  end
 end

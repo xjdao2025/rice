@@ -818,7 +818,7 @@ defmodule Rice.Tasks do
                    "appointed",
                    appointed_at: DateTime.utc_now(),
                    appointment_reason: reason,
-                   reward_slot: length(appointed) + 1
+                   reward_slot: next_reward_slot(task, appointed)
                  ),
                {:ok, _} <-
                  Repo.insert(
@@ -907,6 +907,139 @@ defmodule Rice.Tasks do
   end
 
   defp appoint_application(%User{}, %Task{}, %Application{}, _attrs), do: {:error, :conflict}
+
+  # 被撤销指派的人让出名额,编号(以及那份冻结)留给下一个被指派的人。
+  defp next_reward_slot(task, appointed) do
+    used = Enum.map(appointed, & &1.reward_slot)
+    Enum.find(1..task.capacity, &(&1 not in used))
+  end
+
+  @doc """
+  多人任务:撤销一个人的指派。名额让出来,奖励不发;对方已提交、等待验收时不能撤,
+  要先验收或退回修改。没有人在承作时任务回到 `open`。
+  """
+  def release_assignee(user, %Task{} = task, application_id, attrs \\ %{}) do
+    with_locked_task(task.id, fn current ->
+      with :ok <- authorize_management(current, user),
+           {:ok, application} <- fetch_record(Application, current, application_id) do
+        release_current_assignee(user, current, application, attrs)
+      end
+    end)
+  end
+
+  defp release_current_assignee(
+         %User{} = user,
+         %Task{capacity: capacity, status: status} = task,
+         %Application{} = application,
+         attrs
+       )
+       when capacity > 1 and status in ~w(in_progress overdue under_review) do
+    reason = release_reason(attrs)
+
+    with true <- application.status in ~w(appointed overdue) or {:error, :conflict},
+         {:ok, [_]} <-
+           move_applications(
+             Repo,
+             from(a in Application, where: a.id == ^application.id),
+             "released",
+             reward_slot: nil
+           ),
+         {:ok, _} <-
+           Repo.insert(
+             notification_changeset(
+               task,
+               application.user_id,
+               user.id,
+               "appointment_released",
+               reason
+             )
+           ),
+         {:ok, updated} <- update_multi_status(task, user.id, reason) do
+      {:ok, updated}
+    else
+      {:ok, _} -> {:error, :conflict}
+      error -> error
+    end
+  end
+
+  defp release_current_assignee(%User{}, %Task{}, %Application{}, _attrs),
+    do: {:error, :conflict}
+
+  defp release_reason(attrs) do
+    case attrs["reason"] || attrs[:reason] do
+      reason when is_binary(reason) -> String.slice(String.trim(reason), 0, 512)
+      _ -> nil
+    end
+    |> case do
+      "" -> nil
+      reason -> reason
+    end
+  end
+
+  @doc """
+  多人任务:提前结束。还在承作的人撤销指派,待处理的申请落选,没发出去的奖励退回节点。
+  有人已通过验收就记为 `completed`,一个都没有则记为 `cancelled`。
+  有成果等待验收时不能结束,要先验收或退回修改。
+  """
+  def close(user, %Task{} = task) do
+    with_locked_task(task.id, fn current ->
+      with :ok <- authorize_management(current, user), do: close_current(user, current)
+    end)
+  end
+
+  defp close_current(%User{id: actor_id}, %Task{capacity: capacity, status: status} = task)
+       when capacity > 1 and status in ~w(in_progress overdue under_review) do
+    scope = round_applications(task)
+
+    if Repo.exists?(from(a in scope, where: a.status == "under_review")) do
+      {:error, :conflict}
+    else
+      completed_slots =
+        Repo.all(from(a in scope, where: a.status == "completed", select: a.reward_slot))
+
+      next = if completed_slots == [], do: "cancelled", else: "completed"
+      unused = Enum.to_list(1..task.capacity) -- completed_slots
+
+      reward_status =
+        cond do
+          task.reward_amount == 0 or task.reward_status != "reserved" -> task.reward_status
+          next == "completed" -> "settled"
+          true -> "refunded"
+        end
+
+      detail =
+        if task.reward_amount > 0 and unused != [],
+          do: "已提前结束，向节点退回 #{task.reward_amount * length(unused)} 稻米",
+          else: "已提前结束"
+
+      with {:ok, released} <- move_applications(Repo, scope, "released", reward_slot: nil),
+           {:ok, not_selected} <- move_applications(Repo, scope, "not_selected"),
+           {:ok, _} <- refund_reward_slots(Repo, task, unused),
+           {:ok, saved} <-
+             Repo.update(Ecto.Changeset.change(task, status: next, reward_status: reward_status)),
+           {:ok, _} <- Repo.insert(event_changeset(task.id, actor_id, task.status, next, detail)),
+           :ok <-
+             notify_each(task, actor_id, [
+               {released, "appointment_released", detail},
+               {not_selected, "application_not_selected", nil}
+             ]) do
+        {:ok, preload_detail(saved)}
+      end
+    end
+  end
+
+  defp close_current(%User{}, %Task{}), do: {:error, :conflict}
+
+  defp notify_each(task, actor_id, groups) do
+    groups
+    |> Enum.flat_map(fn {user_ids, event, detail} -> Enum.map(user_ids, &{&1, event, detail}) end)
+    |> Enum.reduce_while(:ok, fn {user_id, event, detail}, _ ->
+      case Repo.insert(notification_changeset(task, user_id, actor_id, event, detail)) do
+        {:ok, _} -> {:cont, :ok}
+        error -> {:halt, error}
+      end
+    end)
+  end
 
   def submit_result(user, %Task{} = task, attrs),
     do: with_locked_task(task.id, &submit_current_result(user, &1, attrs))
@@ -1138,6 +1271,9 @@ defmodule Rice.Tasks do
                  )
                ) do
           {:ok, updated}
+        else
+          {:ok, _} -> {:error, :conflict}
+          error -> error
         end
 
       _ ->
@@ -1193,13 +1329,36 @@ defmodule Rice.Tasks do
   defp request_submission_changes(%User{}, %Task{}, %Submission{}, _), do: {:error, :conflict}
 
   def check_due_tasks(now \\ DateTime.utc_now()) do
+    # 多人任务过了截止仍留在进行中,只在还有事可做时才拿出来:申请截止后还有待处理的申请、
+    # 或者所有承作人都已结束(该收尾了);交付截止后还有人没记成超期。
+    pending_exists =
+      from(a in Application,
+        where: a.task_id == parent_as(:task).id and a.round == parent_as(:task).round,
+        where: a.status == "pending"
+      )
+
+    working_exists =
+      from(a in Application,
+        where: a.task_id == parent_as(:task).id and a.round == parent_as(:task).round,
+        where: a.status in ["appointed", "overdue", "under_review"]
+      )
+
+    not_yet_overdue_exists =
+      from(a in Application,
+        where: a.task_id == parent_as(:task).id and a.round == parent_as(:task).round,
+        where: a.status == "appointed"
+      )
+
     due =
       from(t in Task,
+        as: :task,
         where:
           (t.status == "open" and t.application_deadline <= ^now) or
-            (t.status == "in_progress" and t.execution_deadline <= ^now) or
+            (t.status == "in_progress" and t.capacity == 1 and t.execution_deadline <= ^now) or
             (t.capacity > 1 and t.status in ["in_progress", "overdue", "under_review"] and
-               (t.application_deadline <= ^now or t.execution_deadline <= ^now))
+               ((t.application_deadline <= ^now and
+                   (exists(pending_exists) or not exists(working_exists))) or
+                  (t.execution_deadline <= ^now and exists(not_yet_overdue_exists))))
       )
 
     results =
@@ -1765,6 +1924,8 @@ defmodule Rice.Tasks do
 
     next =
       cond do
+        # 承作的人都被撤销了:回到招募中,再没人接就由定时任务按申请截止处理
+        appointed == [] -> "open"
         complete? -> "completed"
         "overdue" in statuses -> "overdue"
         "under_review" in statuses -> "under_review"
@@ -1778,6 +1939,10 @@ defmodule Rice.Tasks do
     {:ok, _} = refresh_overdue(Repo, task, now)
     current = preload_detail(task)
     {next, unused} = aggregate_multi_status(current, now)
+
+    # 撤销指派让出了名额:之前因名额满而落选的申请重新排队
+    if accepting_applications?(current),
+      do: {:ok, _} = move_applications(Repo, round_applications(current), "pending")
 
     with :ok <- notify_closed_applications(current, actor_id || task.creator_id, now) do
       if next == task.status and is_nil(actor_id) do
