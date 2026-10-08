@@ -28,7 +28,4 @@ defmodule Rice.Tasks.Submission do
     |> validate_required([:review_reason])
     |> validate_length(:review_reason, min: 1, max: 512)
   end
-
-  defp trim(value) when is_binary(value), do: String.trim(value)
-  defp trim(_), do: ""
 end

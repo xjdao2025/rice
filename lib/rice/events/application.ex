@@ -25,7 +25,4 @@ defmodule Rice.Events.Application do
     |> validate_length(:reason, max: 512)
     |> unique_constraint([:event_id, :round, :user_id])
   end
-
-  defp trim(value) when is_binary(value), do: String.trim(value)
-  defp trim(_), do: ""
 end

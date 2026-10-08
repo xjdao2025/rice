@@ -29,7 +29,4 @@ defmodule Rice.Tasks.Application do
     |> validate_length(:reason, max: 512)
     |> unique_constraint([:task_id, :round, :user_id])
   end
-
-  defp trim(value) when is_binary(value), do: String.trim(value)
-  defp trim(_), do: ""
 end

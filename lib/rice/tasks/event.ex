@@ -24,13 +24,4 @@ defmodule Rice.Tasks.Event do
     |> foreign_key_constraint(:task_id)
     |> foreign_key_constraint(:actor_id)
   end
-
-  defp optional_trim(value) when is_binary(value) do
-    case String.trim(value) do
-      "" -> nil
-      value -> value
-    end
-  end
-
-  defp optional_trim(_), do: nil
 end

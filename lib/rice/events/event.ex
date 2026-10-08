@@ -107,6 +107,4 @@ defmodule Rice.Events.Event do
 
   defp require_time(changeset, true, _, _), do: changeset
   defp require_time(changeset, false, field, message), do: add_error(changeset, field, message)
-  defp trim(value) when is_binary(value), do: String.trim(value)
-  defp trim(_), do: ""
 end

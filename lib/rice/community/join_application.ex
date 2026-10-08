@@ -32,7 +32,4 @@ defmodule Rice.Community.JoinApplication do
     |> put_change(:reviewer_id, reviewer.id)
     |> put_change(:reviewed_at, DateTime.utc_now())
   end
-
-  defp trim(nil), do: ""
-  defp trim(value), do: String.trim(value)
 end

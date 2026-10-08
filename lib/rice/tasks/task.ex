@@ -116,18 +116,6 @@ defmodule Rice.Tasks.Task do
       else: changeset
   end
 
-  defp trim(value) when is_binary(value), do: String.trim(value)
-  defp trim(_), do: ""
-
-  defp optional_trim(value) when is_binary(value) do
-    case String.trim(value) do
-      "" -> nil
-      value -> value
-    end
-  end
-
-  defp optional_trim(_), do: nil
-
   defp validate_future_deadline(changeset, opts) do
     case get_field(changeset, :application_deadline) do
       nil ->
