@@ -1,0 +1,26 @@
+test/rice_web/api/grain_flow_test.exs
+  s_8c80ad8d2af680::t_fcc71872305a97 368-371
+  s_8c80ad8d2af680::t_e6ed931174413c 249-257
+  s_8c80ad8d2af680::t_4eb86fecebdfb6 1-47,50,58-248,258-276,282-292,294,308-362,364,366,372-377,383-437
+  s_8c80ad8d2af680::t_3dc22ae4210413 363,365,367,378-382
+  s_8c80ad8d2af680::t_d11d8a82731e43 293,295-307
+  s_8c80ad8d2af680::t_d4201e1e57a02f 277-281
+  s_8c80ad8d2af680::t_c9e365112521c9 48-49,51-57
+  s_8c80ad8d2af680::t_7d7ba71468a238 438-449
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3e29b0e0b0e01dd893df48ac174aed952a6d6057",
+  "prompts": {},
+  "sessions": {
+    "s_8c80ad8d2af680": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1cacbb5-9264-4c9e-8d1e-0245a530ded4",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
