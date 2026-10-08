@@ -1,0 +1,26 @@
+test/rice_web/api/task_flow_test.exs
+  s_8c80ad8d2af680::t_d50350cf5f82e1 53-97
+lib/rice_web/api/task_json.ex
+  s_8c80ad8d2af680::t_faa4aaf5f2a975 211,216-217,221
+docs/tasks.md
+  s_8c80ad8d2af680::t_7b6ccebc70b851 71-74
+lib/rice/tasks.ex
+  s_8c80ad8d2af680::t_902d17693ba4a5 1024-1025
+  s_8c80ad8d2af680::t_faa4aaf5f2a975 979,982-983,991-992,1020-1023,1026-1027,1875-1877
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "bf89b683151ea52ca9802ad175b5812bc4886bb8",
+  "prompts": {},
+  "sessions": {
+    "s_8c80ad8d2af680": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1cacbb5-9264-4c9e-8d1e-0245a530ded4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
