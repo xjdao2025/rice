@@ -1,0 +1,21 @@
+lib/rice_web/router.ex
+  s_8c80ad8d2af680::t_a65e760cc38694 134-135,148-157
+test/rice_web/api/admin/moderation_controller_test.exs
+  s_8c80ad8d2af680::t_a65e760cc38694 337-338,343-351
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6a4f85c2e466fb7032b1ce027f53236fa4028171",
+  "prompts": {},
+  "sessions": {
+    "s_8c80ad8d2af680": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1cacbb5-9264-4c9e-8d1e-0245a530ded4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
