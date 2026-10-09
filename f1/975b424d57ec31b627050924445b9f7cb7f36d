@@ -1,0 +1,29 @@
+lib/rice/admin/posts.ex
+  s_8c80ad8d2af680::t_9983b803a80b16 3-5,8,11-12,14-16,18-21,24-62,74-79,82-86,88-102,104-106,108-110
+  s_8c80ad8d2af680::t_7e96c2880c4b6d 22-23
+test/rice_web/api/admin/misc_controller_test.exs
+  s_8c80ad8d2af680::t_7e96c2880c4b6d 39,46-47,49-52,54,56,58,62-68,71-73,75-83,86-88,92-95,99-102
+lib/rice_web/api/admin/post_controller.ex
+  s_8c80ad8d2af680::t_e42c43cbd166e4 3,6,22-23,26,32
+  s_8c80ad8d2af680::t_51057b4f99619c 12,14,16,18-19,21,25,29
+config/runtime.exs
+  s_8c80ad8d2af680::t_6cc64fdeb8fddc 55-59
+lib/rice_web/router.ex
+  s_8c80ad8d2af680::t_51057b4f99619c 208,210
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f1975b424d57ec31b627050924445b9f7cb7f36d",
+  "prompts": {},
+  "sessions": {
+    "s_8c80ad8d2af680": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1cacbb5-9264-4c9e-8d1e-0245a530ded4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
