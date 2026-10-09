@@ -51,6 +51,11 @@ defmodule RiceWeb.Router do
     get "/auth/semi/callback", SemiAuthController, :callback
   end
 
+  # 帖子图片 / 头像缩略图。xjdao 主站把 /img 也转到这里,前端同源引用。
+  scope "/", RiceWeb do
+    get "/img/:preset/:did/:cid", ThumbController, :show
+  end
+
   # One-time session-handoff redemption for the front-end (cross-origin JSON,
   # CORS handled in the action). No session/CSRF pipeline needed.
   scope "/", RiceWeb do

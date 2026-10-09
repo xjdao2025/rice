@@ -77,6 +77,8 @@ defmodule Rice.MixProject do
       {:bandit, "~> 1.5"},
       # 后台任务(替代 core 的 Hangfire + Redis),任务表与业务表同库同事务
       {:oban, "~> 2.19"},
+      # 缩略图:libvips 绑定,自带预编译的 libvips,镜像里不用另装
+      {:vix, "~> 0.42.0"},
       # 外部依赖(PDS / 短信 / 邮件)在测试里打桩,不打真实服务
       {:mox, "~> 1.2", only: :test},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}

@@ -123,6 +123,9 @@ if config_env() == :prod do
   # 附件落盘位置。必须是容器外挂载进来的卷,否则重新部署就全丢。
   config :rice, :storage_root, System.get_env("STORAGE_ROOT") || "/srv/rice/storage"
 
+  # PDS 的 blob 目录(只读挂载),缩略图直接从这里读原图。不配则 /img 一律 404。
+  config :rice, :pds_blob_root, System.get_env("PDS_BLOB_ROOT")
+
   # 验证码外发。注册 / 找回密码 / 改绑 / 注销都靠它。
   # 日志模拟必须显式启用；真实通道未配置不能伪装成发送成功。
   case System.get_env("RICE_VERIFICATION_MODE", "live") do
