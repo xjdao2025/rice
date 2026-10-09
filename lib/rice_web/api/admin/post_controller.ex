@@ -15,7 +15,9 @@ defmodule RiceWeb.Api.Admin.PostController do
 
   def delete(conn, params), do: respond(conn, Posts.restore(params["uri"], params["cid"]))
 
-  defp respond(conn, {:ok, page}), do: json(conn, page)
+  defp respond(conn, {:ok, page}),
+    do: json(conn, %{data: page.entries, meta: Rice.Pagination.meta(page)})
+
   defp respond(conn, :ok), do: send_resp(conn, :no_content, "")
 
   defp respond(conn, {:error, :invalid_uri}) do

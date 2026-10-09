@@ -28,7 +28,7 @@ defmodule Rice.Admin.Posts do
   后台贴文列表,页码式:`q`(正文)、`author`(handle 或 DID)、`tag`、`since` / `until`、
   `taken_down`、`page`、`per_page`。每条是 AppView 的 postView 加 `is_banned`。
   """
-  @spec list(map()) :: {:ok, %{posts: [map()], total: non_neg_integer()}} | {:error, term()}
+  @spec list(map()) :: {:ok, Rice.Pagination.page(map())} | {:error, term()}
   def list(params) do
     per_page = params |> Map.get("per_page", "10") |> to_int(10) |> min(100) |> max(1)
     page = params |> Map.get("page", "1") |> to_int(1) |> max(1)
@@ -48,7 +48,15 @@ defmodule Rice.Admin.Posts do
 
     with {:ok, body} <- impl().query(query) do
       posts = for p <- body["posts"], do: Map.put(p["post"], "is_banned", p["takenDown"])
-      {:ok, %{posts: posts, total: body["hitsTotal"] || 0}}
+
+      {:ok,
+       %{
+         entries: posts,
+         page: page,
+         per_page: per_page,
+         total: body["hitsTotal"] || 0,
+         next_cursor: nil
+       }}
     end
   end
 

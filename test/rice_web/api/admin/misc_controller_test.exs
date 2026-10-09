@@ -76,7 +76,7 @@ defmodule RiceWeb.Api.Admin.MiscControllerTest do
          %{"posts" => [%{"post" => %{"uri" => @uri}, "takenDown" => true}], "hitsTotal" => 11}}
       end)
 
-      assert %{"posts" => [%{"uri" => @uri, "is_banned" => true}], "total" => 11} =
+      assert %{"data" => [%{"uri" => @uri, "is_banned" => true}], "meta" => %{"total" => 11}} =
                conn
                |> authed(token)
                |> get(~p"/api/admin/posts?q=稻&tag=%23活动&taken_down=true&page=2")
