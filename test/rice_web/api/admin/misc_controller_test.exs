@@ -36,64 +36,70 @@ defmodule RiceWeb.Api.Admin.MiscControllerTest do
     end
   end
 
-  describe "贴文下架" do
+  describe "贴文管理(转给 aerox 的审核服务)" do
     setup do
       Application.put_env(:rice, :post_client, Rice.PostClientMock)
       on_exit(fn -> Application.delete_env(:rice, :post_client) end)
       :ok
     end
 
-    test "下架就是打 blacklist 标签", %{conn: conn, token: token} do
-      expect(Rice.PostClientMock, :label, fn "at://did:plc:x/app.bsky.feed.post/1",
-                                             ["blacklist"] ->
-        :ok
+    @uri "at://did:plc:x/app.bsky.feed.post/1"
+    @ref %{"$type" => "com.atproto.repo.strongRef", "uri" => @uri, "cid" => "bafyc"}
+
+    test "下架和恢复都按 uri + cid 发审核事件", %{conn: conn, token: token} do
+      expect(Rice.PostClientMock, :emit, fn "takedown", @ref -> :ok end)
+      expect(Rice.PostClientMock, :emit, fn "restore", @ref -> :ok end)
+      body = %{uri: @uri, cid: "bafyc"}
+
+      assert conn |> authed(token) |> post(~p"/api/admin/post_takedowns", body) |> response(204)
+
+      assert build_conn()
+             |> authed(token)
+             |> delete(~p"/api/admin/post_takedowns", body)
+             |> response(204)
+    end
+
+    test "缺 uri 或 cid 422,不会去打审核服务", %{conn: conn, token: token} do
+      for body <- [%{}, %{uri: @uri}, %{cid: "bafyc"}, %{uri: "x", cid: "bafyc"}] do
+        assert conn
+               |> authed(token)
+               |> post(~p"/api/admin/post_takedowns", body)
+               |> json_response(422)
+      end
+    end
+
+    test "列表换算成页码,每条带 is_banned", %{conn: conn, token: token} do
+      expect(Rice.PostClientMock, :query, fn params ->
+        assert params == [q: "稻", tag: "活动", takenDown: "true", limit: 10, cursor: "10"]
+
+        {:ok,
+         %{"posts" => [%{"post" => %{"uri" => @uri}, "takenDown" => true}], "hitsTotal" => 11}}
       end)
 
-      assert conn
-             |> authed(token)
-             |> post(~p"/api/admin/post_takedowns", %{uri: "at://did:plc:x/app.bsky.feed.post/1"})
-             |> response(204)
+      assert %{"posts" => [%{"uri" => @uri, "is_banned" => true}], "total" => 11} =
+               conn
+               |> authed(token)
+               |> get(~p"/api/admin/posts?q=稻&tag=%23活动&taken_down=true&page=2")
+               |> json_response(200)
     end
 
-    test "恢复就是清空标签", %{conn: conn, token: token} do
-      expect(Rice.PostClientMock, :label, fn _uri, [] -> :ok end)
+    test "审核服务出错 502、未配置 503,不是 500", %{conn: conn, token: token} do
+      expect(Rice.PostClientMock, :emit, fn _, _ -> {:error, {:labeler, 500}} end)
+      expect(Rice.PostClientMock, :query, fn _ -> {:error, :labeler_not_configured} end)
 
       assert conn
              |> authed(token)
-             |> delete(~p"/api/admin/post_takedowns", %{
-               uri: "at://did:plc:x/app.bsky.feed.post/1"
-             })
-             |> response(204)
-    end
-
-    test "缺 uri 422,不会去打 post 服务", %{conn: conn, token: token} do
-      assert conn
-             |> authed(token)
-             |> post(~p"/api/admin/post_takedowns", %{})
-             |> json_response(422)
-    end
-
-    test "post 服务出错时返回 502,不是 500", %{conn: conn, token: token} do
-      expect(Rice.PostClientMock, :label, fn _, _ -> {:error, {:post_service, 500}} end)
-
-      assert conn
-             |> authed(token)
-             |> post(~p"/api/admin/post_takedowns", %{uri: "at://x/y/1"})
+             |> post(~p"/api/admin/post_takedowns", %{uri: @uri, cid: "bafyc"})
              |> json_response(502)
-    end
 
-    test "未配置时 503", %{conn: conn, token: token} do
-      expect(Rice.PostClientMock, :label, fn _, _ -> {:error, :post_service_not_configured} end)
-
-      assert conn
-             |> authed(token)
-             |> post(~p"/api/admin/post_takedowns", %{uri: "at://x/y/1"})
-             |> json_response(503)
+      assert build_conn() |> authed(token) |> get(~p"/api/admin/posts") |> json_response(503)
     end
 
     test "未认证 401 —— 管理凭据留在服务端的意义就在这", %{conn: conn} do
-      assert conn
-             |> post(~p"/api/admin/post_takedowns", %{uri: "at://x/y/1"})
+      assert conn |> get(~p"/api/admin/posts") |> json_response(401)
+
+      assert build_conn()
+             |> post(~p"/api/admin/post_takedowns", %{uri: @uri})
              |> json_response(401)
     end
   end
