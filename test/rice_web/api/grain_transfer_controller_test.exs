@@ -41,6 +41,33 @@ defmodule RiceWeb.Api.GrainTransferControllerTest do
              |> json_response(429)
     end
 
+    test "邮箱也能找人和转账，不分大小写", %{conn: conn} do
+      {sender, token} = user_with_token()
+      {:ok, _} = Rice.Grains.grant(sender, 100)
+      recipient = user_fixture(%{email: "Friend@Example.com"})
+
+      assert %{"data" => %{"id" => id}} =
+               conn
+               |> authed(token)
+               |> post(~p"/api/grain_transfers/recipient", %{to: " friend@example.COM "})
+               |> json_response(200)
+
+      assert id == recipient.id
+
+      assert %{"data" => %{"to" => %{"id" => ^id}}} =
+               build_conn()
+               |> authed(token)
+               |> post(~p"/api/grain_transfers", %{to: "FRIEND@example.com", amount: 5})
+               |> json_response(201)
+
+      assert Rice.Repo.get!(Rice.Accounts.User, recipient.id).grain_balance == 5
+
+      assert build_conn()
+             |> authed(token)
+             |> post(~p"/api/grain_transfers/recipient", %{to: "nobody@example.com"})
+             |> json_response(422)
+    end
+
     test "手机号预览只返回公开资料，核对后用 id 转账", %{conn: conn} do
       {sender, token} = user_with_token()
       {:ok, _} = Rice.Grains.grant(sender, 100)
