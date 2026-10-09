@@ -1,0 +1,22 @@
+lib/rice/thumbs.ex
+  s_8c80ad8d2af680::t_1fefe7a54084c0 118
+  s_8c80ad8d2af680::t_dd2273467c7e68 10,36,56-59
+test/rice_web/controllers/thumb_controller_test.exs
+  s_8c80ad8d2af680::t_dd2273467c7e68 14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a36ba0dc0711f1f4ea55bdc9dfb96ee919498759",
+  "prompts": {},
+  "sessions": {
+    "s_8c80ad8d2af680": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1cacbb5-9264-4c9e-8d1e-0245a530ded4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
