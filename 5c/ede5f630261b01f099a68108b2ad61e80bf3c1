@@ -1,0 +1,35 @@
+lib/rice/application.ex
+  s_8c80ad8d2af680::t_7bf0024ea957a0 24
+mix.exs
+  s_8c80ad8d2af680::t_ced3a0ab20699d 80-81
+lib/rice/thumbs.ex
+  s_8c80ad8d2af680::t_7bf0024ea957a0 1-12,14-19,22-54,58-60,62-74,76-92,94-119
+  s_8c80ad8d2af680::t_c932eed31827f3 13,20-21,55-57,61,75,93
+config/runtime.exs
+  s_8c80ad8d2af680::t_7bf0024ea957a0 126-128
+lib/rice_web/thumb_controller.ex
+  s_8c80ad8d2af680::t_7bf0024ea957a0 1-19
+lib/rice_web/router.ex
+  s_8c80ad8d2af680::t_7bf0024ea957a0 54-58
+test/rice_web/controllers/thumb_controller_test.exs
+  s_8c80ad8d2af680::t_45fe040e9991e4 1-22,26-82
+  s_8c80ad8d2af680::t_52439f4dd69b85 23-25
+mix.lock
+  s_8c80ad8d2af680::t_ab0ace83ecf177 3,11,47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5cede5f630261b01f099a68108b2ad61e80bf3c1",
+  "prompts": {},
+  "sessions": {
+    "s_8c80ad8d2af680": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1cacbb5-9264-4c9e-8d1e-0245a530ded4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
