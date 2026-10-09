@@ -239,6 +239,7 @@ defmodule RiceWeb.Router do
     # 期 4:稻米。明细只能看自己的,转账当然要登录。
     get "/grain_transfers", GrainTransferController, :index
     post "/grain_transfers/recipient", GrainTransferController, :recipient
+    get "/grain_transfers/recipients", GrainTransferController, :recipients
     post "/grain_transfers", GrainTransferController, :create
 
     # 期 5:提案的写操作

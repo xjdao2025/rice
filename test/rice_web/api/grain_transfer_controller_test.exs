@@ -20,6 +20,56 @@ defmodule RiceWeb.Api.GrainTransferControllerTest do
     assert Rice.Grains.reconcile().ok?
   end
 
+  describe "GET /api/grain_transfers/recipients" do
+    setup do
+      {me, token} = user_with_token(%{nickname: "稻香"})
+
+      search = fn q ->
+        build_conn()
+        |> authed(token)
+        |> get(~p"/api/grain_transfers/recipients?q=#{q}")
+        |> json_response(200)
+      end
+
+      %{me: me, search: search}
+    end
+
+    test "完整 handle、DID 精确命中只回一个人", %{search: search} do
+      bob = user_fixture(%{handle: "bob.web5.xjdao.test", nickname: "稻花"})
+      user_fixture(%{handle: "bobby.web5.xjdao.test"})
+
+      for q <- ["BOB.web5.xjdao.test", bob.did] do
+        assert %{"exact" => true, "data" => [%{"id" => id, "did" => did, "nickname" => "稻花"}]} =
+                 search.(q)
+
+        assert {id, did} == {bob.id, bob.did}
+      end
+    end
+
+    test "handle 第一段或昵称唯一相同也算精确", %{search: search} do
+      bob = user_fixture(%{handle: "bob.web5.xjdao.test"})
+      user_fixture(%{handle: "bobby.web5.xjdao.test"})
+      assert %{"exact" => true, "data" => [%{"id" => id}]} = search.("bob")
+      assert id == bob.id
+    end
+
+    test "不精确时按相同、前缀、包含排序列出候选，不含自己和停用的", %{search: search} do
+      contains = user_fixture(%{nickname: "早稻田"})
+      prefix = user_fixture(%{nickname: "稻田守望"})
+      same_a = user_fixture(%{handle: "a.web5.xjdao.test", nickname: "稻田"})
+      same_b = user_fixture(%{handle: "b.web5.xjdao.test", nickname: "稻田"})
+
+      user_fixture(%{nickname: "稻田停用"})
+      |> Ecto.Changeset.change(disabled_at: DateTime.utc_now())
+      |> Rice.Repo.update!()
+
+      assert %{"exact" => false, "data" => users} = search.("稻田")
+      assert Enum.map(users, & &1["id"]) == Enum.map([same_a, same_b, prefix, contains], & &1.id)
+      assert %{"exact" => false, "data" => []} = search.("稻香")
+      assert %{"exact" => false, "data" => []} = search.("没有这个人")
+    end
+  end
+
   describe "POST /api/grain_transfers/recipient" do
     # 能拿手机号查人,就要防脚本挨个号码试
     test "每人每小时最多查 30 次" do

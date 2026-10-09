@@ -21,6 +21,15 @@ defmodule RiceWeb.Api.GrainTransferController do
     end
   end
 
+  # 「送给谁」:精确命中只回一个人(exact: true),否则是按昵称 / handle 找到的候选
+  def recipients(conn, %{"q" => q}) do
+    with :ok <- limit_contact_lookup(conn, q),
+         {:ok, %{exact: exact, users: users}} <-
+           Grains.search_recipients(conn.assigns.current_user, q) do
+      json(conn, %{data: Enum.map(users, &RiceWeb.Api.UserJSON.public/1), exact: exact})
+    end
+  end
+
   def create(conn, params) do
     opts = [
       kind: if(params["kind"] == "reward", do: "reward", else: "gift"),

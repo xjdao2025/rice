@@ -439,6 +439,72 @@ defmodule Rice.Grains do
 
   def resolve_recipient(_), do: {:error, :recipient_not_found}
 
+  @doc """
+  转账界面「送给谁」的找人:先按 `resolve_recipient/1` 精确找;找不到再按昵称 /
+  handle 模糊找,不含自己和停用账号,最多 10 个。
+
+  昵称或 handle 第一段(`harold.web5.xjdao.net` 的 `harold`)整个相同的排最前,
+  其次是前缀匹配。整个相同的只有一个人时也算精确 —— 只回他,不再列别的候选。
+  """
+  @spec search_recipients(User.t(), term()) ::
+          {:ok, %{exact: boolean(), users: [User.t()]}} | {:error, :recipient_disabled}
+  def search_recipients(%User{} = viewer, q) do
+    q = if is_binary(q), do: String.trim(q), else: ""
+
+    case resolve_recipient(q) do
+      {:ok, user} ->
+        {:ok, %{exact: true, users: [Repo.preload(user, :avatar)]}}
+
+      {:error, :recipient_not_found} when q != "" ->
+        {:ok, fuzzy_recipients(viewer, q)}
+
+      {:error, :recipient_not_found} ->
+        {:ok, %{exact: false, users: []}}
+
+      error ->
+        error
+    end
+  end
+
+  defp fuzzy_recipients(viewer, q) do
+    lower = String.downcase(q)
+    pattern = Repo.contains(q)
+    prefix = String.replace_prefix(pattern, "%", "")
+
+    ranked =
+      Repo.all(
+        from u in User,
+          where:
+            is_nil(u.deleted_at) and is_nil(u.disabled_at) and u.id != ^viewer.id and
+              (ilike(u.nickname, ^pattern) or ilike(u.handle, ^pattern)),
+          select: %{
+            rank:
+              fragment(
+                "CASE WHEN lower(?) = ? OR split_part(lower(?), '.', 1) = ? THEN 0 WHEN ? ILIKE ? OR ? ILIKE ? THEN 1 ELSE 2 END",
+                u.nickname,
+                ^lower,
+                u.handle,
+                ^lower,
+                u.nickname,
+                ^prefix,
+                u.handle,
+                ^prefix
+              )
+              |> selected_as(:rank),
+            user: u
+          },
+          order_by: [selected_as(:rank), u.handle],
+          limit: 10
+      )
+
+    users = Repo.preload(Enum.map(ranked, & &1.user), :avatar)
+
+    case Enum.count(ranked, &(&1.rank == 0)) do
+      1 -> %{exact: true, users: [hd(users)]}
+      _ -> %{exact: false, users: users}
+    end
+  end
+
   @doc "是不是按手机号 / 邮箱找人 —— 这类查询等于问\"这个号是谁\",调用方要限流。"
   @spec contact_identifier?(term()) :: boolean()
   def contact_identifier?(identifier) when is_binary(identifier) do
