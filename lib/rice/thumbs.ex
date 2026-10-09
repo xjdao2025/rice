@@ -7,6 +7,7 @@ defmodule Rice.Thumbs do
   缓存在 `storage_root/thumbs` 下。
 
   * **直接读 PDS 的磁盘**(`PDS_BLOB_ROOT`,只读挂载),不走 getBlob。
+    按 aerox 的布局:`<root>/did_plc_xxx/<cid>`(DID 里的 `:` 换成 `_`)。
   * **缓存不用失效**:CID 是内容哈希,同一个 CID 永远是同一张图。
   * **每次都确认原图还在**:PDS 下架会把 blob 移走,缩略图跟着 404。
   * **只认固定档位**,did/cid 严格校验 —— 没有任意尺寸可刷,也拼不出别的路径。
@@ -32,7 +33,7 @@ defmodule Rice.Thumbs do
     with {:ok, opts} <- Map.fetch(@presets, preset),
          true <- did =~ ~r/\Adid:plc:[a-z2-7]{24}\z/ and cid =~ ~r/\Abafkrei[a-z2-7]{52}\z/,
          root when is_binary(root) <- Application.get_env(:rice, :pds_blob_root),
-         source = Path.join([root, did, cid]),
+         source = Path.join([root, did_dir(did), cid]),
          {:ok, magic} <- head(source) do
       cached = Path.join([cache_root(), preset, String.slice(cid, -2, 2), cid <> ".webp"])
 
@@ -52,10 +53,10 @@ defmodule Rice.Thumbs do
   def warm(preset \\ "feed") do
     root = Application.fetch_env!(:rice, :pds_blob_root)
 
-    for did <- File.ls!(root),
-        File.dir?(Path.join(root, did)),
-        cid <- File.ls!(Path.join(root, did)) do
-      {did, cid}
+    for dir <- File.ls!(root),
+        File.dir?(Path.join(root, dir)),
+        cid <- File.ls!(Path.join(root, dir)) do
+      {String.replace(dir, "_", ":"), cid}
     end
     |> Task.async_stream(fn {did, cid} -> fetch(preset, did, cid) end,
       max_concurrency: @partitions,
@@ -114,6 +115,7 @@ defmodule Rice.Thumbs do
     end
   end
 
+  defp did_dir(did), do: String.replace(did, ":", "_")
   defp worker(cid), do: {:via, PartitionSupervisor, {__MODULE__, cid}}
   defp cache_root, do: Path.join(Application.fetch_env!(:rice, :storage_root), "thumbs")
 end
