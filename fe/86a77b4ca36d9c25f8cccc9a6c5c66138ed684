@@ -1,0 +1,27 @@
+lib/rice_web/router.ex
+  s_8c80ad8d2af680::t_3fdcde9c8d7450 242
+lib/rice_web/api/grain_transfer_controller.ex
+  s_8c80ad8d2af680::t_3fdcde9c8d7450 24-32
+lib/rice/grains.ex
+  s_8c80ad8d2af680::t_9312fe4a1997c3 442-471,473,475-479,498,501,505-507
+  s_8c80ad8d2af680::t_8f7a78a8491655 472,474,480-497,499-500,502-504
+test/rice_web/api/grain_transfer_controller_test.exs
+  s_8c80ad8d2af680::t_3b6cd03a8f1709 26-33,42-44,63
+  s_8c80ad8d2af680::t_3f3c23feb1c6f0 23-25,34-41,45-62,64-72
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fe86a77b4ca36d9c25f8cccc9a6c5c66138ed684",
+  "prompts": {},
+  "sessions": {
+    "s_8c80ad8d2af680": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1cacbb5-9264-4c9e-8d1e-0245a530ded4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
