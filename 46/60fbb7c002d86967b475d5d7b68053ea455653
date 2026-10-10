@@ -1,0 +1,27 @@
+config/config.exs
+  s_8c80ad8d2af680::t_58b6fcf801ed34 31
+lib/rice/workers/moderate_posts.ex
+  s_8c80ad8d2af680::t_58b6fcf801ed34 2
+lib/rice/moderation/posts.ex
+  s_8c80ad8d2af680::t_9640cc5a65aca6 4,8-10,15,24-25
+  s_8c80ad8d2af680::t_58b6fcf801ed34 56-63
+  s_8c80ad8d2af680::t_88178b44643494 65
+test/rice/moderation/posts_test.exs
+  s_8c80ad8d2af680::t_58b6fcf801ed34 91-109
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4660fbb7c002d86967b475d5d7b68053ea455653",
+  "prompts": {},
+  "sessions": {
+    "s_8c80ad8d2af680": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1cacbb5-9264-4c9e-8d1e-0245a530ded4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
