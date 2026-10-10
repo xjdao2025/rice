@@ -10,6 +10,8 @@ defmodule Rice.Admin.Posts do
 
   @callback emit(action :: String.t(), subject :: map()) :: :ok | {:error, term()}
   @callback query(params :: keyword()) :: {:ok, map()} | {:error, term()}
+  @callback label(subject :: map(), val :: String.t(), comment :: String.t()) ::
+              :ok | {:error, term()}
 
   @doc "下架一条贴文。cid 和 uri 一起定位到具体版本(`com.atproto.repo.strongRef`)。"
   @spec take_down(term(), term()) :: :ok | {:error, :invalid_uri | term()}
@@ -23,6 +25,16 @@ defmodule Rice.Admin.Posts do
       impl().emit(action, %{"$type" => "com.atproto.repo.strongRef", "uri" => uri, "cid" => cid})
 
   defp emit(_, _, _), do: {:error, :invalid_uri}
+
+  @doc "给贴文打 `!hide` 标签(内容审核没过),理由写进审核事件的备注。前端见到这个标签就不显示。"
+  @spec hide(String.t(), String.t(), String.t()) :: :ok | {:error, term()}
+  def hide(uri, cid, reason),
+    do:
+      impl().label(
+        %{"$type" => "com.atproto.repo.strongRef", "uri" => uri, "cid" => cid},
+        "!hide",
+        reason
+      )
 
   @doc """
   后台贴文列表,页码式:`q`(正文)、`author`(handle 或 DID)、`tag`、`since` / `until`、
@@ -89,6 +101,21 @@ defmodule Rice.Admin.Posts do
 
     @impl true
     def query(params), do: request(:get, "aerox.moderation.queryPosts", params: params)
+
+    @impl true
+    def label(subject, val, comment) do
+      with {:ok, _} <-
+             request(:post, "aerox.moderation.emitEvent",
+               json: %{
+                 "action" => "label",
+                 "subject" => subject,
+                 "meta" => %{"val" => val},
+                 "comment" => comment,
+                 "createdBy" => "rice"
+               }
+             ),
+           do: :ok
+    end
 
     defp request(method, nsid, opts) do
       cfg = Application.get_env(:rice, :labeler, [])
