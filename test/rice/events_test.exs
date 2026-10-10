@@ -417,7 +417,7 @@ defmodule Rice.EventsTest do
     assert balances(user) == {0, 0}
   end
 
-  test "拒绝和移除分别退款且释放名额，重试不重复退，拒绝后不重报", ctx do
+  test "拒绝和移除分别退款且释放名额，重试不重复退，拒绝后可以重报", ctx do
     event = event!(ctx)
     {:ok, event} = Events.apply(ctx.first, event, %{contact: "测试联系方式"})
     {:ok, event} = Events.apply(ctx.second, event, %{contact: "测试联系方式"})
@@ -439,9 +439,18 @@ defmodule Rice.EventsTest do
     {:ok, another} = Events.apply(ctx.first, another, %{contact: "测试联系方式"})
     a = application(another, ctx.first)
     assert {:ok, _} = Events.reject_application(ctx.host, another, a.id)
-    assert {:ok, repeat} = Events.apply(ctx.first, another, %{contact: "测试联系方式"})
-    assert application(repeat, ctx.first).status == "rejected"
     assert balances(ctx.first) == {100, 0}
+    {:ok, rejected} = Events.fetch_event(another.id, ctx.first)
+    assert "apply" in Events.allowed_actions(rejected, ctx.first)
+
+    # 重报是新的一份申请,重新冻结报名费;连点两次也只报一份
+    assert {:ok, _} = Events.apply(ctx.first, another, %{contact: "再试一次"})
+    assert {:ok, repeat} = Events.apply(ctx.first, another, %{contact: "再试一次"})
+    again = Events.own_application(repeat, ctx.first)
+    assert again.status == "pending" and again.id != a.id
+    assert Repo.get!(Application, a.id).status == "rejected"
+    assert balances(ctx.first) == {80, 20}
+    assert {:ok, _} = Events.approve_application(ctx.host, repeat, again.id)
     assert Rice.Grains.reconcile().ok?
   end
 
@@ -549,7 +558,7 @@ defmodule Rice.EventsTest do
     assert Events.list_events(ctx.first, %{"mine" => "applied"}).entries |> length() == 1
   end
 
-  test "本人可在报名截止后开始前撤销，退回原费用且不能重报或重复退款", ctx do
+  test "本人可在报名截止后开始前撤销，退回原费用，截止后不能重报也不重复退款", ctx do
     event = event!(ctx)
     {:ok, event} = Events.apply(ctx.first, event, %{contact: "测试联系方式"})
     own = application(event, ctx.first)
@@ -573,9 +582,7 @@ defmodule Rice.EventsTest do
     refute "apply" in Events.allowed_actions(withdrawn, ctx.first)
 
     assert {:ok, _} = Events.withdraw_application(ctx.first, event, own.id)
-    assert {:ok, repeated} = Events.apply(ctx.first, event, %{contact: "测试联系方式"})
-    assert application(repeated, ctx.first).id == own.id
-    assert application(repeated, ctx.first).status == "withdrawn"
+    assert {:error, :conflict} = Events.apply(ctx.first, event, %{contact: "测试联系方式"})
     assert {:error, :conflict} = Events.approve_application(ctx.host, event, own.id)
     assert {:ok, _} = Events.cancel(ctx.host, event)
     assert {:ok, _} = Events.withdraw_application(ctx.first, event, own.id)

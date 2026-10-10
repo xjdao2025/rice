@@ -183,6 +183,7 @@ defmodule RiceWeb.Api.TaskJSON do
         Enum.any?(applications, &(is_nil(&1.rejected_at) and is_nil(&1.appointed_at)))
 
     running? = manager? and task.status in ~w(in_progress overdue under_review)
+    working = Enum.filter(applications, &(&1.status in ~w(appointed overdue under_review)))
 
     can_review_results? =
       running? and
@@ -199,6 +200,11 @@ defmodule RiceWeb.Api.TaskJSON do
       running? and not Enum.any?(applications, &(&1.status == "under_review")),
       "close"
     )
+    |> maybe_add(
+      running? and working != [] and not Enum.any?(working, &(&1.user_id == user_id)),
+      "complete"
+    )
+    |> maybe_add(manager? and task.status in ~w(completed expired cancelled), "delete")
     |> maybe_add(
       task.status in ~w(draft open in_progress overdue under_review expired cancelled) and
         Rice.Tasks.can_edit?(task, user),

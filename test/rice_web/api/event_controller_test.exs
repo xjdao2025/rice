@@ -173,7 +173,8 @@ defmodule RiceWeb.Api.EventControllerTest do
     assert withdrawn["data"]["my_application"]["status"] == "withdrawn"
     assert withdrawn["data"]["my_application"]["payment_status"] == "refunded"
     assert withdrawn["data"]["my_application"]["allowed_actions"] == []
-    refute "apply" in withdrawn["data"]["allowed_actions"]
+    # 撤销后还能重新报名
+    assert "apply" in withdrawn["data"]["allowed_actions"]
 
     revisited =
       build_conn()
@@ -187,6 +188,18 @@ defmodule RiceWeb.Api.EventControllerTest do
     assert public["data"]["applications"] == []
     refute Enum.any?(public["data"]["history"], &(&1["action"] == "application_withdrawn"))
     refute inspect(public) =~ "私人申请理由"
+
+    again =
+      build_conn()
+      |> authed(applicant_token)
+      |> post(~p"/api/events/#{event.id}/applications", %{contact: "测试联系方式"})
+      |> json_response(200)
+
+    assert again["data"]["my_application"]["status"] == "pending"
+    assert again["data"]["my_application"]["id"] != own["id"]
+    assert again["data"]["my_application"]["allowed_actions"] == ["withdraw"]
+    refute "apply" in again["data"]["allowed_actions"]
+    assert Rice.Grains.wallet(applicant).balance == 30
   end
 
   test "搜索词里的 % 和 _ 按字面匹配，不是通配符" do

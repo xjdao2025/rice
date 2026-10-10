@@ -741,7 +741,7 @@ defmodule Rice.TasksTest do
     assert public.id == draft.id
   end
 
-  test "发布者只能在任命前取消任务" do
+  test "发布者只能在任命前取消任务,取消的仍公开可见,删除后才消失" do
     publisher = task_publisher_fixture()
     worker = user_fixture()
     task = task_fixture(publisher)
@@ -750,11 +750,29 @@ defmodule Rice.TasksTest do
     assert {:ok, cancelled} = Tasks.cancel(publisher, task)
     assert cancelled.status == "cancelled"
     assert {:error, :conflict} = Tasks.apply(worker, cancelled, %{contact: "测试联系方式"})
-    assert Tasks.list_tasks(nil).entries == []
-    assert {:error, :not_found} = Tasks.fetch_task(task.id, worker)
-    assert {:ok, %{status: "cancelled"}} = Tasks.fetch_task(task.id, publisher)
+    assert [listed] = Tasks.list_tasks(nil).entries
+    assert listed.id == task.id
+    assert {:ok, %{status: "cancelled"}} = Tasks.fetch_task(task.id, worker)
     assert [mine] = Tasks.list_tasks(publisher, %{"mine" => "created"}).entries
     assert mine.id == task.id
+
+    assert {:error, :forbidden} = Tasks.delete(worker, cancelled)
+    assert {:ok, _} = Tasks.delete(publisher, cancelled)
+    assert Tasks.list_tasks(nil).entries == []
+    assert Tasks.list_tasks(publisher, %{"mine" => "created"}).entries == []
+    assert {:error, :not_found} = Tasks.fetch_task(task.id, publisher)
+    assert {:error, :conflict} = Tasks.delete(publisher, task_fixture(publisher))
+  end
+
+  test "取消草稿就是丢弃,不公开也不占草稿位" do
+    publisher = task_publisher_fixture()
+    attrs = %{organizer_contact: "社区服务台", title: "草稿", description: "未发布", status: "draft"}
+    {:ok, draft} = Tasks.create_task(publisher, attrs)
+
+    assert {:ok, _} = Tasks.cancel(publisher, draft)
+    assert Tasks.list_tasks(nil).entries == []
+    assert {:error, :not_found} = Tasks.fetch_task(draft.id, publisher)
+    assert {:ok, %{status: "draft"}} = Tasks.create_task(publisher, attrs)
   end
 
   test "进行中任务不能换社区，取消后可用新金额和社区开启新一期" do
@@ -1345,7 +1363,8 @@ defmodule Rice.TasksTest do
     assert result.id == matching.id
 
     assert {:ok, _cancelled} = Tasks.cancel(publisher, matching)
-    assert Tasks.list_tasks(nil, %{"status" => "closed"}).entries == []
+    assert [public] = Tasks.list_tasks(nil, %{"status" => "closed"}).entries
+    assert public.id == matching.id
 
     assert [closed] =
              Tasks.list_tasks(publisher, %{"mine" => "created", "status" => "closed"}).entries

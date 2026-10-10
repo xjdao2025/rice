@@ -178,23 +178,18 @@ defmodule RiceWeb.Api.GrainFlowTest do
     # ── 3. 节点主把个人稻米转入节点 ────────────────────────────────────
     fund = %{amount: 120, client_request_id: "fund-1"}
 
-    assert build_conn()
-           |> authed(alice_token)
-           |> post(~p"/api/nodes/#{node.id}/fund", fund)
-           |> json_response(403)
-
     funded =
       build_conn()
       |> authed(manager_token)
       |> post(~p"/api/nodes/#{node.id}/fund", fund)
-      |> json_response(200)
+      |> json_response(201)
 
-    assert funded["data"]["balance"] == 220
+    assert funded["data"]["amount"] == 120
     # 重试同一请求不重复扣
     assert build_conn()
            |> authed(manager_token)
            |> post(~p"/api/nodes/#{node.id}/fund", fund)
-           |> json_response(200)
+           |> json_response(201)
 
     assert build_conn()
            |> authed(manager_token)

@@ -13,7 +13,7 @@ defmodule RiceWeb.Api.EventJSON do
   defp data(event, user, detail?) do
     current = Enum.filter(event.applications, &(&1.round == event.round))
     past = Enum.filter(event.applications, &(&1.round < event.round))
-    own = if user, do: Enum.find(current, &(&1.user_id == user.id))
+    own = if user, do: Events.own_application(event, user)
     manage? = Events.can_manage?(event, user)
 
     visible_current =

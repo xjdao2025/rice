@@ -4,7 +4,7 @@ defmodule Rice.Grains.Transfer do
 
   `kind`:
     * `reward` 打赏 —— 对着某条帖子
-    * `gift`   赠送 —— 点对点
+    * `gift`   赠送 —— 点对点;节点管理员从节点账户发给个人也记这一种
     * `grant`  后台发放 —— 增发,`from_user_id` 为 NULL
     * `task_reward` 任务完成后发放 —— 只能由 Task 状态机写入
   """
@@ -50,6 +50,7 @@ defmodule Rice.Grains.Transfer do
     |> validate_length(:subject_uri, max: 512)
     |> validate_length(:request_id, max: 128)
     |> unique_constraint(:request_id, name: :grain_transfers_request_id)
+    |> unique_constraint(:request_id, name: :grain_transfers_node_request_id)
     |> validate_not_self()
     |> validate_from_matches_kind()
     |> validate_account(:to_user_id, :to_node_id)

@@ -47,6 +47,10 @@ defmodule RiceWeb.Api.TaskController do
 
   def close(conn, %{"task_id" => task_id}), do: change(conn, task_id, &Tasks.close/2)
 
+  def complete(conn, %{"task_id" => task_id}), do: change(conn, task_id, &Tasks.complete/2)
+
+  def delete(conn, %{"task_id" => task_id}), do: change(conn, task_id, &Tasks.delete/2)
+
   def release_assignee(conn, %{"task_id" => task_id, "application_id" => application_id}),
     do: change(conn, task_id, &Tasks.release_assignee(&1, &2, application_id, conn.params))
 

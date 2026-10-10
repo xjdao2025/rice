@@ -7,6 +7,9 @@ defmodule Rice.Events do
   alias Rice.Events.{Application, Event, EventHistory}
   alias Rice.{Grains, Inbox, Pagination, Repo}
 
+  # 被拒绝或自己撤销后可以重新报名;同一期每人只有一份有效申请(部分唯一索引兜底)
+  @reapplicable ~w(rejected withdrawn)
+
   @type result(reason) :: {:ok, Event.t()} | {:error, reason | Changeset.t()}
 
   @spec list_events(User.t() | nil, map()) :: Pagination.page(Event.t())
@@ -336,7 +339,13 @@ defmodule Rice.Events do
       require!(current.creator_id != user.id and not can_manage?(current, user), :forbidden)
 
       existing =
-        Repo.get_by(Application, event_id: current.id, round: current.round, user_id: user.id)
+        Repo.one(
+          from(a in Application,
+            where:
+              a.event_id == ^current.id and a.round == ^current.round and a.user_id == ^user.id and
+                a.status not in @reapplicable
+          )
+        )
 
       if existing do
         current
@@ -556,7 +565,7 @@ defmodule Rice.Events do
     now = DateTime.utc_now()
     host? = can_manage?(event, user)
     current = Enum.filter(event.applications, &(&1.round == event.round))
-    own = Enum.find(current, &(&1.user_id == user.id))
+    own = own_application(event, user)
 
     [
       {"edit",
@@ -567,12 +576,21 @@ defmodule Rice.Events do
       {"finish",
        host? and event.status in ["open", "in_progress"] and not before?(now, event.ends_at)},
       {"apply",
-       not host? and event.creator_id != user.id and is_nil(own) and event.status == "open" and
+       not host? and event.creator_id != user.id and (is_nil(own) or own.status in @reapplicable) and
+         event.status == "open" and
          before?(now, event.application_deadline) and before?(now, event.starts_at) and
          Enum.count(current, &(&1.status == "approved")) < event.capacity}
     ]
     |> Enum.filter(&elem(&1, 1))
     |> Enum.map(&elem(&1, 0))
+  end
+
+  @doc "本期自己的申请;被拒绝或撤销后重新报过名的,取最新那份。"
+  @spec own_application(Event.t(), User.t()) :: Application.t() | nil
+  def own_application(event, %User{id: user_id}) do
+    event.applications
+    |> Enum.filter(&(&1.round == event.round and &1.user_id == user_id))
+    |> Enum.max_by(& &1.id, fn -> nil end)
   end
 
   @spec application_actions(Event.t(), Application.t(), User.t() | nil) :: [String.t()]

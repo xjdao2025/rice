@@ -67,7 +67,7 @@ defmodule Rice.Grains do
         case attrs.request_id &&
                Repo.get_by(Transfer, from_user_id: from.id, request_id: attrs.request_id) do
           nil ->
-            book!(attrs, to.id)
+            book!(attrs, from.id, to.id)
 
           %Transfer{to_user_id: to_id, amount: ^amount, kind: ^kind, subject_uri: ^subject_uri} =
               existing
@@ -257,13 +257,12 @@ defmodule Rice.Grains do
     end
   end
 
-  @doc "Explicit, retry-safe personal contribution; never automatically migrates a balance."
+  @doc "任何人把自己的稻米转入节点(节点的「接收稻米」);可以安全重试,从不自动迁移余额。"
   @spec fund_node(User.t(), Node.t(), term(), term()) ::
           {:ok, Transfer.t()}
           | {:error,
              :invalid_amount
              | :missing_request_id
-             | :forbidden
              | :conflict
              | :insufficient_balance
              | :recipient_not_found
@@ -279,10 +278,6 @@ defmodule Rice.Grains do
       true ->
         Repo.transaction(fn ->
           lock_business_accounts(Repo, [user.id, {:node, node.id}])
-
-          unless Rice.Community.admin?(Repo.get!(Node, node.id), user),
-            do: Repo.rollback(:forbidden)
-
           uri = "rice://nodes/#{node.id}/fund/#{request_id}"
 
           existing =
@@ -305,10 +300,60 @@ defmodule Rice.Grains do
                   subject_uri: uri,
                   memo: "转入节点稻米"
                 },
+                user.id,
                 {:node, node.id}
               )
           end
         end)
+    end
+  end
+
+  @doc """
+  节点管理员把节点账户里的稻米发给某人(节点的「发放稻米」)。
+  带 `request_id` 可以安全重试:同一节点的同一个标识只记一笔。
+  """
+  @spec send_from_node(User.t(), Node.t(), User.t() | String.t(), pos_integer(), keyword()) ::
+          {:ok, Transfer.t()}
+          | {:error,
+             :forbidden
+             | :recipient_not_found
+             | :recipient_disabled
+             | :insufficient_balance
+             | :conflict
+             | Ecto.Changeset.t()}
+  def send_from_node(%User{} = admin, %Node{} = node, to_identifier, amount, opts \\ []) do
+    request_id = Keyword.get(opts, :request_id)
+
+    with {:ok, to} <- resolve_recipient(to_identifier) do
+      Repo.transaction(fn ->
+        lock_business_accounts(Repo, [to.id, {:node, node.id}])
+
+        unless Rice.Community.admin?(Repo.get!(Node, node.id), admin),
+          do: Repo.rollback(:forbidden)
+
+        case request_id && Repo.get_by(Transfer, from_node_id: node.id, request_id: request_id) do
+          nil ->
+            book!(
+              %{
+                kind: "gift",
+                from_node_id: node.id,
+                to_user_id: to.id,
+                amount: amount,
+                memo: Keyword.get(opts, :memo, "") || "",
+                request_id: request_id
+              },
+              {:node, node.id},
+              to.id
+            )
+
+          %Transfer{to_user_id: to_id, amount: ^amount} = existing when to_id == to.id ->
+            existing
+
+          _ ->
+            Repo.rollback(:conflict)
+        end
+      end)
+      |> Repo.preload_ok([:from_user, :to_user, :from_node, :to_node])
     end
   end
 
@@ -390,8 +435,8 @@ defmodule Rice.Grains do
   defp wallet_user(nil), do: nil
   defp wallet_user(user), do: %{id: user.id, nickname: user.nickname, handle: user.handle}
 
-  # 用户付款:记流水、扣付款人、给收款账户入账,任何一步失败整个事务回滚。
-  defp book!(%{from_user_id: payer, amount: amount} = attrs, recipient) do
+  # 付款(个人或节点):记流水、扣付款人、给收款账户入账,任何一步失败整个事务回滚。
+  defp book!(%{amount: amount} = attrs, payer, recipient) do
     with {:ok, transfer} <- Repo.insert(Transfer.changeset(%Transfer{}, attrs)),
          {:ok, _} <- debit(Repo, payer, amount),
          {:ok, _} <- credit_account(Repo, recipient, amount) do
@@ -403,10 +448,12 @@ defmodule Rice.Grains do
 
   # 这一条 SQL 就是全部的并发控制。`grain_balance >= amount` 让扣款和余额检查
   # 在同一个原子操作里完成,不存在"查完到扣之间被插一脚"的窗口。
-  defp debit(repo, user_id, amount) do
+  defp debit(repo, payer, amount) do
+    {schema, id} = account(payer)
+
     {count, _} =
       repo.update_all(
-        from(u in User, where: u.id == ^user_id and u.grain_balance >= ^amount),
+        from(a in schema, where: a.id == ^id and a.grain_balance >= ^amount),
         inc: [grain_balance: -amount]
       )
 

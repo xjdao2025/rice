@@ -95,6 +95,79 @@ defmodule RiceWeb.Api.TaskFlowTest do
     assert Rice.Grains.reconcile().ok?
   end
 
+  # 人招满了、活在线下做完了,没人在系统里交付:负责人直接确认完成,而不是只能取消
+  test "负责人确认完成:承接中和待验收的都结算,空名额退回,之后可以删除" do
+    {manager, manager_token} = actor("manager")
+    {worker_a, token_a} = actor("worker_a")
+    {worker_b, token_b} = actor("worker_b")
+    funded_node_fixture(manager, 100)
+    now = DateTime.utc_now()
+
+    task_id =
+      post_as(manager_token, ~p"/api/tasks", %{
+        client_request_id: "offline-done",
+        title: "清理水渠",
+        description: "三个人一起",
+        organizer_contact: "节点服务台",
+        reward_amount: 20,
+        capacity: 3,
+        application_deadline: DateTime.add(now, 60),
+        execution_deadline: DateTime.add(now, 120)
+      })
+      |> json_response(201)
+      |> get_in(["data", "id"])
+
+    for token <- [token_a, token_b] do
+      application_id =
+        post_as(token, ~p"/api/tasks/#{task_id}/applications", %{contact: "电话"})
+        |> json_response(201)
+        |> get_in(["data", "my_application", "id"])
+
+      post_as(manager_token, ~p"/api/tasks/#{task_id}/applications/#{application_id}/appoint")
+      |> json_response(200)
+    end
+
+    # 小林交了成果还没验收,阿青什么都没交
+    post_as(token_b, ~p"/api/tasks/#{task_id}/submissions", %{body: "做完了"})
+    |> json_response(201)
+
+    running = detail(manager_token, task_id) |> json_response(200)
+    assert "complete" in running["data"]["allowed_actions"]
+    refute "delete" in running["data"]["allowed_actions"]
+
+    refute "complete" in (detail(token_a, task_id)
+                          |> json_response(200))["data"]["allowed_actions"]
+
+    assert post_as(token_a, ~p"/api/tasks/#{task_id}/complete") |> json_response(403)
+    assert authed(manager_token) |> delete(~p"/api/tasks/#{task_id}") |> json_response(409)
+
+    done = post_as(manager_token, ~p"/api/tasks/#{task_id}/complete") |> json_response(200)
+    assert done["data"]["status"] == "completed"
+    assert done["data"]["reward_status"] == "settled"
+    assert done["data"]["allowed_actions"] == ["delete"]
+
+    assert Map.new(done["data"]["applications"], &{&1["user"]["nickname"], &1["state"]}) ==
+             %{"阿青" => "completed", "小林" => "completed"}
+
+    assert balance(worker_a) == 20
+    assert balance(worker_b) == 20
+    assert node_balance(manager) == {60, 0}
+    assert post_as(manager_token, ~p"/api/tasks/#{task_id}/complete") |> json_response(409)
+    assert Rice.Grains.reconcile().ok?
+
+    # 删除:只有负责人能删,删了谁都看不到,账本还在
+    assert authed(token_a) |> delete(~p"/api/tasks/#{task_id}") |> json_response(403)
+    assert authed(manager_token) |> delete(~p"/api/tasks/#{task_id}") |> json_response(200)
+    assert detail(manager_token, task_id) |> json_response(404)
+    assert detail(nil, task_id) |> json_response(404)
+
+    assert (authed(manager_token)
+            |> get(~p"/api/tasks?mine=created")
+            |> json_response(200))["data"] == []
+
+    assert balance(worker_a) == 20
+  end
+
   test "多人任务:发布、申请、指派、撤销、补位、交付、验收、提前结束,五个身份各自看到什么" do
     actors = Map.new(@labels, &{&1, actor(&1)})
     {manager, manager_token} = actors["manager"]
@@ -269,7 +342,7 @@ defmodule RiceWeb.Api.TaskFlowTest do
 
     views = snapshot.("closed", task_id)
     assert views["manager"]["reward_status"] == "settled"
-    assert views["manager"]["allowed_actions"] == []
+    assert views["manager"]["allowed_actions"] == ["delete"]
     assert views["worker_c"]["my_application_status"] == "released"
     assert views["worker_b"]["my_status"] == "completed"
 
