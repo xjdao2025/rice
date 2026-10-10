@@ -1,0 +1,32 @@
+priv/repo/migrations/20261010010000_create_post_moderations.exs
+  s_8c80ad8d2af680::t_efa40316bc77ab 1-18
+lib/rice/moderation/post_check.ex
+  s_8c80ad8d2af680::t_efa40316bc77ab 1-12
+config/config.exs
+  s_8c80ad8d2af680::t_efa40316bc77ab 30-31
+lib/rice/workers/moderate_posts.ex
+  s_8c80ad8d2af680::t_efa40316bc77ab 1-7
+test/rice/moderation/posts_test.exs
+  s_8c80ad8d2af680::t_ac6afcf8a175ad 1-104
+lib/rice/admin/posts.ex
+  s_8c80ad8d2af680::t_efa40316bc77ab 13-14,29-38,105-118
+  s_8c80ad8d2af680::t_2f2884481758c3 119
+lib/rice/moderation/posts.ex
+  s_8c80ad8d2af680::t_efa40316bc77ab 1-93
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9647237690de227ccd8795d02d10f565de0bc13e",
+  "prompts": {},
+  "sessions": {
+    "s_8c80ad8d2af680": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1cacbb5-9264-4c9e-8d1e-0245a530ded4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
