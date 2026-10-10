@@ -24,6 +24,7 @@ defmodule Rice.Tasks.Task do
     field(:reward_status, :string, default: "none")
     field(:reward_subject_uri, :string)
     field(:round, :integer, default: 1)
+    field(:deleted_at, :utc_datetime_usec)
     field(:search_cursor, :string, virtual: true)
 
     belongs_to(:creator, Rice.Accounts.User)

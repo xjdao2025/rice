@@ -33,7 +33,7 @@ defmodule Rice.Tasks do
   @spec list_tasks(User.t() | nil, map()) :: Pagination.page(Task.t())
   def list_tasks(user, params \\ %{}) do
     query =
-      from(t in Task, as: :task)
+      from(t in Task, as: :task, where: is_nil(t.deleted_at))
       |> scope_visibility(user, params["mine"])
       |> filter_status(params["status"], user, params["mine"])
       |> filter_query(params["q"])
@@ -565,6 +565,10 @@ defmodule Rice.Tasks do
       {:error, :conflict}
     else
       {updates, detail, reward_step} = refund_reward(task, "cancelled")
+      # 草稿从没公开过,取消就是丢弃
+      updates =
+        if status == "draft", do: [deleted_at: DateTime.utc_now()] ++ updates, else: updates
+
       rows = Enum.map(applicant_ids(task), &{&1, "task_cancelled", nil})
       transition_task(task, updates, actor_id, detail, rows, reward_step)
     end
@@ -759,7 +763,9 @@ defmodule Rice.Tasks do
   @spec close(User.t(), Task.t()) :: {:ok, Task.t()} | {:error, error()}
   def close(user, %Task{} = task), do: with_managed(task, user, &close_current(user, &1))
 
-  defp close_current(%User{id: actor_id}, %Task{status: status} = task)
+  defp close_current(user, task, label \\ "已提前结束")
+
+  defp close_current(%User{id: actor_id}, %Task{status: status} = task, label)
        when status in @running do
     scope = round_applications(task)
 
@@ -782,8 +788,8 @@ defmodule Rice.Tasks do
       detail =
         if task.reward_amount > 0 and unused != [],
           do:
-            "已提前结束，向#{if(task.funding_node_id, do: "节点", else: "发布者")}退回 #{task.reward_amount * length(unused)} 稻米",
-          else: "已提前结束"
+            "#{label}，向#{if(task.funding_node_id, do: "节点", else: "发布者")}退回 #{task.reward_amount * length(unused)} 稻米",
+          else: label
 
       with {:ok, released} <- move_applications(Repo, scope, "released", reward_slot: nil),
            {:ok, not_selected} <- move_applications(Repo, scope, "not_selected"),
@@ -810,7 +816,72 @@ defmodule Rice.Tasks do
     end
   end
 
-  defp close_current(%User{}, %Task{}), do: {:error, :conflict}
+  defp close_current(%User{}, %Task{}, _label), do: {:error, :conflict}
+
+  @doc """
+  负责人确认任务完成:还在承接的人(含待验收)都记为完成并发放奖励,其余按提前结束处理。
+  线下已经做完、没人在系统里交付成果时,用它代替逐个验收。
+  """
+  @spec complete(User.t(), Task.t()) :: {:ok, Task.t()} | {:error, error()}
+  def complete(user, %Task{} = task),
+    do: with_managed(task, user, &complete_current(user, &1))
+
+  defp complete_current(%User{id: actor_id} = user, %Task{status: status} = task)
+       when status in @running do
+    working =
+      Repo.all(
+        from(a in round_applications(task), where: a.status in ~w(appointed overdue under_review))
+      )
+
+    cond do
+      working == [] ->
+        {:error, :conflict}
+
+      # 和验收一样,不能给自己发奖
+      Enum.any?(working, &(&1.user_id == actor_id)) ->
+        {:error, :forbidden}
+
+      true ->
+        ids = Enum.map(working, & &1.user_id)
+
+        Repo.update_all(
+          from(s in Submission,
+            where:
+              s.task_id == ^task.id and s.round == ^task.round and s.user_id in ^ids and
+                is_nil(s.final_status) and is_nil(s.review_reason)
+          ),
+          set: [final_status: "approved"]
+        )
+
+        with :ok <-
+               all_ok(working, fn application ->
+                 with :ok <- settle_application_reward(task, application),
+                      :ok <- move_one(app_scope(application), "completed"),
+                      do: {:ok, application}
+               end),
+             :ok <-
+               notify(
+                 task,
+                 actor_id,
+                 Enum.map(ids, &{&1, "result_approved", reward_detail(task, :settled)})
+               ),
+             do: close_current(user, task, "已确认完成")
+    end
+  end
+
+  defp complete_current(%User{}, %Task{}), do: {:error, :conflict}
+
+  @doc "软删除已结束的任务;列表和详情不再出现,账本和事件都留着。"
+  @spec delete(User.t(), Task.t()) :: {:ok, Task.t()} | {:error, error()}
+  def delete(user, %Task{} = task) do
+    with_managed(task, user, fn
+      %Task{status: status} = current when status in ~w(completed expired cancelled) ->
+        Repo.update(Ecto.Changeset.change(current, deleted_at: DateTime.utc_now()))
+
+      _ ->
+        {:error, :conflict}
+    end)
+  end
 
   @spec submit_result(User.t(), Task.t(), map()) :: {:ok, Task.t()} | {:error, error()}
   def submit_result(user, %Task{} = task, attrs),
@@ -1001,11 +1072,12 @@ defmodule Rice.Tasks do
 
   defp execution_overdue?(task, now), do: past?(task.execution_deadline, now)
 
+  defp visible_to?(%Task{deleted_at: %DateTime{}}, _user), do: false
+
   defp visible_to?(%Task{status: "draft", creator_id: creator_id}, %User{id: creator_id}),
     do: true
 
   defp visible_to?(%Task{status: "draft"}, _user), do: false
-  defp visible_to?(%Task{status: "cancelled"} = task, user), do: private_viewer?(task, user)
 
   defp visible_to?(%Task{status: "open", application_deadline: deadline} = task, user),
     do: not past?(deadline, visibility_cutoff()) or private_viewer?(task, user)
@@ -1033,7 +1105,7 @@ defmodule Rice.Tasks do
 
     from(t in query,
       where:
-        t.status not in ["draft", "cancelled"] and
+        t.status != "draft" and
           (t.status != "expired" or t.application_deadline > ^cutoff) and
           (t.status != "open" or is_nil(t.application_deadline) or
              t.application_deadline > ^cutoff)

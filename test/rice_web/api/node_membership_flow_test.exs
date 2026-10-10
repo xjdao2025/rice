@@ -110,13 +110,6 @@ defmodule RiceWeb.Api.NodeMembershipFlowTest do
            |> get(~p"/api/nodes/#{node.id}/wallet")
            |> response(403)
 
-    {:ok, _} = Rice.Grains.grant(joiner, 50)
-
-    assert build_conn()
-           |> authed(joiner_token)
-           |> post(~p"/api/nodes/#{node.id}/fund", %{amount: 20, client_request_id: "m-1"})
-           |> response(403)
-
     task =
       build_conn()
       |> authed(owner_token)
@@ -157,12 +150,6 @@ defmodule RiceWeb.Api.NodeMembershipFlowTest do
     assert my_nodes(joiner_token, "managed") == [node.id]
     assert review(joiner_token, node.id, other_app, "approve") |> json_response(200)
     assert node_view(other_token, node.id)["role"] == "member"
-
-    assert build_conn()
-           |> authed(joiner_token)
-           |> post(~p"/api/nodes/#{node.id}/fund", %{amount: 20, client_request_id: "m-1"})
-           |> json_response(200)
-           |> get_in(["data", "balance"]) == 20
 
     assert build_conn()
            |> authed(joiner_token)

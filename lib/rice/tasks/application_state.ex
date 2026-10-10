@@ -13,8 +13,8 @@ defmodule Rice.Tasks.ApplicationState do
 
   @transitions %{
     "pending" => ~w(appointed rejected not_selected cancelled expired),
-    "appointed" => ~w(overdue under_review released),
-    "overdue" => ~w(appointed under_review released),
+    "appointed" => ~w(overdue under_review released completed),
+    "overdue" => ~w(appointed under_review released completed),
     "under_review" => ~w(appointed overdue completed),
     "not_selected" => ~w(pending),
     "completed" => [],

@@ -258,6 +258,7 @@ defmodule RiceWeb.Router do
     patch "/nodes/:node_id/members/:user_id", NodeController, :update_member
     get "/nodes/:node_id/wallet", NodeWalletController, :show
     post "/nodes/:node_id/fund", NodeWalletController, :fund
+    post "/nodes/:node_id/grain_transfers", NodeWalletController, :transfer
     post "/nodes/:node_id/applications/:application_id/approve", NodeController, :approve
     post "/nodes/:node_id/applications/:application_id/reject", NodeController, :reject
     post "/events", EventController, :create
@@ -275,6 +276,8 @@ defmodule RiceWeb.Router do
     post "/tasks/:task_id/publish", TaskController, :publish
     post "/tasks/:task_id/cancel", TaskController, :cancel
     post "/tasks/:task_id/close", TaskController, :close
+    post "/tasks/:task_id/complete", TaskController, :complete
+    delete "/tasks/:task_id", TaskController, :delete
     post "/tasks/:task_id/applications", TaskController, :apply
 
     post "/tasks/:task_id/applications/:application_id/release",
