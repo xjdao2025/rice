@@ -2,8 +2,7 @@ defmodule Rice.Notifications.AliyunSms do
   @moduledoc """
   阿里云短信(Dysmsapi 2017-05-25)。
 
-  没有引入阿里云 SDK —— 这里只用到一个 Action,签名算法是公开且固定的
-  (RPC 风格 v1.0,HMAC-SHA1),自己签比拖进一整个 SDK 划算。
+  签名见 `Rice.Aliyun`。
 
   只发验证码模板。模板参数是 `{"code": "123456"}`,和 core 的
   `AliyunSmsCodeDto` 一致 —— 生产上的模板已经按这个字段名审过了,换名字要重新报备。
@@ -88,46 +87,8 @@ defmodule Rice.Notifications.AliyunSms do
   本地不测就只能到生产才发现。
   """
   @spec signed(map(), keyword(), String.t() | nil, String.t() | nil) :: map()
-  def signed(params, cfg, nonce \\ nil, timestamp \\ nil) do
-    params =
-      Map.merge(params, %{
-        "Format" => "JSON",
-        "Version" => @api_version,
-        "AccessKeyId" => cfg[:access_key_id],
-        "SignatureMethod" => "HMAC-SHA1",
-        "SignatureVersion" => "1.0",
-        "SignatureNonce" => nonce || nonce(),
-        "Timestamp" => timestamp || timestamp()
-      })
-
-    Map.put(params, "Signature", signature(params, cfg[:access_key_secret]))
-  end
-
-  defp signature(params, secret) do
-    canonical =
-      params
-      |> Enum.sort_by(fn {k, _} -> k end)
-      |> Enum.map_join("&", fn {k, v} -> encode(k) <> "=" <> encode(to_string(v)) end)
-
-    string_to_sign = "GET&" <> encode("/") <> "&" <> encode(canonical)
-
-    :crypto.mac(:hmac, :sha, secret <> "&", string_to_sign) |> Base.encode64()
-  end
-
-  # 阿里云要的是 RFC3986,而 URI.encode_www_form 是 form 编码:
-  # 空格变 `+`、`~` 被转义、`*` 不转义。三处都得掰回来。
-  defp encode(value) do
-    value
-    |> URI.encode_www_form()
-    |> String.replace("+", "%20")
-    |> String.replace("*", "%2A")
-    |> String.replace("%7E", "~")
-  end
-
-  defp nonce, do: :crypto.strong_rand_bytes(16) |> Base.encode16(case: :lower)
-
-  defp timestamp,
-    do: DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601()
+  def signed(params, cfg, nonce \\ nil, timestamp \\ nil),
+    do: Rice.Aliyun.signed("GET", params, cfg, @api_version, nonce, timestamp)
 
   defp config, do: Application.get_env(:rice, __MODULE__, [])
   defp http, do: Application.get_env(:rice, :aliyun_http, __MODULE__.Http)

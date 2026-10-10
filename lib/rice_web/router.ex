@@ -271,6 +271,7 @@ defmodule RiceWeb.Router do
     post "/events/:event_id/applications/:application_id/reject", EventController, :reject
     post "/events/:event_id/applications/:application_id/remove", EventController, :remove
     post "/events/:event_id/applications/:application_id/withdraw", EventController, :withdraw
+    post "/moderation/check", ModerationController, :check
     post "/tasks", TaskController, :create
     patch "/tasks/:task_id", TaskController, :update
     post "/tasks/:task_id/publish", TaskController, :publish

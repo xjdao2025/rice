@@ -146,6 +146,16 @@ if config_env() == :prod do
     template_code: System.get_env("ALIYUN_SMS_TEMPLATE_CODE"),
     endpoint: System.get_env("ALIYUN_SMS_ENDPOINT") || "https://dysmsapi.aliyuncs.com"
 
+  # 内容安全默认沿用短信那把 AK(core 时代就是同一个 RAM 用户)
+  config :rice, Rice.Moderation,
+    access_key_id:
+      System.get_env("ALIYUN_GREEN_ACCESS_KEY_ID") || System.get_env("ALIYUN_SMS_ACCESS_KEY_ID"),
+    access_key_secret:
+      System.get_env("ALIYUN_GREEN_ACCESS_KEY_SECRET") ||
+        System.get_env("ALIYUN_SMS_ACCESS_KEY_SECRET"),
+    endpoint:
+      System.get_env("ALIYUN_GREEN_ENDPOINT") || "https://green-cip.cn-hangzhou.aliyuncs.com"
+
   config :rice, Rice.Notifications.Smtp,
     sender_name: System.get_env("SMTP_SENDER_NAME") || "乡建DAO",
     sender_address: System.get_env("SMTP_SENDER_ADDRESS") || "no-reply@xjdao.xyz"
