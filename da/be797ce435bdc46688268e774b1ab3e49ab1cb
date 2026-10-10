@@ -1,0 +1,65 @@
+lib/rice/tasks.ex
+  s_8c80ad8d2af680::t_c066806c684506 36,568,821-858,861-862,868-884,1108
+  s_8c80ad8d2af680::t_c95a1e1b72ee8d 569-571,766-768,791-792,819,859-860,863-867
+  s_8c80ad8d2af680::t_333af21f4a1712 1075
+  s_8c80ad8d2af680::t_9352fcead253a9 820,1076
+test/rice_web/api/task_flow_test.exs
+  s_8c80ad8d2af680::t_22c52406d18171 98-170,345
+test/rice_web/api/community_wallet_test.exs
+  s_8c80ad8d2af680::t_7ea85fda3441c6 5,20-21,34-35,54-99
+  s_8c80ad8d2af680::t_57d3797e279c60 100-102
+lib/rice_web/api/task_json.ex
+  s_8c80ad8d2af680::t_b5de6e1686f4ab 186,203-204
+  s_8c80ad8d2af680::t_f6fe3b4097170c 205-207
+test/rice_web/api/grain_flow_test.exs
+  s_8c80ad8d2af680::t_e2dbfdb50eb1d7 185,187,192
+lib/rice/tasks/application_state.ex
+  s_8c80ad8d2af680::t_c066806c684506 16-17
+lib/rice_web/api/event_json.ex
+  s_8c80ad8d2af680::t_71c630c340802e 16
+priv/repo/migrations/20261010000000_add_task_deletion_and_event_reapply.exs
+  s_8c80ad8d2af680::t_c7cfd0bdfc8808 1-25
+lib/rice_web/router.ex
+  s_8c80ad8d2af680::t_f6fe3b4097170c 278-279
+  s_8c80ad8d2af680::t_8d5a6f71f70e38 260
+lib/rice/grains.ex
+  s_8c80ad8d2af680::t_b76401afb2bb44 70,260,303,311-356,439,451-453,456
+  s_8c80ad8d2af680::t_5c74719950b40c 438
+  s_8c80ad8d2af680::t_0dbde4314b4ab1 357-359
+lib/rice_web/api/task_controller.ex
+  s_8c80ad8d2af680::t_f6fe3b4097170c 50-53
+test/rice/tasks_test.exs
+  s_8c80ad8d2af680::t_22c52406d18171 744,753-755,758-775,1366-1367
+lib/rice_web/api/node_wallet_controller.ex
+  s_8c80ad8d2af680::t_8d5a6f71f70e38 25
+  s_8c80ad8d2af680::t_5c74719950b40c 14,16-24,26-27,29-33,35-38,42-50
+  s_8c80ad8d2af680::t_58d6f2873c03f9 51
+lib/rice/events.ex
+  s_8c80ad8d2af680::t_71c630c340802e 10-12
+  s_8c80ad8d2af680::t_48090677abda78 342-348,568,579-580,588-593
+  s_8c80ad8d2af680::t_5f400aa871986a 594-595
+test/rice/events_test.exs
+  s_8c80ad8d2af680::t_919f6318995c65 420,443-453,561,585
+lib/rice/grains/transfer.ex
+  s_8c80ad8d2af680::t_b76401afb2bb44 7,53
+test/rice_web/api/event_controller_test.exs
+  s_8c80ad8d2af680::t_919f6318995c65 176-177,191-202
+lib/rice/tasks/task.ex
+  s_8c80ad8d2af680::t_c066806c684506 27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "dabe797ce435bdc46688268e774b1ab3e49ab1cb",
+  "prompts": {},
+  "sessions": {
+    "s_8c80ad8d2af680": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1cacbb5-9264-4c9e-8d1e-0245a530ded4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
