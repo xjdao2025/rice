@@ -32,6 +32,13 @@ defmodule Rice.Moderation do
     end
   end
 
+  @doc "图片给阿里云的地址:PDS 公开的 getBlob,阿里云自己来取。"
+  @spec blob_url(String.t(), String.t()) :: String.t()
+  def blob_url(did, cid) do
+    pds = Application.fetch_env!(:rice, :pds)[:public_url]
+    "#{pds}/xrpc/com.atproto.sync.getBlob?" <> URI.encode_query(%{did: did, cid: cid})
+  end
+
   @spec enabled?() :: boolean()
   def enabled?, do: config()[:access_key_id] not in [nil, ""]
 
