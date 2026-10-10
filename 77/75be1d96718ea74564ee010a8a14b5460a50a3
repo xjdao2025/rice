@@ -1,0 +1,40 @@
+lib/rice/moderation.ex
+  s_8c80ad8d2af680::t_52cb278145bb37 54-61,63-75
+  s_8c80ad8d2af680::t_cd838d7bf4edea 1-53,62,76-113
+test/rice_web/api/moderation_controller_test.exs
+  s_8c80ad8d2af680::t_9d3dc482f0c934 1-118
+test/rice_web/api/node_controller_test.exs
+  s_8c80ad8d2af680::t_9d3dc482f0c934 80-83
+lib/rice/notifications/aliyun_sms.ex
+  s_8c80ad8d2af680::t_809ab5436ee2b0 5,90-91
+lib/rice/aliyun.ex
+  s_8c80ad8d2af680::t_809ab5436ee2b0 1-54
+priv/repo/migrations/20260901000000_add_business_schema.exs
+  s_8c80ad8d2af680::t_9d3dc482f0c934 271
+lib/rice_web/api/moderation_controller.ex
+  s_8c80ad8d2af680::t_58cf927d89c715 1-20,25-31
+  s_8c80ad8d2af680::t_9d3dc482f0c934 21-24
+lib/rice_web/router.ex
+  s_8c80ad8d2af680::t_58cf927d89c715 273
+config/runtime.exs
+  s_8c80ad8d2af680::t_58cf927d89c715 144-152
+  s_8c80ad8d2af680::t_aa8f0c9852acfa 143
+lib/rice_web/api/fallback_controller.ex
+  s_8c80ad8d2af680::t_58cf927d89c715 32-34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7775be1d96718ea74564ee010a8a14b5460a50a3",
+  "prompts": {},
+  "sessions": {
+    "s_8c80ad8d2af680": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1cacbb5-9264-4c9e-8d1e-0245a530ded4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
