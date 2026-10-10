@@ -12,6 +12,7 @@ defmodule Rice.Moderation do
   没配密钥时不审(开发、测试);配了但阿里云出错时返回 `:unavailable`,由调用方拒绝发布
   —— 和 core 一样,宁可发不出去也不放过。
   """
+  import Ecto.Query, only: [from: 2]
   require Logger
 
   @version "2022-03-02"
@@ -37,6 +38,32 @@ defmodule Rice.Moderation do
   def blob_url(did, cid) do
     pds = Application.fetch_env!(:rice, :pds)[:public_url]
     "#{pds}/xrpc/com.atproto.sync.getBlob?" <> URI.encode_query(%{did: did, cid: cid})
+  end
+
+  @doc """
+  记下发布前审核通过的内容(作者、正文、图片 CID)。帖子写进 PDS 后,事后补审见到
+  一模一样的内容就不再交给阿里云 —— 正常发的帖子只审一次。
+  """
+  @spec remember_pass(String.t(), String.t() | nil, [String.t()]) :: :ok
+  def remember_pass(did, text, cids) do
+    Rice.Repo.insert!(%Rice.Moderation.Pass{fingerprint: fingerprint(did, text, cids)},
+      on_conflict: :nothing,
+      conflict_target: :fingerprint
+    )
+
+    :ok
+  end
+
+  @spec passed?(String.t(), String.t() | nil, [String.t()]) :: boolean()
+  def passed?(did, text, cids),
+    do:
+      Rice.Repo.exists?(
+        from p in Rice.Moderation.Pass, where: p.fingerprint == ^fingerprint(did, text, cids)
+      )
+
+  defp fingerprint(did, text, cids) do
+    :crypto.hash(:sha256, Enum.join([did, String.trim(text || "") | cids], "\n"))
+    |> Base.encode16(case: :lower)
   end
 
   @spec enabled?() :: boolean()

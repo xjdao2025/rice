@@ -54,6 +54,17 @@ defmodule RiceWeb.Api.ModerationControllerTest do
     assert check(token, %{images: List.duplicate("bafygood", 10)}) |> json_response(422)
   end
 
+  test "通过的内容记下指纹,没通过的不记", %{user: user, token: token} do
+    assert check(token, %{text: " 去插秧 ", images: ["bafygood"]}) |> json_response(200)
+    assert check(token, %{text: "转发领导人讲话"}) |> json_response(422)
+
+    # 指纹只认作者、去掉首尾空白的正文和图片 CID
+    assert Rice.Moderation.passed?(user.did, "去插秧", ["bafygood"])
+    refute Rice.Moderation.passed?(user.did, "去插秧", [])
+    refute Rice.Moderation.passed?("did:plc:other", "去插秧", ["bafygood"])
+    refute Rice.Moderation.passed?(user.did, "转发领导人讲话", [])
+  end
+
   test "阿里云出错时拒绝发布;没登录不能用", %{token: token} do
     assert check(token, %{text: "宕机"}) |> json_response(503)
     assert build_conn() |> post(~p"/api/moderation/check", %{text: "x"}) |> json_response(401)
