@@ -10,18 +10,25 @@ defmodule RiceWeb.Api.ModerationController do
   def check(conn, params) do
     user = conn.assigns.current_user
 
-    images =
-      for cid <- List.wrap(params["images"]),
-          is_binary(cid),
-          do: Rice.Moderation.blob_url(user.did, cid)
+    cids = for cid <- List.wrap(params["images"]), is_binary(cid), do: cid
+    images = Enum.map(cids, &Rice.Moderation.blob_url(user.did, &1))
 
     # 一帖最多 9 张图,和前端一致;多出来的不能悄悄跳过不审
     with true <- length(images) <= 9 || {:error, :unprocessable_entity},
          :ok <- Rice.RateLimit.hit({:moderation, user.id}, 120, 3600) do
       case Rice.Moderation.check(params["text"], images) do
-        :ok -> json(conn, %{data: %{allowed: true}})
-        {:blocked, _reasons} -> {:error, :content_blocked}
-        {:error, :unavailable} -> {:error, :moderation_unavailable}
+        :ok ->
+          # 记下指纹,帖子写进 PDS 后的事后补审就不必再审一遍
+          if Rice.Moderation.enabled?(),
+            do: Rice.Moderation.remember_pass(user.did, params["text"], cids)
+
+          json(conn, %{data: %{allowed: true}})
+
+        {:blocked, _reasons} ->
+          {:error, :content_blocked}
+
+        {:error, :unavailable} ->
+          {:error, :moderation_unavailable}
       end
     end
   end
