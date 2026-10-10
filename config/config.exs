@@ -28,7 +28,7 @@ config :rice, Oban,
        {"* * * * *", Rice.Workers.CloseProposals},
        {"* * * * *", Rice.Workers.ExpireTasks},
        {"* * * * *", Rice.Workers.StartEvents},
-       {"* * * * *", Rice.Workers.ModeratePosts}
+       {"*/5 * * * *", Rice.Workers.ModeratePosts}
      ]}
   ]
 

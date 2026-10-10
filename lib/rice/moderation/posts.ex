@@ -1,15 +1,18 @@
 defmodule Rice.Moderation.Posts do
   @moduledoc """
   事后补审。发帖前的审核在 rice-front 里调 `/api/moderation/check`,但帖子是直接写进
-  用户自己的 PDS 的,绕过前端也能发。这里定时从审核服务(aerox labeler 的 `queryPosts`)
+  用户自己的 PDS 的,绕过前端也能发。这里每 5 分钟从审核服务(aerox labeler 的 `queryPosts`)
   取最近一天的新帖,没审过的交给 `Rice.Moderation`;不通过就让审核服务打 `!hide` 标签,
   rice-front 见到这个标签就不显示,后台可以撤掉标签恢复。
+
+  从前端正常发的帖子,发布前已经审过、留了指纹(`Rice.Moderation.remember_pass/3`),
+  内容一模一样就直接记为通过,不再花一次阿里云的钱。
 
   `queryPosts` 只给顶层帖,评论只有发布前那一道。
   """
   import Ecto.Query
 
-  alias Rice.Moderation.PostCheck
+  alias Rice.Moderation.{Pass, PostCheck}
   alias Rice.Repo
 
   @pages 10
@@ -18,6 +21,8 @@ defmodule Rice.Moderation.Posts do
   @spec scan(DateTime.t()) :: :ok | {:error, term()}
   def scan(now \\ DateTime.utc_now()) do
     if Rice.Moderation.enabled?() do
+      # 指纹只用来对上一天之内的新帖,留两天足够
+      Repo.delete_all(from p in Pass, where: p.inserted_at < ^DateTime.add(now, -2, :day))
       since = now |> DateTime.add(-1, :day) |> DateTime.to_iso8601()
       scan_page([since: since, takenDown: "false", limit: 100], @pages)
     else
@@ -48,11 +53,16 @@ defmodule Rice.Moderation.Posts do
   end
 
   defp review(%{"uri" => uri, "cid" => cid} = post, :ok) do
-    images =
-      for blob <- image_cids(post["record"]),
-          do: Rice.Moderation.blob_url(post["author"]["did"], blob)
+    did = post["author"]["did"]
+    text = post["record"]["text"]
+    cids = image_cids(post["record"])
 
-    case Rice.Moderation.check(post["record"]["text"], images) do
+    verdict =
+      if Rice.Moderation.passed?(did, text, cids),
+        do: :ok,
+        else: Rice.Moderation.check(text, Enum.map(cids, &Rice.Moderation.blob_url(did, &1)))
+
+    case verdict do
       :ok ->
         {:cont, record(uri, cid, "ok", [])}
 

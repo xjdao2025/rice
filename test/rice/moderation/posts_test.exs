@@ -88,6 +88,25 @@ defmodule Rice.Moderation.PostsTest do
     assert Repo.all(from c in PostCheck, select: c.cid) == ["cid-1"]
   end
 
+  test "发布前审过的内容不再找阿里云,改了内容的照审;过期指纹清掉" do
+    Rice.Moderation.remember_pass("did:plc:alice", "原来的话", [])
+
+    Repo.update_all(Rice.Moderation.Pass,
+      set: [inserted_at: DateTime.add(DateTime.utc_now(), -3, :day)]
+    )
+
+    Rice.Moderation.remember_pass("did:plc:alice", "去插秧", [])
+
+    expect(Rice.PostClientMock, :query, fn _ -> page([post("1", "去插秧"), post("2", "原来的话")]) end)
+
+    assert Posts.scan() == :ok
+    assert_received {:green, _, %{"ServiceParameters" => params}}
+    assert params =~ "原来的话"
+    refute_received {:green, _, _}
+    assert Repo.aggregate(PostCheck, :count) == 2
+    assert Repo.aggregate(Rice.Moderation.Pass, :count) == 1
+  end
+
   test "没配密钥时不审,也不记" do
     Application.put_env(:rice, Rice.Moderation, [])
     assert Posts.scan() == :ok
