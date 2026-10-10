@@ -268,9 +268,7 @@ defmodule Rice.Repo.Migrations.AddBusinessSchema do
                  "(fee_amount > 0 and payment_status = 'settled' and status = 'approved')"
            )
 
-    create constraint(:event_applications, :event_applications_round_positive,
-             check: "round > 0"
-           )
+    create constraint(:event_applications, :event_applications_round_positive, check: "round > 0")
 
     create table(:event_history, primary_key: false) do
       tsid_primary_key()

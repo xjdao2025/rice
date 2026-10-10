@@ -77,7 +77,10 @@ defmodule RiceWeb.Api.NodeControllerTest do
     end
 
     test "入会申请仅本人和本节点管理员可见，节点余额公开", ctx do
-      Rice.Repo.update!(Ecto.Changeset.change(ctx.node, grain_balance: 123, grain_frozen_balance: 5))
+      Rice.Repo.update!(
+        Ecto.Changeset.change(ctx.node, grain_balance: 123, grain_frozen_balance: 5)
+      )
+
       data = apply_join(ctx, "我的私人申请理由")
       application_id = data["my_application"]["id"]
       assert data["my_application"]["status"] == "pending"

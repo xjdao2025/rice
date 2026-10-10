@@ -29,6 +29,9 @@ defmodule RiceWeb.Api.FallbackController do
     cannot_delete_superuser: {:unprocessable_entity, %{detail: "超级管理员不能删除"}},
     cannot_delete_self: {:unprocessable_entity, %{detail: "不能删除自己"}},
     unprocessable_entity: {:unprocessable_entity, %{detail: "请求无法处理"}},
+    # 内容审核:不说命中了什么,免得被拿来试探
+    content_blocked: {:unprocessable_entity, %{detail: "内容可能包含违规信息，请修改后再发布"}},
+    moderation_unavailable: {:service_unavailable, %{detail: "内容审核暂时不可用，请稍后再发布"}},
     # 验证码
     too_many_attempts: {:too_many_requests, %{detail: "尝试次数过多,请重新获取验证码"}},
     code_expired: {:unprocessable_entity, %{code: ["验证码已过期"]}},
