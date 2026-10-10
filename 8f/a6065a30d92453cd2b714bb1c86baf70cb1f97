@@ -1,0 +1,21 @@
+test/rice_web/api/moderation_controller_test.exs
+  s_8c80ad8d2af680::t_d040eb03a436ca 7
+test/support/fake_green.ex
+  s_8c80ad8d2af680::t_e0530bca88c3ed 1-50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8fa6065a30d92453cd2b714bb1c86baf70cb1f97",
+  "prompts": {},
+  "sessions": {
+    "s_8c80ad8d2af680": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1cacbb5-9264-4c9e-8d1e-0245a530ded4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
