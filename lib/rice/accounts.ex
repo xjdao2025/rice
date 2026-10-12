@@ -124,6 +124,7 @@ defmodule Rice.Accounts do
         preload: [:avatar]
     )
     |> put_semi_wallet()
+    |> put_superuser()
   end
 
   def get_user_by_legacy_id(_), do: nil
@@ -589,7 +590,7 @@ defmodule Rice.Accounts do
       {token, _user} ->
         # 只在超过一分钟没更新时才写,避免每个请求都产生一次写
         maybe_touch(token, now)
-        Repo.preload(token, user: :avatar).user |> put_semi_wallet()
+        Repo.preload(token, user: :avatar).user |> put_semi_wallet() |> put_superuser()
     end
   end
 
@@ -613,6 +614,28 @@ defmodule Rice.Accounts do
   end
 
   def put_semi_wallet(other), do: other
+
+  @doc """
+  标出后台超级管理员:手机号对上 `admin_users` 里一条未删未停用的 superuser,
+  这个 C 端用户就自动拿到全平台的任务 / 活动管理权,以及用个人稻米发任务的资格
+  —— 见 `Rice.Tasks.can_manage?/2`、`Rice.Tasks.create_task/2`。
+
+  同 `put_semi_wallet/1`:在取当前用户时查一次,之后判权限全走内存。`(phone_region, phone)`
+  上有唯一索引,多出来的是固定一次索引查询,不随渲染条数增长。
+  """
+  @spec put_superuser(User.t() | nil) :: User.t() | nil
+  def put_superuser(%User{phone: phone} = user) when is_binary(phone) do
+    super? =
+      Repo.exists?(
+        from a in Rice.Admin.AdminUser,
+          where: a.superuser and a.phone_region == ^user.phone_region and a.phone == ^phone,
+          where: is_nil(a.deleted_at) and is_nil(a.disabled_at)
+      )
+
+    if super?, do: %{user | superuser: true}, else: user
+  end
+
+  def put_superuser(other), do: other
 
   defp maybe_touch(token, now) do
     stale? =

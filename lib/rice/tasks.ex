@@ -3,8 +3,8 @@ defmodule Rice.Tasks do
   节点任务：草稿、发布、申请、接收、交付与验收，每个名额独立结算。
 
   节点管理员代表节点发布，由节点账户出资；没有可管节点、但有 `can_publish_tasks`
-  的人以个人名义发布，由自己的余额出资。单人任务就是只有一个名额的多人任务，
-  两者剩下的差别见 docs/tasks.md。
+  的人（后台超管同等待遇）以个人名义发布，由自己的余额出资。单人任务就是只有一个
+  名额的多人任务，两者剩下的差别见 docs/tasks.md。
   """
   import Ecto.Query
 
@@ -100,6 +100,10 @@ defmodule Rice.Tasks do
   @spec can_manage?(Task.t(), User.t() | nil) :: boolean()
   def can_manage?(_task, nil), do: false
 
+  # 后台超管管全平台的任务。这条要在下面几条之前 —— draft / 个人出资那两条
+  # 只看 creator_id,会先匹配掉并把超管挡回去。
+  def can_manage?(_task, %User{superuser: true}), do: true
+
   def can_manage?(%Task{status: "draft", creator_id: id} = task, user),
     do: id == user.id and (is_nil(task.node_id) or Rice.Community.admin?(node_of(task), user))
 
@@ -112,6 +116,8 @@ defmodule Rice.Tasks do
     do: if(can_manage?(task, user), do: :ok, else: {:error, :forbidden})
 
   @spec can_edit?(Task.t(), User.t() | nil) :: boolean()
+  def can_edit?(%Task{}, %User{superuser: true}), do: true
+
   def can_edit?(%Task{status: "draft"} = task, user), do: can_manage?(task, user)
   def can_edit?(%Task{funding_node_id: nil} = task, user), do: can_manage?(task, user)
 
@@ -175,6 +181,7 @@ defmodule Rice.Tasks do
 
   # 发任务的资格是"或":节点管理员用节点的稻米;没有可管节点、但平台给了
   # `can_publish_tasks` 的人用自己的稻米(返回 nil 节点,即个人出资)。
+  # 后台超管按 `can_publish_tasks` 同等对待,不额外放开节点出资 —— 那是花别人的钱。
   defp publishing_node(user, nil) do
     ids = Rice.Community.managed_node_ids(user)
 
@@ -193,6 +200,8 @@ defmodule Rice.Tasks do
       {:error, :forbidden}
     end
   end
+
+  defp personal_publisher(%User{superuser: true}), do: {:ok, nil}
 
   defp personal_publisher(user) do
     if Repo.get!(User, user.id).can_publish_tasks, do: {:ok, nil}, else: {:error, :forbidden}

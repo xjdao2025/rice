@@ -745,6 +745,9 @@ defmodule Rice.Events do
   @spec can_manage?(Event.t(), User.t() | nil) :: boolean()
   def can_manage?(_event, nil), do: false
 
+  # 后台超管管全平台的活动,但办活动仍要 `require_node!`(见下)——那是花钱的口子。
+  def can_manage?(_event, %User{superuser: true}), do: true
+
   def can_manage?(%Event{status: "draft", creator_id: creator_id} = event, user),
     do: creator_id == user.id and Rice.Community.admin?(node_of(event), user)
 
@@ -754,6 +757,8 @@ defmodule Rice.Events do
   def can_manage?(event, user), do: Rice.Community.admin?(node_of(event), user)
 
   @spec can_edit?(Event.t(), User.t() | nil) :: boolean()
+  def can_edit?(%Event{}, %User{superuser: true}), do: true
+
   def can_edit?(%Event{status: "draft"} = event, user), do: can_manage?(event, user)
 
   def can_edit?(%Event{} = event, %User{} = user), do: Rice.Community.admin?(node_of(event), user)
@@ -765,6 +770,8 @@ defmodule Rice.Events do
 
   defp require_host!(user, event), do: require!(can_manage?(event, user), :forbidden)
 
+  # 动节点的钱的判断,只认节点管理员 —— 后台超管在这里不放行,放开就等于
+  # 能花任意节点的稻米。超管因此只能在自己当管理员的节点下办活动。
   defp require_node!(user, node_id) do
     require!(Rice.Tsid.valid?(node_id), :forbidden)
 
