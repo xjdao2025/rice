@@ -181,6 +181,39 @@ defmodule RiceWeb.Api.TaskControllerTest do
     assert "edit" in detail["data"]["allowed_actions"]
   end
 
+  # 前端发布任务是「先存草稿,再发布」,第二步会重新问一次出资资格
+  test "超管先存草稿再发布,不会在最后一步被拒" do
+    {superuser, token} = superuser_with_token()
+    Rice.Grains.grant(superuser, 50)
+
+    draft =
+      build_conn()
+      |> authed(token)
+      |> post(~p"/api/tasks", %{
+        title: "巡查河道",
+        description: "先存草稿再发布",
+        organizer_contact: "我的电话",
+        reward_amount: 20,
+        client_request_id: "superuser-draft-then-publish",
+        status: "draft"
+      })
+      |> json_response(201)
+
+    assert draft["data"]["status"] == "draft"
+
+    published =
+      build_conn()
+      |> authed(token)
+      |> post(~p"/api/tasks/#{draft["data"]["id"]}/publish")
+      |> json_response(200)
+
+    assert published["data"]["status"] == "open"
+    assert published["data"]["funding_node_id"] == nil
+
+    assert %{grain_balance: 30, grain_frozen_balance: 20} =
+             Rice.Repo.get!(Rice.Accounts.User, superuser.id)
+  end
+
   # 个人出资的任务没有节点:申请、指派、交付、验收、编辑都不能去读节点
   test "个人出资的任务走完整流程,奖励从发布者自己的稻米发出" do
     {person, token} = user_with_token()

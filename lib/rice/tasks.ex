@@ -533,14 +533,15 @@ defmodule Rice.Tasks do
     with_locked_task(task.id, &publish_current_draft(user, &1))
   end
 
+  # 出资资格要问**传进来的那个 user**:重建 `%User{id: creator_id}` 会把
+  # `superuser` 这类取当前用户时才填的虚拟字段丢掉,超管发布自己的草稿就成了 403。
+  # 模式里 creator_id 已经和 user.id 相等,重建没有别的作用。
   defp publish_current_draft(
-         %User{id: creator_id},
+         %User{id: creator_id} = user,
          %Task{creator_id: creator_id, status: "draft"} = task
        ) do
     publisher =
-      if task.node_id,
-        do: publishing_node(%User{id: creator_id}, task.node_id),
-        else: personal_publisher(%User{id: creator_id})
+      if task.node_id, do: publishing_node(user, task.node_id), else: personal_publisher(user)
 
     with {:ok, _node} <- publisher do
       case Task.publish_changeset(task) do
