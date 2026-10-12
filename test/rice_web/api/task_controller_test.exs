@@ -5,7 +5,7 @@ defmodule RiceWeb.Api.TaskControllerTest do
   # 现在管理员名单随节点预加载,一页的查询数和条数无关
   test "任务列表的查询次数不随条数增长" do
     publisher = task_publisher_fixture()
-    funded_publisher_fixture(publisher, 1_000)
+    funded_node_fixture(publisher, 1_000)
     {admin, admin_token} = user_with_token()
     node = Rice.Repo.get_by!(Rice.Community.Node, user_id: publisher.id)
 
@@ -118,7 +118,7 @@ defmodule RiceWeb.Api.TaskControllerTest do
 
     # 节点出资、别人创建的任务,超管照样管得着
     publisher = task_publisher_fixture()
-    funded_publisher_fixture(publisher, 1_000)
+    funded_node_fixture(publisher, 1_000)
     other = task_fixture(publisher, %{title: "整理档案"})
 
     detail =
@@ -276,7 +276,7 @@ defmodule RiceWeb.Api.TaskControllerTest do
     {first, first_token} = user_with_token()
     {second, second_token} = user_with_token()
     {_visitor, visitor_token} = user_with_token()
-    funded_publisher_fixture(publisher, 100)
+    funded_node_fixture(publisher, 100)
 
     {:ok, task} =
       Rice.Tasks.create_task(publisher, %{
@@ -491,7 +491,7 @@ defmodule RiceWeb.Api.TaskControllerTest do
 
   test "接口跑通申请、任命、提交、驳回与审核通过", %{conn: conn} do
     publisher = task_publisher_fixture()
-    node = funded_publisher_fixture(publisher, 100)
+    node = funded_node_fixture(publisher, 100)
     {:ok, publisher_token} = Rice.Accounts.issue_token(publisher)
     {worker, worker_token} = user_with_token()
 
@@ -789,7 +789,7 @@ defmodule RiceWeb.Api.TaskControllerTest do
 
   test "发布必须带请求标识，重复同一发布请求不会创建新任务或重复冻结" do
     publisher = task_publisher_fixture()
-    funded_publisher_fixture(publisher, 100)
+    node = funded_node_fixture(publisher, 100)
     {:ok, token} = Rice.Accounts.issue_token(publisher)
 
     attrs = %{
@@ -807,7 +807,7 @@ defmodule RiceWeb.Api.TaskControllerTest do
     assert Rice.Repo.aggregate(Rice.Tasks.Task, :count) == 1
 
     assert %{grain_balance: 40, grain_frozen_balance: 60} =
-             Rice.Repo.get!(Rice.Accounts.User, publisher.id)
+             Rice.Repo.get!(Rice.Community.Node, node.id)
 
     assert Rice.Repo.aggregate(Rice.Grains.Receipt, :count) == 1
   end

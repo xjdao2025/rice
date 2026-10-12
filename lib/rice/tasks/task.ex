@@ -1,5 +1,5 @@
 defmodule Rice.Tasks.Task do
-  @moduledoc "任务主体；奖励由所属节点的账户冻结，个人发布的任务(没有节点)由发布者本人出资。"
+  @moduledoc "任务主体；奖励按发布者选择的钱包冻结；节点管理员可选节点或个人钱包，个人发布者仅用个人钱包。"
   use Rice.Schema
 
   @statuses ~w(draft open in_progress overdue under_review completed expired cancelled)

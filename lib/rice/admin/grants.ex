@@ -2,16 +2,13 @@ defmodule Rice.Admin.Grants do
   @moduledoc """
   后台发放稻米。
 
-  core 有 single 和 batch 两个接口:single 收一个手机号/邮箱,batch 收一个
-  上传文件的 fileId、由服务端去解析。这里只有一个接口,收一个收款人数组 ——
-  解析 Excel 是前端的事,服务端不该为了一个功能长出一个表格解析器。
+  增发对象只能是节点，不向用户个人账户增发。历史个人增发流水保留用于对账。
 
   **全有或全无**:任何一个收款人解析不出来,整批都不发。
   core 也是这个语义(数量对不上就抛异常),但它是在拿到分布式锁之后才发现的。
   """
   import Ecto.Query
 
-  alias Rice.Accounts.User
   alias Rice.Admin.AdminUser
   alias Rice.Community.Node
   alias Rice.Grains.Transfer
@@ -20,61 +17,106 @@ defmodule Rice.Admin.Grants do
   # nodes.grain_balance and grain_transfers.amount are PostgreSQL bigint.
   @max_bigint 9_223_372_036_854_775_807
 
-  @doc """
-  校验一批发放请求,但**不动账**。返回解析好的收款人。
-
-  单独拿出来是为了让调用方能在验短信码之前先把参数问题挑出来。验证码是一次性的,
-  而发放又常常是粘一列几百个手机号 —— 要是先验码再校验收款人,一个笔误就把码烧掉了,
-  还得等 60 秒重发。先校验参数(不写任何东西),码留到真要动账的时候再验。
-  """
-  @spec prepare(term(), term()) ::
-          {:ok, [User.t()]}
+  @doc "批量向节点增发。同一管理员的请求标识可安全重试；整批全有或全无。"
+  @spec grant_nodes(AdminUser.t(), term(), term(), term(), term(), keyword()) ::
+          {:ok, non_neg_integer(), :created | :replayed}
           | {:error,
-             :no_recipients
+             :unprocessable_entity
              | :invalid_amount
-             | {:unknown_recipients, [String.t()]}
-             | {:invalid_recipients, [term()]}}
-  def prepare(recipients, amount) when is_list(recipients) and recipients != [] do
-    with :ok <- validate_amount(amount) do
-      case Rice.Accounts.find_users(recipients) do
-        {:ok, []} -> {:error, :no_recipients}
-        result -> result
+             | :missing_request_id
+             | :not_found
+             | :conflict
+             | :contact_not_set
+             | Rice.Accounts.code_error()
+             | Ecto.Changeset.t()}
+  def grant_nodes(admin, ids, amount, request_id, code, opts \\ []) do
+    with :ok <- validate_node_ids(ids),
+         :ok <- validate_node_amount(amount),
+         :ok <- validate_request_id(request_id) do
+      ids = Enum.sort(Enum.uniq(ids))
+      memo = Keyword.get(opts, :memo) || ""
+      prefix = "rice://node-grants/#{admin.id}/#{Base.url_encode64(request_id, padding: false)}/"
+
+      Repo.transaction(fn ->
+        # 同一管理员的批次先排队，确保更换节点名单的重试也能识别为冲突。
+        Repo.one!(from a in AdminUser, where: a.id == ^admin.id, lock: "FOR UPDATE")
+        nodes = Repo.all(from n in Node, where: n.id in ^ids, order_by: n.id, lock: "FOR UPDATE")
+        if length(nodes) != length(ids), do: Repo.rollback(:not_found)
+
+        changesets =
+          Enum.map(nodes, fn node ->
+            cs =
+              Transfer.changeset(%Transfer{}, %{
+                kind: "grant",
+                to_node_id: node.id,
+                amount: amount,
+                memo: memo,
+                subject_uri: prefix <> node.id
+              })
+
+            case Ecto.Changeset.apply_action(cs, :insert) do
+              {:ok, _} -> cs
+              {:error, invalid} -> Repo.rollback(invalid)
+            end
+          end)
+
+        memo = Ecto.Changeset.get_field(hd(changesets), :memo)
+
+        existing =
+          Repo.all(
+            from t in Transfer,
+              where:
+                t.kind == "grant" and
+                  fragment("left(?, ?) = ?", t.subject_uri, ^String.length(prefix), ^prefix)
+          )
+
+        cond do
+          existing != [] ->
+            same? =
+              Enum.sort(Enum.map(existing, & &1.to_node_id)) == ids and
+                Enum.all?(existing, &(&1.amount == amount and &1.memo == memo))
+
+            if same?, do: {length(ids), :replayed}, else: Repo.rollback(:conflict)
+
+          Enum.any?(nodes, &(&1.grain_balance > @max_bigint - amount)) ->
+            Repo.rollback(:invalid_amount)
+
+          true ->
+            case Rice.Admin.verify_grant_code(admin, code) do
+              :ok ->
+                Enum.each(changesets, fn cs ->
+                  case Repo.insert(cs) do
+                    {:ok, _} -> :ok
+                    {:error, reason} -> Repo.rollback(reason)
+                  end
+                end)
+
+                {count, _} =
+                  Repo.update_all(from(n in Node, where: n.id in ^ids),
+                    inc: [grain_balance: amount]
+                  )
+
+                if count != length(ids), do: Repo.rollback(:not_found)
+                {count, :created}
+
+              {:error, reason} ->
+                {:verification_error, reason}
+            end
+        end
+      end)
+      |> case do
+        {:ok, {:verification_error, reason}} -> {:error, reason}
+        {:ok, {count, status}} -> {:ok, count, status}
+        {:error, reason} -> {:error, reason}
       end
     end
   end
 
-  def prepare(_, _), do: {:error, :no_recipients}
-
-  @doc "把 `prepare/2` 解析出来的收款人真正入账。一个事务:要么每个人都到账,要么一个都不动。"
-  @spec credit([User.t()], pos_integer(), keyword()) ::
-          {:ok, non_neg_integer()} | {:error, Ecto.Changeset.t()}
-  def credit(users, amount, opts \\ []) do
-    memo = Keyword.get(opts, :memo, "") || ""
-
-    users
-    |> Enum.reduce(Ecto.Multi.new(), fn user, multi ->
-      changeset =
-        Transfer.changeset(%Transfer{}, %{
-          kind: "grant",
-          to_user_id: user.id,
-          amount: amount,
-          memo: memo
-        })
-
-      multi
-      |> Ecto.Multi.insert({:transfer, user.id}, changeset)
-      |> Ecto.Multi.update_all(
-        {:credit, user.id},
-        from(u in User, where: u.id == ^user.id),
-        inc: [grain_balance: amount]
-      )
-    end)
-    |> Repo.transaction()
-    |> case do
-      {:ok, _} -> {:ok, length(users)}
-      {:error, _step, reason, _} -> {:error, reason}
-    end
+  defp validate_node_ids(ids) when is_list(ids) and ids != [] do
+    if Enum.all?(ids, &Rice.Tsid.valid?/1), do: :ok, else: {:error, :unprocessable_entity}
   end
+
+  defp validate_node_ids(_), do: {:error, :unprocessable_entity}
 
   @doc """
   管理员向节点账户发放稻米。`client_request_id` 在同一管理员、节点下标识一次发放。
@@ -180,9 +222,6 @@ defmodule Rice.Admin.Grants do
       {:error, changeset} -> {:error, changeset}
     end
   end
-
-  defp validate_amount(amount) when is_integer(amount) and amount > 0, do: :ok
-  defp validate_amount(_), do: {:error, :invalid_amount}
 
   @doc "发放记录。可按收款人和时间范围筛。"
   @spec list_grants(map()) :: Pagination.page(Transfer.t())

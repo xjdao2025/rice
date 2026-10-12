@@ -44,223 +44,210 @@ defmodule RiceWeb.Api.Admin.GrainControllerTest do
     assert Rice.Repo.reload!(user).grain_balance == 0
   end
 
-  describe "发放" do
-    test "收款人可以用邮箱 / handle / DID / id", %{conn: conn, token: token, code: code} do
-      a = user_fixture(%{email: "a@example.com"})
-      b = user_fixture(%{handle: "bb.web5.xjdao.test"})
-      c = user_fixture()
+  describe "节点增发" do
+    test "批量入节点钱包，重复节点只增发一次且可重试", %{conn: conn, token: token, code: code} do
+      owner = user_fixture()
+      a = node_fixture(%{user_id: owner.id})
+      b = node_fixture()
 
-      assert %{"data" => %{"granted" => 3}} =
+      attrs = %{
+        node_ids: [a.id, b.id, a.id],
+        amount: 10,
+        code: code,
+        client_request_id: "batch-1"
+      }
+
+      assert %{"data" => %{"granted" => 2, "replayed" => false}} =
                conn
                |> authed(token)
-               |> post(~p"/api/admin/grain_grants", %{
-                 to: ["a@example.com", "bb.web5.xjdao.test", c.did],
-                 amount: 10,
-                 code: code
-               })
+               |> post(~p"/api/admin/grain_grants", attrs)
                |> json_response(201)
 
-      for user <- [a, b, c] do
-        assert Rice.Repo.get!(Rice.Accounts.User, user.id).grain_balance == 10
+      assert %{"data" => %{"granted" => 2, "replayed" => true}} =
+               build_conn()
+               |> authed(token)
+               |> post(~p"/api/admin/grain_grants", Map.delete(attrs, :code))
+               |> json_response(200)
+
+      assert Rice.Repo.reload!(a).grain_balance == 10
+      assert Rice.Repo.reload!(b).grain_balance == 10
+      assert Rice.Repo.reload!(owner).grain_balance == 0
+      assert Rice.Grains.reconcile().ok?
+
+      for changed <- [%{amount: 11}, %{node_ids: [a.id]}, %{memo: "变更"}] do
+        assert build_conn()
+               |> authed(token)
+               |> post(~p"/api/admin/grain_grants", Map.merge(attrs, changed))
+               |> json_response(409)
       end
     end
 
-    # core 也是全有或全无,但它是在拿到分布式锁之后才发现数量对不上
-    test "有一个收款人认不出来,整批都不发", %{conn: conn, token: token, code: code} do
-      user = user_fixture(%{phone: "13800003333", phone_region: "86"})
-
-      assert %{"errors" => %{"to" => [message]}} =
-               conn
-               |> authed(token)
-               |> post(~p"/api/admin/grain_grants", %{
-                 to: ["13800003333", "查无此人@example.com"],
-                 amount: 50,
-                 code: code
-               })
-               |> json_response(422)
-
-      assert message =~ "查无此人@example.com"
-      assert Rice.Repo.get!(Rice.Accounts.User, user.id).grain_balance == 0
-    end
-
-    test "重复的收款人只发一次", %{conn: conn, token: token, code: code} do
-      user = user_fixture(%{phone: "13800004444", phone_region: "86"})
-
-      assert %{"data" => %{"granted" => 1}} =
-               conn
-               |> authed(token)
-               |> post(~p"/api/admin/grain_grants", %{
-                 to: ["13800004444", "13800004444", user.did],
-                 amount: 25,
-                 code: code
-               })
-               |> json_response(201)
-
-      assert Rice.Repo.get!(Rice.Accounts.User, user.id).grain_balance == 25
-    end
-
-    test "金额非法 422", %{conn: conn, token: token, code: code} do
+    test "拒绝旧个人增发请求", %{conn: conn, token: token, code: code} do
       user = user_fixture()
 
-      for amount <- [0, -1, "abc", nil, 1.5] do
-        assert conn
+      assert %{"errors" => %{"to" => [_]}} =
+               conn
                |> authed(token)
-               |> post(~p"/api/admin/grain_grants", %{to: [user.did], amount: amount, code: code})
+               |> post(~p"/api/admin/grain_grants", %{to: [user.id], amount: 10, code: code})
                |> json_response(422)
-      end
 
-      assert Rice.Repo.get!(Rice.Accounts.User, user.id).grain_balance == 0
+      assert Rice.Repo.reload!(user).grain_balance == 0
     end
 
-    test "收款人为空 422", %{conn: conn, token: token, code: code} do
+    test "不存在的节点导致整批失败且不消耗验证码", %{conn: conn, token: token, code: code} do
+      node = node_fixture()
+
+      attrs = %{
+        node_ids: [node.id, Rice.Tsid.generate()],
+        amount: 10,
+        code: code,
+        client_request_id: "batch-2"
+      }
+
       assert conn
              |> authed(token)
-             |> post(~p"/api/admin/grain_grants", %{to: [], amount: 10, code: code})
-             |> json_response(422)
+             |> post(~p"/api/admin/grain_grants", attrs)
+             |> json_response(404)
+
+      assert Rice.Repo.reload!(node).grain_balance == 0
+
+      assert build_conn()
+             |> authed(token)
+             |> post(~p"/api/admin/grain_grants", %{attrs | node_ids: [node.id]})
+             |> json_response(201)
     end
 
-    # `to` 是 JSON 数组,里面塞什么都能过 HTTP 那一层。
-    # 直接 String.trim/1 会抛,表现是 500 —— 客户端发错格式不该是服务端的错。
-    test "收款人不是字符串时 422 而不是 500", %{conn: conn, token: token, code: code} do
-      user = user_fixture()
+    test "金额、节点列表与请求标识必须有效", %{conn: conn, token: token, code: code} do
+      node = node_fixture()
+      attrs = %{node_ids: [node.id], amount: 10, code: code, client_request_id: "batch-3"}
+      invalid = for amount <- [0, -1, "abc", nil, 1.5], do: %{amount: amount}
+      invalid = invalid ++ for ids <- [[], [nil], [123], ["bad"], "bad"], do: %{node_ids: ids}
 
-      for bad <- [[nil], [123], [%{"phone" => "13800000000"}], [["嵌套"]], [user.did, nil]] do
-        assert %{"errors" => %{"to" => [_]}} =
-                 conn
-                 |> authed(token)
-                 |> post(~p"/api/admin/grain_grants", %{to: bad, amount: 10, code: code})
-                 |> json_response(422)
-      end
-
-      assert Rice.Repo.get!(Rice.Accounts.User, user.id).grain_balance == 0
-    end
-
-    # 从表格里粘一列手机号,末尾常带几个空行
-    test "空白的收款人直接丢掉,不算作认不出来", %{conn: conn, token: token, code: code} do
-      user = user_fixture(%{phone: "13800006666", phone_region: "86"})
-
-      assert %{"data" => %{"granted" => 1}} =
-               conn
-               |> authed(token)
-               |> post(~p"/api/admin/grain_grants", %{
-                 to: ["13800006666", "", "  "],
-                 amount: 15,
-                 code: code
-               })
-               |> json_response(201)
-
-      assert Rice.Repo.get!(Rice.Accounts.User, user.id).grain_balance == 15
-    end
-
-    # 按手机号找和按 DID 找必须是同一个结果。原先联系方式那条路排除了停用的,
-    # id/DID/handle 那条路没排除 —— 同一个人换个写法就发得出去了。
-    test "停用的用户收不到,五种写法都收不到", %{conn: conn, token: token, code: code} do
-      user =
-        user_fixture(%{
-          phone: "13800005555",
-          phone_region: "86",
-          email: "disabled@example.com",
-          handle: "disabled.web5.xjdao.test"
-        })
-
-      Rice.Repo.update!(Ecto.Changeset.change(user, disabled_at: DateTime.utc_now()))
-
-      for identifier <- [
-            "13800005555",
-            "disabled@example.com",
-            "disabled.web5.xjdao.test",
-            user.did,
-            user.id
-          ] do
+      for changed <- invalid ++ [%{client_request_id: nil}, %{memo: String.duplicate("x", 257)}] do
         assert conn
                |> authed(token)
-               |> post(~p"/api/admin/grain_grants", %{
-                 to: [identifier],
-                 amount: 10,
-                 code: code
-               })
-               |> json_response(422),
-               "#{identifier} 不该发得出去"
+               |> post(~p"/api/admin/grain_grants", Map.merge(attrs, changed))
+               |> json_response(422)
       end
 
-      assert Rice.Repo.get!(Rice.Accounts.User, user.id).grain_balance == 0
+      assert Rice.Repo.reload!(node).grain_balance == 0
+
+      assert conn
+             |> authed(token)
+             |> post(~p"/api/admin/grain_grants", attrs)
+             |> json_response(201)
+    end
+
+    test "批量溢出不部分入账", %{conn: conn, token: token, code: code} do
+      a = node_fixture()
+      b = node_fixture()
+      Rice.Repo.update!(Ecto.Changeset.change(b, grain_balance: 9_223_372_036_854_775_807))
+
+      assert conn
+             |> authed(token)
+             |> post(~p"/api/admin/grain_grants", %{
+               node_ids: [a.id, b.id],
+               amount: 10,
+               code: code,
+               client_request_id: "overflow"
+             })
+             |> json_response(422)
+
+      assert Rice.Repo.reload!(a).grain_balance == 0
     end
   end
 
   # 令牌可能被人从浏览器里捞走,短信在管理员自己手上。发钱要两样都有。
   describe "发放的二次验证" do
     test "没有验证码发不出去", %{conn: conn, token: token} do
-      user = user_fixture()
-
-      assert %{"errors" => %{"code" => [_]}} =
-               conn
-               |> authed(token)
-               |> post(~p"/api/admin/grain_grants", %{to: [user.did], amount: 10})
-               |> json_response(422)
-
-      assert Rice.Repo.get!(Rice.Accounts.User, user.id).grain_balance == 0
-    end
-
-    test "验证码不对发不出去", %{conn: conn, token: token} do
-      user = user_fixture()
+      user = node_fixture()
 
       assert %{"errors" => %{"code" => [_]}} =
                conn
                |> authed(token)
                |> post(~p"/api/admin/grain_grants", %{
-                 to: [user.did],
+                 node_ids: [user.id],
+                 client_request_id: user.id,
+                 amount: 10
+               })
+               |> json_response(422)
+
+      assert Rice.Repo.get!(Rice.Community.Node, user.id).grain_balance == 0
+    end
+
+    test "验证码不对发不出去", %{conn: conn, token: token} do
+      user = node_fixture()
+
+      assert %{"errors" => %{"code" => [_]}} =
+               conn
+               |> authed(token)
+               |> post(~p"/api/admin/grain_grants", %{
+                 node_ids: [user.id],
+                 client_request_id: user.id,
                  amount: 10,
                  code: "000000"
                })
                |> json_response(422)
 
-      assert Rice.Repo.get!(Rice.Accounts.User, user.id).grain_balance == 0
+      assert Rice.Repo.get!(Rice.Community.Node, user.id).grain_balance == 0
     end
 
     # 码是发到某个管理员手机上的,不是一张全局通行证
     test "别的管理员手机上的码用不了", %{conn: conn, token: token} do
       other = admin_fixture()
       other_code = grant_code(other)
-      user = user_fixture()
+      user = node_fixture()
 
       assert %{"errors" => %{"code" => [_]}} =
                conn
                |> authed(token)
                |> post(~p"/api/admin/grain_grants", %{
-                 to: [user.did],
+                 node_ids: [user.id],
+                 client_request_id: user.id,
                  amount: 10,
                  code: other_code
                })
                |> json_response(422)
 
-      assert Rice.Repo.get!(Rice.Accounts.User, user.id).grain_balance == 0
+      assert Rice.Repo.get!(Rice.Community.Node, user.id).grain_balance == 0
     end
 
     test "同一个码用不了第二次", %{conn: conn, token: token, code: code} do
-      a = user_fixture()
-      b = user_fixture()
-
-      assert conn
-             |> authed(token)
-             |> post(~p"/api/admin/grain_grants", %{to: [a.did], amount: 10, code: code})
-             |> json_response(201)
-
-      assert conn
-             |> authed(token)
-             |> post(~p"/api/admin/grain_grants", %{to: [b.did], amount: 10, code: code})
-             |> json_response(422)
-
-      assert Rice.Repo.get!(Rice.Accounts.User, b.id).grain_balance == 0
-    end
-
-    # 粘一列几百个手机号,一个笔误不该把码烧掉 —— 重发要等 60 秒
-    test "参数校验失败不消耗验证码", %{conn: conn, token: token, code: code} do
-      user = user_fixture(%{phone: "13800009999", phone_region: "86"})
+      a = node_fixture()
+      b = node_fixture()
 
       assert conn
              |> authed(token)
              |> post(~p"/api/admin/grain_grants", %{
-               to: ["13800009999", "打错了@example.com"],
+               node_ids: [a.id],
+               client_request_id: a.id,
+               amount: 10,
+               code: code
+             })
+             |> json_response(201)
+
+      assert conn
+             |> authed(token)
+             |> post(~p"/api/admin/grain_grants", %{
+               node_ids: [b.id],
+               client_request_id: b.id,
+               amount: 10,
+               code: code
+             })
+             |> json_response(422)
+
+      assert Rice.Repo.get!(Rice.Community.Node, b.id).grain_balance == 0
+    end
+
+    # 粘一列几百个手机号,一个笔误不该把码烧掉 —— 重发要等 60 秒
+    test "参数校验失败不消耗验证码", %{conn: conn, token: token, code: code} do
+      user = node_fixture()
+
+      assert conn
+             |> authed(token)
+             |> post(~p"/api/admin/grain_grants", %{
+               node_ids: [user.id, "bad"],
+               client_request_id: user.id,
                amount: 10,
                code: code
              })
@@ -270,13 +257,14 @@ defmodule RiceWeb.Api.Admin.GrainControllerTest do
       assert conn
              |> authed(token)
              |> post(~p"/api/admin/grain_grants", %{
-               to: ["13800009999"],
+               node_ids: [user.id],
+               client_request_id: user.id,
                amount: 10,
                code: code
              })
              |> json_response(201)
 
-      assert Rice.Repo.get!(Rice.Accounts.User, user.id).grain_balance == 10
+      assert Rice.Repo.get!(Rice.Community.Node, user.id).grain_balance == 10
     end
 
     # 用一个新管理员 —— setup 里给默认管理员塞过码了,60 秒内再发是 429

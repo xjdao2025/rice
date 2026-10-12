@@ -2,8 +2,7 @@ defmodule RiceWeb.Api.Admin.GrainController do
   @moduledoc """
   后台发放稻米与查明细。
 
-  core 的 single / batch 在这里是同一个 POST —— 收款人永远是个数组,
-  发一个人就是长度为 1。
+  单个和批量增发均进入节点钱包；历史个人增发记录仍可查询。
   """
   use RiceWeb, :controller
 
@@ -42,24 +41,32 @@ defmodule RiceWeb.Api.Admin.GrainController do
   @doc """
   发放。顺序是**先校验参数,再验短信码,最后动账**。
 
-  验证码是一次性的,而发放常常是从表格里粘几百个手机号 —— 先验码的话,
-  一个笔误就把码烧掉了,还得等 60 秒重发。参数校验不写任何东西,放前面没有风险;
-  码留到真要动账之前那一刻验。
+  节点、金额和备注验证通过后才消耗验证码；失败不会部分入账。
   """
   def create(conn, params) do
-    recipients = List.wrap(params["to"])
-    amount = params["amount"]
-
-    with {:ok, users} <- Grants.prepare(recipients, amount),
-         :ok <- Rice.Admin.verify_grant_code(conn.assigns.current_admin, params["code"]),
-         {:ok, count} <- Grants.credit(users, amount, memo: params["memo"]) do
-      conn |> put_status(:created) |> json(%{data: %{granted: count}})
+    # 明确拒绝旧版个人收款参数，不能静默将其解释成节点。
+    if Map.has_key?(params, "to") do
+      unprocessable(conn, %{to: ["稻米只能增发给节点，请选择节点"]})
     else
-      error -> grant_error(conn, error)
+      with {:ok, count, status} <-
+             Grants.grant_nodes(
+               conn.assigns.current_admin,
+               params["node_ids"],
+               params["amount"],
+               params["client_request_id"],
+               params["code"],
+               memo: params["memo"]
+             ) do
+        conn
+        |> put_status(if(status == :created, do: :created, else: :ok))
+        |> json(%{data: %{granted: count, replayed: status == :replayed}})
+      else
+        error -> grant_error(conn, error)
+      end
     end
   end
 
-  @doc "向节点独立账户发放，使用与个人发放相同的管理员验证码。"
+  @doc "向单个节点增发，使用当前平台管理员的增发验证码。"
   def create_node(conn, %{"node_id" => node_id} = params) do
     with {:ok, transfer, status} <-
            Grants.grant_node(
@@ -89,18 +96,6 @@ defmodule RiceWeb.Api.Admin.GrainController do
   # 验证码错误(和登录同一类响应)、金额、冲突等交给 fallback;这里只管发放特有的几种
   defp grant_error(conn, {:error, :contact_not_set}),
     do: unprocessable(conn, %{code: ["该管理员没有绑定手机号"]})
-
-  defp grant_error(conn, {:error, {:unknown_recipients, missing}}),
-    do: unprocessable(conn, %{to: ["这些收款人不存在: " <> Enum.join(missing, ", ")]})
-
-  defp grant_error(conn, {:error, {:invalid_recipients, bad}}),
-    do:
-      unprocessable(conn, %{
-        to: ["收款人必须是字符串,这些不是: " <> Enum.map_join(bad, ", ", &inspect/1)]
-      })
-
-  defp grant_error(conn, {:error, :no_recipients}),
-    do: unprocessable(conn, %{to: ["至少要有一个收款人"]})
 
   defp grant_error(_conn, error), do: error
 
