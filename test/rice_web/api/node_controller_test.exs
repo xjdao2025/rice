@@ -17,7 +17,7 @@ defmodule RiceWeb.Api.NodeControllerTest do
       [first, second] = data
       assert first["owner"]["nickname"] == "主理人"
       assert first["owner"]["did"] == owner.did
-      refute Map.has_key?(first["owner"], "grain_balance")
+      assert first["owner"]["grain_balance"] == 777
       assert is_nil(second["owner"])
     end
 
@@ -76,9 +76,13 @@ defmodule RiceWeb.Api.NodeControllerTest do
       }
     end
 
-    test "入会申请仅本人和本节点管理员可见，节点余额公开", ctx do
+    test "入会申请仅本人和本节点管理员可见，节点余额与负责人余额公开", ctx do
       Rice.Repo.update!(
         Ecto.Changeset.change(ctx.node, grain_balance: 123, grain_frozen_balance: 5)
+      )
+
+      Rice.Repo.update!(
+        Ecto.Changeset.change(ctx.admin, grain_balance: 99, grain_frozen_balance: 1)
       )
 
       data = apply_join(ctx, "我的私人申请理由")
@@ -93,7 +97,8 @@ defmodule RiceWeb.Api.NodeControllerTest do
         assert is_nil(public["data"]["my_application"])
         refute Map.has_key?(public["data"], "applications")
         refute Jason.encode!(public) =~ "我的私人申请理由"
-        refute Map.has_key?(public["data"]["owner"], "grain_balance")
+        assert public["data"]["owner"]["grain_balance"] == 99
+        assert public["data"]["owner"]["grain_frozen_balance"] == 1
         assert public["data"]["grain_balance"] == 123
         assert public["data"]["grain_frozen_balance"] == 5
       end

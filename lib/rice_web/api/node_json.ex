@@ -1,4 +1,5 @@
 defmodule RiceWeb.Api.NodeJSON do
+  alias Rice.Accounts.User
   alias RiceWeb.Api.{AttachmentJSON, UserJSON}
 
   def index(%{nodes: nodes, current_user: user}),
@@ -30,9 +31,18 @@ defmodule RiceWeb.Api.NodeJSON do
       description: node.description,
       position: node.position,
       logo: AttachmentJSON.embed(node.logo),
-      owner: UserJSON.embed(node.user)
+      owner: owner(node.user)
     }
   end
+
+  # 节点页那三个稻米数字,生产(xjdao.xyz)一直显示的是**负责人账号的余额** —— 生产
+  # 没有节点钱包,那 735 万就记在 node_member 账号上。bff669c 把 owner/1 换成
+  # UserJSON.embed 时把这个字段丢了,页面上的数字才全成了 0。
+  defp owner(%User{grain_balance: balance, grain_frozen_balance: frozen} = user) do
+    user |> UserJSON.embed() |> Map.merge(%{grain_balance: balance, grain_frozen_balance: frozen})
+  end
+
+  defp owner(user), do: UserJSON.embed(user)
 
   defp data(node, user) do
     own_application = if user, do: Enum.find(node.applications, &(&1.user_id == user.id))

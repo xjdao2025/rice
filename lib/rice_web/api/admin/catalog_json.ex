@@ -22,24 +22,17 @@ defmodule RiceWeb.Api.Admin.AnnouncementJSON do
 end
 
 defmodule RiceWeb.Api.Admin.NodeJSON do
-  alias RiceWeb.Api.UserJSON
-
   def index(%{records: records}), do: %{data: Enum.map(records, &data/1)}
   def show(%{record: record}), do: %{data: data(record)}
 
+  # 节点余额和负责人余额都由 NodeJSON.embed 给,这里只补列表要的插入时间。
   def data(node) do
     node
     |> RiceWeb.Api.NodeJSON.embed()
     |> Map.merge(%{
       grain_balance: node.grain_balance,
       grain_frozen_balance: node.grain_frozen_balance,
-      owner: owner(node.user),
       inserted_at: node.inserted_at
     })
   end
-
-  defp owner(%Rice.Accounts.User{} = user),
-    do: user |> UserJSON.public() |> Map.put(:grain_balance, user.grain_balance)
-
-  defp owner(_), do: nil
 end
