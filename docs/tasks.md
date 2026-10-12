@@ -90,11 +90,16 @@ pending ──指派──▶ appointed ──提交──▶ under_review ─�
 
 ## 谁能发任务
 
-节点管理员,**或**平台在后台给了 `can_publish_tasks` 的用户,满足其一即可:
+节点管理员,**或**平台在后台给了 `can_publish_tasks` 的用户,**或**后台超级管理员,
+满足其一即可:
 
 - 节点管理员发的任务由节点出奖励(`funding_node_id` = 节点)。
-- 没有可管节点、但有 `can_publish_tasks` 的人发的任务没有节点,奖励从**自己的**
-  稻米冻结(`funding_node_id` 为 nil),由本人管理。不能借这个授权动用任何节点的稻米。
+- 没有可管节点、但有 `can_publish_tasks` 的人(超管按 `can_publish_tasks` 同等待遇)
+  发的任务没有节点,奖励从**自己的**稻米冻结(`funding_node_id` 为 nil),由本人管理。
+  不能借这个授权动用任何节点的稻米。
+- 超管按手机号对应到同一个 C 端账号(`Accounts.put_superuser/1`),除发布外还能管
+  **全平台**的任务与活动;但凡要动节点稻米的判断——办活动的节点、点名 `node_id`
+  发任务——仍然只认节点管理员。
 
 ## 奖励
 

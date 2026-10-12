@@ -543,7 +543,13 @@ defmodule Rice.Accounts do
         case pds().create_session(user.handle, password) do
           {:ok, session} ->
             {:ok, token} = issue_token(user)
-            {:ok, %{user: put_semi_wallet(user), token: token, pds_session: session}}
+
+            {:ok,
+             %{
+               user: user |> put_semi_wallet() |> put_superuser(),
+               token: token,
+               pds_session: session
+             }}
 
           {:error, _} = error ->
             login_failure(error)

@@ -110,9 +110,11 @@ defmodule Rice.Events do
         {:error, :not_found}
 
       event ->
-        if event.status != "draft" or (user && user.id == event.creator_id),
-          do: {:ok, preload(event)},
-          else: {:error, :not_found}
+        # 草稿本来只有创建者看得见;超管既然管全平台,就得先能打开才谈得上 can_manage?
+        visible =
+          event.status != "draft" or (user && (user.id == event.creator_id or user.superuser))
+
+        if visible, do: {:ok, preload(event)}, else: {:error, :not_found}
     end
   end
 

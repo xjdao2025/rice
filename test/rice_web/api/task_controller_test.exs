@@ -134,6 +134,53 @@ defmodule RiceWeb.Api.TaskControllerTest do
     |> json_response(200)
   end
 
+  # 有管理员行不等于超管:开关就是 superuser 这一列,别把 role=admin 也当成特权
+  test "同手机号的管理员不是超管时,什么都没多" do
+    {person, token} = superuser_with_token()
+    Rice.Grains.grant(person, 50)
+    admin = Rice.Repo.get_by!(Rice.Admin.AdminUser, phone: person.phone)
+    Rice.Repo.update!(Ecto.Changeset.change(admin, superuser: false))
+
+    attrs = %{
+      title: "巡查河道",
+      description: "不该发得出去",
+      organizer_contact: "我的电话",
+      reward_amount: 20,
+      client_request_id: "plain-admin"
+    }
+
+    assert build_conn() |> authed(token) |> post(~p"/api/tasks", attrs) |> json_response(403)
+  end
+
+  # 草稿本来只有创建者看得见;超管管全平台,得先打得开才谈得上 can_manage?
+  test "超管能打开别人的草稿,普通人仍然打不开" do
+    publisher = task_publisher_fixture()
+    {:ok, publisher_token} = Rice.Accounts.issue_token(publisher)
+
+    draft =
+      build_conn()
+      |> authed(publisher_token)
+      |> post(~p"/api/tasks", %{
+        organizer_contact: "社区服务台",
+        title: "任务草稿",
+        description: "发布前不可见",
+        client_request_id: "superuser-draft",
+        status: "draft"
+      })
+      |> json_response(201)
+
+    {_plain, plain_token} = user_with_token()
+    {_superuser, super_token} = superuser_with_token()
+    url = ~p"/api/tasks/#{draft["data"]["id"]}"
+
+    assert build_conn() |> authed(plain_token) |> get(url) |> json_response(404)
+
+    detail = build_conn() |> authed(super_token) |> get(url) |> json_response(200)
+    assert detail["data"]["status"] == "draft"
+    assert detail["data"]["can_manage"]
+    assert "edit" in detail["data"]["allowed_actions"]
+  end
+
   # 个人出资的任务没有节点:申请、指派、交付、验收、编辑都不能去读节点
   test "个人出资的任务走完整流程,奖励从发布者自己的稻米发出" do
     {person, token} = user_with_token()

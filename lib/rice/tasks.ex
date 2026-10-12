@@ -1086,6 +1086,9 @@ defmodule Rice.Tasks do
   defp visible_to?(%Task{status: "draft", creator_id: creator_id}, %User{id: creator_id}),
     do: true
 
+  # 草稿本来只有创建者看得见;超管既然管全平台,就得先能打开才谈得上 can_manage?
+  defp visible_to?(%Task{status: "draft"}, %User{superuser: true}), do: true
+
   defp visible_to?(%Task{status: "draft"}, _user), do: false
 
   defp visible_to?(%Task{status: "open", application_deadline: deadline} = task, user),
