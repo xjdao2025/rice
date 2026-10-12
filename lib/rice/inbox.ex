@@ -91,12 +91,12 @@ defmodule Rice.Inbox do
          %{
            event: "task_cancelled",
            detail: nil,
-           task: %{reward_status: "refunded", reward_amount: amount} = task
+           task: %{reward_status: "refunded", reward_amount: amount}
          },
          _event
        )
        when amount > 0,
-       do: "已向#{if(task.funding_node_id, do: "社区", else: "发布者")}退回 #{amount} 稻米"
+       do: "已向发布者退回 #{amount} 稻米"
 
   defp notification_detail(notification, _event), do: notification.detail
 

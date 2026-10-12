@@ -162,7 +162,7 @@ defmodule Rice.TaskApplicationStateTest do
 
   test "单人任务:编辑把申请截止改到过去,任务过期,待处理申请跟着 expired" do
     publisher = task_publisher_fixture()
-    funded_node_fixture(publisher, 10)
+    funded_publisher_fixture(publisher, 10)
     [first, second] = for _ <- 1..2, do: user_fixture()
     task = new_task(publisher, %{reward_amount: 10})
     for u <- [first, second], do: apply!(u, task)
@@ -175,13 +175,13 @@ defmodule Rice.TaskApplicationStateTest do
     assert task.status == "expired"
     assert task.reward_status == "refunded"
     assert states(task) == %{first.id => "expired", second.id => "expired"}
-    assert node_balance(publisher) == {10, 0}
+    assert publisher_balance(publisher) == {10, 0}
   end
 
   # 部署窗口里旧版本指派的单人申请没有名额编号:验收不能因此把结算过的那笔再退一次
   test "单人任务:没有名额编号的指派也能正常验收结算" do
     publisher = task_publisher_fixture()
-    funded_node_fixture(publisher, 50)
+    funded_publisher_fixture(publisher, 50)
     worker = user_fixture()
     task = new_task(publisher, %{reward_amount: 20})
     a = apply!(worker, task)
@@ -290,13 +290,13 @@ defmodule Rice.TaskApplicationStateTest do
 
   test "重新开放进入下一轮:旧轮次申请保留终态,新轮次从空开始" do
     publisher = task_publisher_fixture()
-    funded_node_fixture(publisher, 100)
+    funded_publisher_fixture(publisher, 100)
     worker = user_fixture()
     task = new_task(publisher, %{capacity: 2, reward_amount: 10})
     apply!(worker, task)
     {:ok, task} = Tasks.cancel(publisher, task)
     assert states(task)[worker.id] == "cancelled"
-    assert node_balance(publisher) == {100, 0}
+    assert publisher_balance(publisher) == {100, 0}
 
     {:ok, reopened} =
       Tasks.update_task(publisher, task, %{
@@ -306,7 +306,7 @@ defmodule Rice.TaskApplicationStateTest do
 
     assert reopened.round == 2 and reopened.status == "open"
     assert states(reopened) == %{}
-    assert node_balance(publisher) == {60, 40}
+    assert publisher_balance(publisher) == {60, 40}
 
     old = Repo.one!(from a in Application, where: a.task_id == ^task.id and a.round == 1)
     assert {old.status, old.final_status} == {"cancelled", "cancelled"}
@@ -318,19 +318,20 @@ defmodule Rice.TaskApplicationStateTest do
     assert Rice.Grains.reconcile().ok?
   end
 
-  defp node_balance(publisher) do
+  # 任务奖励冻结在发布者个人账上,节点钱包不参与出资
+  defp publisher_balance(publisher) do
     %{grain_balance: b, grain_frozen_balance: f} =
-      Repo.get_by!(Rice.Community.Node, user_id: publisher.id)
+      Repo.get!(Rice.Accounts.User, publisher.id)
 
     {b, f}
   end
 
   test "多人任务:撤销指派让出名额,编号和冻结留给下一个人;没人承作时回到 open" do
     publisher = task_publisher_fixture()
-    funded_node_fixture(publisher, 90)
+    funded_publisher_fixture(publisher, 90)
     [first, second, third] = for _ <- 1..3, do: user_fixture()
     task = new_task(publisher, %{capacity: 2, reward_amount: 30})
-    assert node_balance(publisher) == {30, 60}
+    assert publisher_balance(publisher) == {30, 60}
 
     [a, b, c] = for u <- [first, second, third], do: apply!(u, task)
     {:ok, task} = Tasks.appoint(publisher, task, a.id)
@@ -346,7 +347,7 @@ defmodule Rice.TaskApplicationStateTest do
     assert states(task)[third.id] == "pending"
     assert Repo.get!(Application, a.id).reward_slot == nil
     # 冻结不动,名额让出来
-    assert node_balance(publisher) == {30, 60}
+    assert publisher_balance(publisher) == {30, 60}
     assert task.status == "under_review"
 
     # 被撤销的人留着 appointed_at,列表筛选不能拿它当"还在承接"
@@ -378,7 +379,7 @@ defmodule Rice.TaskApplicationStateTest do
 
   test "多人任务:全部撤销后回到 open,过了申请截止由定时任务退款过期" do
     publisher = task_publisher_fixture()
-    funded_node_fixture(publisher, 60)
+    funded_publisher_fixture(publisher, 60)
     worker = user_fixture()
     now = DateTime.utc_now()
     task = new_task(publisher, %{capacity: 2, reward_amount: 30})
@@ -387,22 +388,22 @@ defmodule Rice.TaskApplicationStateTest do
     {:ok, task} = Tasks.appoint(publisher, task, a.id)
     {:ok, task} = Tasks.release_assignee(publisher, task, a.id)
     assert task.status == "open"
-    assert node_balance(publisher) == {0, 60}
+    assert publisher_balance(publisher) == {0, 60}
 
     {:ok, _} = Tasks.check_due_tasks(DateTime.add(now, 4000))
     task = Repo.get!(Rice.Tasks.Task, task.id)
     assert task.status == "expired"
     assert task.reward_status == "refunded"
-    assert node_balance(publisher) == {60, 0}
+    assert publisher_balance(publisher) == {60, 0}
     assert Rice.Grains.reconcile().ok?
   end
 
   test "多人任务:提前结束,已验收的算完成,其余撤销并退回冻结" do
     publisher = task_publisher_fixture()
-    funded_node_fixture(publisher, 100)
+    funded_publisher_fixture(publisher, 100)
     [first, second, third, fourth] = for _ <- 1..4, do: user_fixture()
     task = new_task(publisher, %{capacity: 3, reward_amount: 30})
-    assert node_balance(publisher) == {10, 90}
+    assert publisher_balance(publisher) == {10, 90}
 
     [a, b, _c, _d] = for u <- [first, second, third, fourth], do: apply!(u, task)
     {:ok, task} = Tasks.appoint(publisher, task, a.id)
@@ -412,7 +413,7 @@ defmodule Rice.TaskApplicationStateTest do
     # 有成果等待验收时不能结束
     assert {:error, :conflict} = Tasks.close(publisher, task)
     {:ok, task} = Tasks.approve_result(publisher, task, hd(task.submissions).id)
-    assert node_balance(publisher) == {10, 60}
+    assert publisher_balance(publisher) == {10, 60}
 
     {:ok, task} = Tasks.close(publisher, task)
     assert task.status == "completed"
@@ -425,14 +426,14 @@ defmodule Rice.TaskApplicationStateTest do
              fourth.id => "not_selected"
            }
 
-    assert node_balance(publisher) == {70, 0}
+    assert publisher_balance(publisher) == {70, 0}
     assert Rice.Grains.reconcile().ok?
     assert {:error, :conflict} = Tasks.close(publisher, task)
   end
 
   test "多人任务:一个都没验收就提前结束,记为 cancelled 并全额退回" do
     publisher = task_publisher_fixture()
-    funded_node_fixture(publisher, 60)
+    funded_publisher_fixture(publisher, 60)
     worker = user_fixture()
     task = new_task(publisher, %{capacity: 2, reward_amount: 30})
 
@@ -444,7 +445,7 @@ defmodule Rice.TaskApplicationStateTest do
     assert task.status == "cancelled"
     assert task.reward_status == "refunded"
     assert states(task)[worker.id] == "released"
-    assert node_balance(publisher) == {60, 0}
+    assert publisher_balance(publisher) == {60, 0}
     assert Rice.Grains.reconcile().ok?
   end
 

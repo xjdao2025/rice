@@ -205,7 +205,8 @@ defmodule RiceWeb.Api.GrainFlowTest do
            |> get(~p"/api/nodes/#{node.id}/wallet")
            |> json_response(403)
 
-    # ── 4. 任务奖励:从节点账户冻结,验收后发给承作人 ────────────────
+    # ── 4. 任务奖励:从发布者个人余额冻结,验收后发给承作人 ──────────
+    # 任务跟节点钱包无关:节点那 220 一分不动,冻结、结算、退款都在节点主账上。
     created =
       build_conn()
       |> authed(manager_token)
@@ -214,15 +215,16 @@ defmodule RiceWeb.Api.GrainFlowTest do
         title: "修篱笆",
         description: "修好",
         organizer_contact: "服务台",
-        reward_amount: 150
+        reward_amount: 50
       })
       |> json_response(201)
 
     task_id = created["data"]["id"]
-    assert balances(node) == {70, 150}
-    assert node_wallet(manager_token, node.id)["frozen"] == 150
+    assert balances(manager) == {30, 50}
+    assert balances(node) == {220, 0}
+    assert wallet(manager_token)["frozen"] == 50
 
-    # 节点余额不够再发一个
+    # 发布者余额不够再发一个
     assert %{"errors" => %{"amount" => _}} =
              build_conn()
              |> authed(manager_token)
@@ -275,15 +277,16 @@ defmodule RiceWeb.Api.GrainFlowTest do
       |> json_response(200)
 
     assert approved["data"]["reward_status"] == "settled"
-    assert balances(bob) == {210, 0}
-    assert balances(node) == {70, 0}
+    assert balances(bob) == {110, 0}
+    assert balances(manager) == {30, 0}
+    assert balances(node) == {220, 0}
     # 任务已完成,再点一次验收是冲突,不会重复发
     assert build_conn()
            |> authed(manager_token)
            |> post(~p"/api/tasks/#{task_id}/submissions/#{submission_id}/approve")
            |> json_response(409)
 
-    assert balances(bob) == {210, 0}
+    assert balances(bob) == {110, 0}
 
     assert [%{kind: "reserved"}, %{kind: "settled"}] =
              Repo.all(
@@ -293,24 +296,29 @@ defmodule RiceWeb.Api.GrainFlowTest do
                  select: %{kind: r.kind}
              )
 
-    # 结算在节点钱包里是一笔 task_reward 转账(付给小林),冻结凭证仍留作证据
-    node_entries = node_wallet(manager_token, node.id)["entries"]
+    # 结算在**发布者**明细里是一笔 task_reward 转账(付给小林),冻结凭证仍留作证据
+    manager_entries = wallet(manager_token)["entries"]
 
     assert Enum.any?(
-             node_entries,
-             &(&1["kind"] == "task_reward" and &1["amount"] == 150 and
+             manager_entries,
+             &(&1["kind"] == "task_reward" and &1["amount"] == 50 and
                  &1["to_user"]["id"] == bob.id)
            )
 
-    assert Enum.any?(node_entries, &(&1["kind"] == "reserved" and &1["amount"] == 150))
+    assert Enum.any?(manager_entries, &(&1["kind"] == "reserved" and &1["amount"] == 50))
+
+    # 节点钱包只有注资和后台发放这两条流水,任务没碰它
+    node_entries = node_wallet(manager_token, node.id)["entries"]
     assert Enum.any?(node_entries, &(&1["kind"] == "community_fund" and &1["amount"] == 120))
     assert Enum.any?(node_entries, &(&1["kind"] == "grant" and &1["amount"] == 100))
-    # 小林的明细里是一笔来自节点的收入
+    refute Enum.any?(node_entries, &(&1["kind"] == "task_reward"))
+
+    # 小林的明细里是一笔来自节点主个人的收入
     bob_entries = wallet(bob_token)["entries"]
 
     assert Enum.any?(
              bob_entries,
-             &(&1["kind"] == "task_reward" and &1["from_node"]["id"] == node.id)
+             &(&1["kind"] == "task_reward" and &1["from_user"]["id"] == manager.id)
            )
 
     # ── 5. 活动报名费:报名时从个人冻结,结束后结算给节点,撤销退回 ──
@@ -351,7 +359,7 @@ defmodule RiceWeb.Api.GrainFlowTest do
       |> get_in(["data", "my_application", "id"])
 
     assert balances(alice) == {110, 30}
-    assert balances(bob) == {180, 30}
+    assert balances(bob) == {80, 30}
     # 没钱的人报不了名,也不留申请
     {poor, poor_token} = user_with_token()
 
@@ -378,7 +386,7 @@ defmodule RiceWeb.Api.GrainFlowTest do
            |> post(~p"/api/events/#{event_id}/applications/#{bob_app}/withdraw")
            |> json_response(200)
 
-    assert balances(bob) == {210, 0}
+    assert balances(bob) == {110, 0}
 
     # 时间到了,主办方结束活动:阿青的报名费结算到节点
     Repo.update_all(from(e in Rice.Events.Event, where: e.id == ^event_id),
@@ -397,9 +405,9 @@ defmodule RiceWeb.Api.GrainFlowTest do
 
     assert finished["data"]["status"] == "completed"
     assert balances(alice) == {110, 0}
-    assert balances(node) == {100, 0}
+    assert balances(node) == {250, 0}
 
-    # ── 6. 对账:发放 500 = 阿青 110 + 小林 210 + 节点主 80 + 节点 100 ────
+    # ── 6. 对账:发放 500 = 阿青 110 + 小林 110 + 节点主 30 + 节点 250 ────
     assert %{ok?: true, granted: 500, balances: 500, frozen: 0} = Rice.Grains.reconcile()
     assert Repo.aggregate(from(t in Transfer, where: t.kind == "grant"), :count) == 3
   end

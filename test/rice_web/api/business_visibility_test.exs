@@ -121,10 +121,10 @@ defmodule RiceWeb.Api.BusinessVisibilityTest do
     assert hd(response["notifications"])["record"]["text"] == "历史活动已结束"
   end
 
-  test "历史任务通知保留名称和已有结算金额，退款明确退回社区" do
+  test "历史任务通知保留名称和已有结算金额，退款明确退回发布者" do
     host = task_publisher_fixture()
     {recipient, token} = user_with_token()
-    funded_node_fixture(host, 120)
+    funded_publisher_fixture(host, 120)
     attrs = %{title: "整理村史", description: "交付内容", organizer_contact: "社区服务台", reward_amount: 60}
     {:ok, task} = Rice.Tasks.create_task(host, attrs)
     {:ok, application} = Rice.Tasks.apply(recipient, task, %{contact: "测试联系方式"})
@@ -139,7 +139,7 @@ defmodule RiceWeb.Api.BusinessVisibilityTest do
     response = build_conn() |> authed(token) |> get(~p"/api/notifications") |> json_response(200)
     items = Map.new(response["notifications"], &{&1["reason"], &1})
     assert items["task-result_approved"]["record"]["text"] == "整理村史 · 已向承作人发放 60 稻米"
-    assert items["task-task_cancelled"]["record"]["text"] == "修整步道 · 已向社区退回 60 稻米"
+    assert items["task-task_cancelled"]["record"]["text"] == "修整步道 · 已向发布者退回 60 稻米"
 
     assert Enum.all?(
              response["notifications"],

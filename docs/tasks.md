@@ -72,10 +72,10 @@ pending ──指派──▶ appointed ──提交──▶ under_review ─�
 - **撤销指派**(`release_assignee`):某个人不交付或联系不上,把他变成 `released`。
   名额空出来后,之前因名额满而 `not_selected` 的申请重新变回 `pending`。
 - **提前结束**(`close`):不等名额填满。已 `completed` 的保留,仍在承作的变 `released`,
-  `pending` 的变 `not_selected`,所有没结算的名额退回节点。有人通过验收记为 `completed`,
+  `pending` 的变 `not_selected`,所有没结算的名额退回发布者。有人通过验收记为 `completed`,
   一个都没有记为 `cancelled`。有成果等待验收时拒绝(409),先验收或退回修改。
 
-**单人任务**也可以提前结束:承接人超期不交时,这是唯一能把冻结的奖励退回节点的路
+**单人任务**也可以提前结束:承接人超期不交时,这是唯一能把冻结的奖励退回发布者的路
 (取消只允许 `open`)。结果是 `cancelled`,承接人变 `released`,任务上的
 `assignee_id` / `appointed_at` 清空。单人任务没有撤销指派。
 
@@ -93,21 +93,23 @@ pending ──指派──▶ appointed ──提交──▶ under_review ─�
 节点管理员,**或**平台在后台给了 `can_publish_tasks` 的用户,**或**后台超级管理员,
 满足其一即可:
 
-- 节点管理员发的任务由节点出奖励(`funding_node_id` = 节点)。
+- 节点管理员可以以节点名义发任务(`funding_node_id` = 节点):任务进那个节点的列表、
+  由该节点的管理员共管。**但奖励仍从发布者自己的余额冻结**,不动节点钱包。
 - 没有可管节点、但有 `can_publish_tasks` 的人(超管按 `can_publish_tasks` 同等待遇)
-  发的任务没有节点,奖励从**自己的**稻米冻结(`funding_node_id` 为 nil),由本人管理。
-  不能借这个授权动用任何节点的稻米。
+  发的任务没有节点(`funding_node_id` 为 nil),由本人管理。
 - 超管按手机号对应到同一个 C 端账号(`Accounts.put_superuser/1`),除发布外还能管
-  **全平台**的任务与活动;但凡要动节点稻米的判断——办活动的节点、点名 `node_id`
-  发任务——仍然只认节点管理员。
+  **全平台**的任务与活动;但凡是把任务挂到某个节点下、或以节点名义办活动——
+  仍然只认节点管理员。
 
 ## 奖励
 
-- `reward_amount` 是**每人**的奖励。发布时从出资方一次性冻结 `reward_amount × capacity`:
-  节点任务从**节点账户**(`funding_node_id`),个人任务从发布者本人的余额。余额不足,发布返回 422。
+- `reward_amount` 是**每人**的奖励。发布时从**发布者本人**一次性冻结
+  `reward_amount × capacity`,余额不足发布返回 422。`funding_node_id` 只标记任务
+  归属哪个节点,不出账 —— 节点钱包只归注资(`fund_node`)、节点发放(`send_from_node`)
+  和后台给节点发放这三条路。
 - 每个名额在指派时分配 `reward_slot`(取 1..capacity 里最小的空号);该人验收通过时只结算他那一份。
   撤销指派不动账,只是把号让出来。
-- 任务整体完成或提前结束时,没有结算的名额按份退回节点。
+- 任务整体完成或提前结束时,没有结算的名额按份退回发布者。
 - 任务 `reward_status` 在部分结算期间保持 `reserved`,完成后才是 `settled`;个人结算以
   `grain_receipts` 为准。
 

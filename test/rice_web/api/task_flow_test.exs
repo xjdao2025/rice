@@ -43,8 +43,9 @@ defmodule RiceWeb.Api.TaskFlowTest do
   defp detail(nil, task_id), do: build_conn() |> get(~p"/api/tasks/#{task_id}")
   defp detail(token, task_id), do: authed(token) |> get(~p"/api/tasks/#{task_id}")
 
-  defp node_balance(publisher) do
-    %{grain_balance: b, grain_frozen_balance: f} = Repo.get_by!(Node, user_id: publisher.id)
+  # 任务奖励冻结在发布者个人账上,节点钱包不参与出资
+  defp publisher_balance(publisher) do
+    %{grain_balance: b, grain_frozen_balance: f} = Repo.get!(User, publisher.id)
     {b, f}
   end
 
@@ -54,7 +55,7 @@ defmodule RiceWeb.Api.TaskFlowTest do
   test "单人任务承接人超期不交,管理员提前结束,冻结的稻米退回节点" do
     {manager, manager_token} = actor("manager")
     {worker, token} = actor("worker_a")
-    funded_node_fixture(manager, 100)
+    funded_publisher_fixture(manager, 100)
     now = DateTime.utc_now()
 
     task_id =
@@ -82,12 +83,12 @@ defmodule RiceWeb.Api.TaskFlowTest do
     overdue = detail(manager_token, task_id) |> json_response(200)
     assert overdue["data"]["status"] == "overdue"
     assert "close" in overdue["data"]["allowed_actions"]
-    assert node_balance(manager) == {70, 30}
+    assert publisher_balance(manager) == {70, 30}
 
     closed = post_as(manager_token, ~p"/api/tasks/#{task_id}/close") |> json_response(200)
     assert closed["data"]["status"] == "cancelled"
     assert closed["data"]["assignee"] == nil
-    assert node_balance(manager) == {100, 0}
+    assert publisher_balance(manager) == {100, 0}
     assert balance(worker) == 0
 
     mine = detail(token, task_id) |> json_response(200)
@@ -100,7 +101,7 @@ defmodule RiceWeb.Api.TaskFlowTest do
     {manager, manager_token} = actor("manager")
     {worker_a, token_a} = actor("worker_a")
     {worker_b, token_b} = actor("worker_b")
-    funded_node_fixture(manager, 100)
+    funded_publisher_fixture(manager, 100)
     now = DateTime.utc_now()
 
     task_id =
@@ -151,7 +152,7 @@ defmodule RiceWeb.Api.TaskFlowTest do
 
     assert balance(worker_a) == 20
     assert balance(worker_b) == 20
-    assert node_balance(manager) == {60, 0}
+    assert publisher_balance(manager) == {60, 0}
     assert post_as(manager_token, ~p"/api/tasks/#{task_id}/complete") |> json_response(409)
     assert Rice.Grains.reconcile().ok?
 
@@ -175,7 +176,7 @@ defmodule RiceWeb.Api.TaskFlowTest do
     {worker_b, token_b} = actors["worker_b"]
     {worker_c, token_c} = actors["worker_c"]
     {_guest, guest_token} = actors["guest"]
-    funded_node_fixture(manager, 100)
+    funded_publisher_fixture(manager, 100)
 
     tokens = %{
       "manager" => manager_token,
@@ -214,7 +215,7 @@ defmodule RiceWeb.Api.TaskFlowTest do
       |> json_response(201)
 
     task_id = created["data"]["id"]
-    assert node_balance(manager) == {40, 60}
+    assert publisher_balance(manager) == {40, 60}
 
     views = snapshot.("published", task_id)
     assert views["manager"]["total_reward_amount"] == 60
@@ -290,7 +291,7 @@ defmodule RiceWeb.Api.TaskFlowTest do
     assert views["manager"]["appointed_count"] == 1
     assert views["manager"]["application_closed"] == false
     assert "appoint" in views["manager"]["allowed_actions"]
-    assert node_balance(manager) == {40, 60}
+    assert publisher_balance(manager) == {40, 60}
 
     assert Enum.any?(
              Rice.Tasks.list_notifications(worker_a),
@@ -334,7 +335,7 @@ defmodule RiceWeb.Api.TaskFlowTest do
     assert views["worker_b"]["allowed_actions"] == []
     assert views["worker_c"]["allowed_actions"] == ["submit_result"]
     assert balance(worker_b) == 30
-    assert node_balance(manager) == {40, 30}
+    assert publisher_balance(manager) == {40, 30}
 
     # ── 8. 提前结束:小周撤销,剩下一份退回节点 ──────────────────────
     closed = post_as(manager_token, ~p"/api/tasks/#{task_id}/close") |> json_response(200)
@@ -349,7 +350,7 @@ defmodule RiceWeb.Api.TaskFlowTest do
     assert Map.new(views["manager"]["applications"], &{&1["user"]["nickname"], &1["state"]}) ==
              %{"阿青" => "released", "小林" => "completed", "小周" => "released"}
 
-    assert node_balance(manager) == {70, 0}
+    assert publisher_balance(manager) == {70, 0}
     assert balance(worker_c) == 0
     assert Rice.Grains.reconcile().ok?
 
