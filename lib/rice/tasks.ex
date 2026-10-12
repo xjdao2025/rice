@@ -2,11 +2,9 @@ defmodule Rice.Tasks do
   @moduledoc """
   节点任务：草稿、发布、申请、接收、交付与验收，每个名额独立结算。
 
-  节点管理员以节点名义发布，没有可管节点、但有 `can_publish_tasks` 的人（后台超管
-  同等待遇）以个人名义发布 —— 但**奖励一律从发布者本人的余额冻结**，`funding_node_id`
-  只标记任务挂在哪个节点（谁来管、出现在哪个节点列表），不是出资账户。节点钱包只管
-  注资、发放和后台给节点发放这三条路，不碰任务。单人任务就是只有一个名额的多人任务，
-  两者剩下的差别见 docs/tasks.md。
+  节点管理员发布时可选择节点或个人钱包，默认节点账户出资；没有可管节点、但有 `can_publish_tasks`
+  的人（后台超管同等待遇）以个人名义发布，由自己的余额出资。单人任务就是只有一个
+  名额的多人任务，两者剩下的差别见 docs/tasks.md。
   """
   import Ecto.Query
 
@@ -16,7 +14,11 @@ defmodule Rice.Tasks do
   alias Rice.{Grains, Pagination, Repo}
 
   @type error ::
-          :not_found | :forbidden | :conflict | :grain_reservation_missing | Ecto.Changeset.t()
+          :not_found
+          | :forbidden
+          | :conflict
+          | :grain_reservation_missing
+          | Ecto.Changeset.t()
 
   # 仍占着名额的申请状态。被撤销指派(released)的人留着 appointed_at,
   # 所以"算不算承接者"一律按状态判断,不看 appointed_at。
@@ -29,7 +31,8 @@ defmodule Rice.Tasks do
   @frozen_terms [
     reward_amount: "已发布任务不能修改任务奖励",
     capacity: "已发布任务不能修改领取人数",
-    node_id: "已发布任务不能修改所属节点"
+    node_id: "已发布任务不能修改所属节点",
+    funding_node_id: "已发布任务不能修改出资钱包"
   ]
 
   @spec list_tasks(User.t() | nil, map()) :: Pagination.page(Task.t())
@@ -181,10 +184,9 @@ defmodule Rice.Tasks do
   defp recruiting?(task),
     do: task.status == "open" or (task.capacity > 1 and task.status in @running)
 
-  # 发任务的资格是"或":节点管理员以节点名义发(返回那个节点);没有可管节点、
-  # 但平台给了 `can_publish_tasks` 的人以个人名义发(返回 nil)。钱都是发布者自己的。
-  # 后台超管按 `can_publish_tasks` 同等对待,不额外放开点名 `node_id` 挂到别人节点下 ——
-  # 任务会进那个节点的列表并由它的管理员共管。
+  # 发任务的资格是"或":节点管理员用节点的稻米;没有可管节点、但平台给了
+  # `can_publish_tasks` 的人用自己的稻米(返回 nil 节点,即个人出资)。
+  # 后台超管按 `can_publish_tasks` 同等对待,不额外放开节点出资 —— 那是花别人的钱。
   defp publishing_node(user, nil) do
     ids = Rice.Community.managed_node_ids(user)
 
@@ -210,8 +212,53 @@ defmodule Rice.Tasks do
     if Repo.get!(User, user.id).can_publish_tasks, do: {:ok, nil}, else: {:error, :forbidden}
   end
 
+  # 资金账户和所属节点分开；个人出资只能由发布者本人授权。
+  defp funding_choice(user, node_id, creator_id, attrs, default) do
+    source = Map.get(attrs, "funding_source", Map.get(attrs, :funding_source, default))
+
+    case source do
+      "personal" when user.id == creator_id ->
+        {:ok, nil}
+
+      "personal" ->
+        {:error, :forbidden}
+
+      "node" when not is_nil(node_id) ->
+        if Rice.Community.admin?(Repo.get(Rice.Community.Node, node_id), user),
+          do: {:ok, node_id},
+          else: {:error, :forbidden}
+
+      _ ->
+        {:error, :unprocessable_entity}
+    end
+  end
+
+  defp funding_source(%Task{funding_node_id: nil}), do: "personal"
+  defp funding_source(%Task{}), do: "node"
+
+  defp edit_funding(user, task, node_id, attrs) do
+    source =
+      Map.get(attrs, "funding_source", Map.get(attrs, :funding_source, funding_source(task)))
+
+    if task.status in ~w(expired cancelled) do
+      funding_choice(user, node_id, task.creator_id, attrs, funding_source(task))
+    else
+      if source == funding_source(task),
+        do: {:ok, task.funding_node_id},
+        else: {:error, :unprocessable_entity}
+    end
+  end
+
   defp create_new_task(user, node, attrs) do
-    with {:ok, status} <- initial_status(attrs) do
+    with {:ok, status} <- initial_status(attrs),
+         {:ok, funding_node_id} <-
+           funding_choice(
+             user,
+             node && node.id,
+             user.id,
+             attrs,
+             if(node, do: "node", else: "personal")
+           ) do
       # Do not wait on the draft unique index while holding the payer lock:
       # publishing that draft needs the same payer lock to reserve its reward.
       if status == "draft" and
@@ -228,7 +275,7 @@ defmodule Rice.Tasks do
         %Task{
           creator_id: user.id,
           node_id: node && node.id,
-          funding_node_id: node && node.id,
+          funding_node_id: funding_node_id,
           status: status
         }
         |> Task.create_changeset(attrs)
@@ -259,7 +306,7 @@ defmodule Rice.Tasks do
   end
 
   @spec update_task(User.t(), Task.t(), map()) ::
-          {:ok, Task.t()} | {:error, error() | :insufficient_balance}
+          {:ok, Task.t()} | {:error, error() | :unprocessable_entity | :insufficient_balance}
   def update_task(user, task, attrs) do
     with_locked_task(task.id, fn current ->
       if current.status == "draft",
@@ -276,10 +323,12 @@ defmodule Rice.Tasks do
          attrs = Map.drop(attrs, ["client_request_id", :client_request_id]),
          task = Repo.preload(task, :image_links),
          node_id = attrs["node_id"] || attrs[:node_id] || task.node_id,
+         {:ok, funding_node_id} <- edit_funding(user, task, node_id, attrs),
          changeset =
            task
            |> Task.create_changeset(attrs, published_edit: true, editing_user_id: user.id)
            |> Ecto.Changeset.put_change(:node_id, node_id)
+           |> Ecto.Changeset.put_change(:funding_node_id, funding_node_id)
            |> validate_active_terms_edit(task)
            |> validate_reopen_schedule(task),
          {:ok, _} <- Ecto.Changeset.apply_action(changeset, :update),
@@ -298,7 +347,7 @@ defmodule Rice.Tasks do
           true -> task.status
         end
 
-      with {:ok, changeset} <- revise_reward(task, changeset, node_id, reopening?),
+      with {:ok, changeset} <- revise_reward(task, changeset, funding_node_id, reopening?),
            {:ok, changeset} <- expire_edited_task(task, changeset, expiring?),
            {:ok, changeset} <- begin_next_round(task, changeset, reopening?),
            changeset = Ecto.Changeset.put_change(changeset, :status, status),
@@ -512,13 +561,19 @@ defmodule Rice.Tasks do
   end
 
   defp update_current_draft(
-         %User{id: creator_id},
+         %User{id: creator_id} = user,
          %Task{creator_id: creator_id, status: "draft"} = task,
          attrs
        ) do
     attrs = Map.drop(attrs, ["client_request_id", :client_request_id])
 
-    with {:ok, updated} <- task |> Task.create_changeset(attrs) |> Repo.update() do
+    with {:ok, funding_node_id} <-
+           funding_choice(user, task.node_id, creator_id, attrs, funding_source(task)),
+         {:ok, updated} <-
+           task
+           |> Task.create_changeset(attrs)
+           |> Ecto.Changeset.put_change(:funding_node_id, funding_node_id)
+           |> Repo.update() do
       {:ok, preload_detail(updated)}
     end
   end
@@ -767,7 +822,7 @@ defmodule Rice.Tasks do
   end
 
   @doc """
-  提前结束进行中的任务。还在承作的人撤销指派,待处理的申请落选,没发出去的奖励退回发布者。
+  提前结束进行中的任务。还在承作的人撤销指派,待处理的申请落选,没发出去的奖励退回原出资账户。
   有人已通过验收就记为 `completed`,一个都没有则记为 `cancelled`。
   有成果等待验收时不能结束,要先验收或退回修改。
 
@@ -800,7 +855,7 @@ defmodule Rice.Tasks do
 
       detail =
         if task.reward_amount > 0 and unused != [],
-          do: "#{label}，向发布者退回 #{task.reward_amount * length(unused)} 稻米",
+          do: "#{label}，向出资账户退回 #{task.reward_amount * length(unused)} 稻米",
           else: label
 
       with {:ok, released} <- move_applications(Repo, scope, "released", reward_slot: nil),
@@ -1402,17 +1457,17 @@ defmodule Rice.Tasks do
   end
 
   defp reserve_reward(%Task{reward_amount: amount} = task) when amount > 0 do
-    # 草稿还没有冻结,发布时才把归属节点写进 funding_node_id;出资方始终是发布者本人
-    task = %{task | funding_node_id: task.node_id}
+    # 草稿已保存出资选择；发布时按选定账户冻结。
 
     {
-      [status: "open", reward_status: "reserved", funding_node_id: task.node_id],
+      [status: "open", reward_status: "reserved", funding_node_id: task.funding_node_id],
       reward_detail(task, :reserved),
       fn repo, _changes -> reserve_task_reward(repo, task) end
     }
   end
 
-  defp reserve_reward(task), do: {[status: "open", funding_node_id: task.node_id], nil, nil}
+  defp reserve_reward(task),
+    do: {[status: "open", funding_node_id: task.funding_node_id], nil, nil}
 
   defp refund_reward(%Task{reward_status: "reserved", reward_amount: amount} = task, status)
        when amount > 0 do
@@ -1425,9 +1480,22 @@ defmodule Rice.Tasks do
 
   defp refund_reward(_task, status), do: {[status: status], nil, nil}
 
-  # 出资方始终是**发布者本人**。funding_node_id 只说任务挂在哪个节点(谁来管、
-  # 出现在哪个节点列表),不是钱的账户 —— 节点钱包只归注资、发放、后台发放那三条路。
-  defp reward_account(%Task{creator_id: id}), do: id
+  defp reward_account(%Task{funding_node_id: nil, creator_id: id}), do: id
+  defp reward_account(%Task{funding_node_id: id}), do: {:node, id}
+
+  # 已冻结的奖励以凭证为准，兼容曾由发布者个人出资的节点任务。
+  # 新发布 / 重开仍由 reward_account/1 决定账户，不挪动历史冻结资金。
+  defp reserved_reward_account(repo, task, slot) do
+    case repo.get_by(Rice.Grains.Receipt,
+           subject_uri: slot_subject(task, slot),
+           kind: "reserved"
+         ) do
+      %Rice.Grains.Receipt{from_user_id: id} when not is_nil(id) -> id
+      %Rice.Grains.Receipt{from_node_id: id} when not is_nil(id) -> {:node, id}
+      _ -> reward_account(task)
+    end
+  end
+
   defp reward_subject(%Task{reward_subject_uri: nil, id: id}), do: "rice://tasks/#{id}"
   defp reward_subject(%Task{reward_subject_uri: subject}), do: subject
 
@@ -1455,7 +1523,7 @@ defmodule Rice.Tasks do
     all_ok(slots, fn slot ->
       Grains.refund_business(
         repo,
-        reward_account(task),
+        reserved_reward_account(repo, task, slot),
         task.reward_amount,
         slot_subject(task, slot)
       )
@@ -1468,7 +1536,7 @@ defmodule Rice.Tasks do
     with {:ok, _} <-
            Grains.settle_business(
              Repo,
-             reward_account(task),
+             reserved_reward_account(Repo, task, application.reward_slot),
              application.user_id,
              task.reward_amount,
              slot_subject(task, application.reward_slot)
@@ -1622,7 +1690,7 @@ defmodule Rice.Tasks do
         "已向承作人发放 #{amount} 稻米"
 
       :refunded ->
-        "已向发布者退回 #{amount * task.capacity} 稻米"
+        "已向出资账户退回 #{amount * task.capacity} 稻米"
     end
   end
 

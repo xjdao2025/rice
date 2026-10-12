@@ -8,7 +8,7 @@ defmodule Rice.TaskApplicationRejectionTest do
     publisher = task_publisher_fixture()
     rejected = user_fixture()
     selected = user_fixture()
-    funded_publisher_fixture(publisher, 100)
+    node = funded_node_fixture(publisher, 100)
 
     {:ok, task} =
       Tasks.create_task(publisher, %{
@@ -44,7 +44,7 @@ defmodule Rice.TaskApplicationRejectionTest do
     assert [%{event: "assignee_appointed"}] = Tasks.list_notifications(selected)
 
     assert %{grain_balance: 40, grain_frozen_balance: 60} =
-             Repo.get!(Rice.Accounts.User, publisher.id)
+             Repo.get!(Rice.Community.Node, node.id)
 
     assert [%{kind: "reserved", amount: 60}] = Repo.all(Rice.Grains.Receipt)
     assert Rice.Grains.reconcile().ok?

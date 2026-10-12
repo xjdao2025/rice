@@ -67,12 +67,11 @@ defmodule Rice.Fixtures do
     {user, token}
   end
 
-  # 给发布者一笔稻米,顺便确认他名下有节点(返回那个节点)。任务奖励一律从
-  # **发布者个人余额**冻结 —— 节点钱包不参与出资,所以钱留在他账上。
-  def funded_publisher_fixture(publisher, amount) do
+  def funded_node_fixture(publisher, amount) do
     node = Repo.get_by!(Rice.Community.Node, user_id: publisher.id)
     {:ok, _} = Rice.Grains.grant(publisher, amount)
-    node
+    {:ok, _} = Rice.Grains.fund_node(publisher, node, amount, "fixture-fund")
+    Repo.get!(Rice.Community.Node, node.id)
   end
 
   def task_fixture(creator, attrs \\ %{}) do

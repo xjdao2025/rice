@@ -15,7 +15,7 @@ defmodule Rice.TaskApplicationConcurrencyTest do
       ids = [publisher.id, worker.id]
 
       try do
-        funded_publisher_fixture(publisher, 100)
+        node = funded_node_fixture(publisher, 100)
 
         {:ok, task} =
           Tasks.create_task(publisher, %{
@@ -78,14 +78,14 @@ defmodule Rice.TaskApplicationConcurrencyTest do
                ) == 1
 
         assert %{grain_balance: 60, grain_frozen_balance: 40} =
-                 Repo.get!(Rice.Accounts.User, publisher.id)
+                 Repo.get!(Rice.Community.Node, node.id)
 
         assert Repo.aggregate(
-                 from(r in Rice.Grains.Receipt, where: r.from_user_id == ^publisher.id),
+                 from(r in Rice.Grains.Receipt, where: r.from_node_id == ^node.id),
                  :count
                ) == 2
 
-        # The payer's own wallet serializes spending: 60 available, two racing 40s.
+        # The shared community account, not a creator's wallet, serializes spending.
         reserves =
           race(
             supervisor,
@@ -94,7 +94,7 @@ defmodule Rice.TaskApplicationConcurrencyTest do
 
               fn ->
                 Repo.transaction(fn ->
-                  case Rice.Grains.reserve_business(Repo, publisher.id, 40, uri) do
+                  case Rice.Grains.reserve_business(Repo, {:node, node.id}, 40, uri) do
                     {:ok, receipt} -> receipt
                     {:error, reason} -> Repo.rollback(reason)
                   end
@@ -113,7 +113,7 @@ defmodule Rice.TaskApplicationConcurrencyTest do
             for _ <- 1..2 do
               fn ->
                 Repo.transaction(fn ->
-                  Rice.Grains.refund_business(Repo, publisher.id, 40, reserved.subject_uri)
+                  Rice.Grains.refund_business(Repo, {:node, node.id}, 40, reserved.subject_uri)
                 end)
               end
             end
@@ -122,7 +122,7 @@ defmodule Rice.TaskApplicationConcurrencyTest do
         assert Enum.all?(refunds, &match?({:ok, {:ok, _}}, &1))
 
         assert %{grain_balance: 60, grain_frozen_balance: 40} =
-                 Repo.get!(Rice.Accounts.User, publisher.id)
+                 Repo.get!(Rice.Community.Node, node.id)
 
         assert Rice.Grains.reconcile().ok?
       after
@@ -140,7 +140,7 @@ defmodule Rice.TaskApplicationConcurrencyTest do
       ids = [publisher.id, first.id, second.id, third.id]
 
       try do
-        funded_publisher_fixture(publisher, 60)
+        node = funded_node_fixture(publisher, 60)
 
         {:ok, task} =
           Tasks.create_task(publisher, %{
@@ -220,7 +220,7 @@ defmodule Rice.TaskApplicationConcurrencyTest do
         assert %{grain_balance: 10} = Repo.get!(Rice.Accounts.User, first.id)
 
         assert %{grain_balance: 40, grain_frozen_balance: 10} =
-                 Repo.get!(Rice.Accounts.User, publisher.id)
+                 Repo.get!(Rice.Community.Node, node.id)
 
         assert Repo.aggregate(
                  from(t in Rice.Grains.Transfer,

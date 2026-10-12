@@ -96,7 +96,7 @@ defmodule Rice.Inbox do
          _event
        )
        when amount > 0,
-       do: "已向发布者退回 #{amount} 稻米"
+       do: "已向出资账户退回 #{amount} 稻米"
 
   defp notification_detail(notification, _event), do: notification.detail
 

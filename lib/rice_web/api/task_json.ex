@@ -33,6 +33,7 @@ defmodule RiceWeb.Api.TaskJSON do
       description: task.description,
       organizer_contact: task.organizer_contact,
       funding_node_id: task.funding_node_id,
+      funding_source: if(task.funding_node_id, do: "node", else: "personal"),
       can_manage: Rice.Tasks.can_manage?(task, current_user),
       attachments:
         Enum.map(loaded(task.image_links), &RiceWeb.Api.AttachmentJSON.embed(&1.attachment)),
