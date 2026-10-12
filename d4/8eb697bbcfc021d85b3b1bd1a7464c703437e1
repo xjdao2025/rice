@@ -1,0 +1,23 @@
+test/rice_web/api/task_controller_test.exs
+  s_8c80ad8d2af680::t_21410d03017102 184-211,213-216
+  s_8c80ad8d2af680::t_246998aa04bdb1 212
+lib/rice/tasks.ex
+  s_8c80ad8d2af680::t_444a2ea5077f80 536-538,540
+  s_8c80ad8d2af680::t_246998aa04bdb1 544
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d48eb697bbcfc021d85b3b1bd1a7464c703437e1",
+  "prompts": {},
+  "sessions": {
+    "s_8c80ad8d2af680": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1cacbb5-9264-4c9e-8d1e-0245a530ded4",
+        "model": "mimo-v2.6-flash"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
