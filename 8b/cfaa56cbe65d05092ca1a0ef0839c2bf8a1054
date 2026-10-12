@@ -1,0 +1,55 @@
+docs/tasks.md
+  s_aef130248f1bc9::t_67aad3583a46a9 75,78,96,98-99,101-102,106-107,110,147-162
+docs/node-wallet.md
+  s_aef130248f1bc9::t_1075564a37fdb0 1-55
+docs/permissions.md
+  s_aef130248f1bc9::t_66eda209d6c525 1-95
+lib/rice/admin/grants.ex
+  s_aef130248f1bc9::t_045b29fa1963a6 5,20-22,24,26-110,115-116,119-120
+lib/rice/inbox.ex
+  s_aef130248f1bc9::t_eb01d9294d155f 99
+lib/rice/tasks.ex
+  s_aef130248f1bc9::t_deac9547367863 5-7,17-21,34-35,187-189,215-251,253-261,278,309,326,331,350,564,570-576,825,858,1460,1463,1469-1470,1483-1498,1526,1539,1693
+lib/rice/tasks/task.ex
+  s_aef130248f1bc9::t_c3e019bf5def9b 2
+lib/rice_web/api/admin/grain_controller.ex
+  s_aef130248f1bc9::t_7ccbfc80279ec0 5,44,47-49,51-65,69
+lib/rice_web/api/task_json.ex
+  s_aef130248f1bc9::t_480709c2b908a6 36
+test/rice/task_application_concurrency_test.exs
+  s_aef130248f1bc9::t_91f79415d8a9e5 18,81,84,88,97,116,125,143,223
+test/rice/task_application_rejection_test.exs
+  s_aef130248f1bc9::t_afd222d33fe33d 11,47
+test/rice/task_application_state_test.exs
+  s_aef130248f1bc9::t_c5a785d9b738fb 165,178,184,293,299,309,321,323,330,333,349,381,390,396,402,405,415,428,435,447
+test/rice/tasks_test.exs
+  s_aef130248f1bc9::t_b26fd2cfa86636 6-138,142,154,213,220,234,254,314,332,336,374,389,404,408,414,427,433,446,457,470,484,490,496,510,519,536,542,547,568,746,774,913,1000,1101,1152,1200,1273,1309,1328,1373,1397,1425
+test/rice_web/api/admin/grain_controller_test.exs
+  s_aef130248f1bc9::t_c8ecea9f88d373 47-60,63,66-81,85-86,88,91,94,97-98,100-105,107-117,120-124,126,129,133,137-138,141-144,146-154,156,163,168-172,175,179,185-186,192,199,205-206,212,216-217,221-226,231-236,239,244,249-250,260-261,267
+test/rice_web/api/business_visibility_test.exs
+  s_aef130248f1bc9::t_6f371798bb8105 124,127,142
+test/rice_web/api/grain_flow_test.exs
+  s_aef130248f1bc9::t_d358b51d695119 75-84,87,93-98,101,105,110,113-122,124-127,130-131,215,224,229-230,232,285-286,293,303-304,307-308,312,314-315,320,361,388,407,409,411
+test/rice_web/api/task_controller_test.exs
+  s_aef130248f1bc9::t_5c433f1a5892ab 8,121,279,494,792,810
+test/rice_web/api/task_flow_test.exs
+  s_aef130248f1bc9::t_0dc6a9a5b5c309 46-47,57,85,90,103,154,178,217,293,337,352
+test/support/fixtures.ex
+  s_aef130248f1bc9::t_3932e9a281b859 70,73-74
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8bcfaa56cbe65d05092ca1a0ef0839c2bf8a1054",
+  "prompts": {},
+  "sessions": {
+    "s_aef130248f1bc9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a12fdb-5eb5-7d01-b5cf-03faf7bc12a1",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
