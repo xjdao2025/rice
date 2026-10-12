@@ -205,8 +205,9 @@ defmodule RiceWeb.Router do
     get "/settings", SettingsController, :show
     patch "/settings", SettingsController, :update
 
-    # 贴文不在 rice 库里,这里只是把下架请求转给 post 服务 ——
+    # 贴文不在 rice 库里,这里只是把列表和下架请求转给 aerox 的审核服务 ——
     # uri 放 body 不放路径:AT URI 里有斜杠。
+    get "/posts", PostController, :index
     post "/post_takedowns", PostController, :create
     delete "/post_takedowns", PostController, :delete
   end

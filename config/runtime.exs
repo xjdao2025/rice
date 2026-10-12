@@ -52,6 +52,11 @@ config :rice, :pds,
   # 这里只存密码,Rice.PDS.admin_auth/0 负责拼。
   admin_password: System.get_env("PDS_ADMIN_PASSWORD")
 
+# aerox 的审核服务:后台贴文列表和下架 / 恢复(Rice.Admin.Posts)。两项缺一则 503。
+config :rice, :labeler,
+  url: System.get_env("LABELER_URL"),
+  admin_password: System.get_env("LABELER_ADMIN_PASSWORD")
+
 # Session handoff to the front-end (social-app). After the bridge mints a PDS
 # session, rice redirects the browser here with a one-time ticket the app
 # redeems cross-origin; `allowed_origin` scopes the redeem endpoint's CORS.

@@ -11,7 +11,7 @@ defmodule RiceWeb.ThumbControllerTest do
 
   setup do
     root = Path.join(System.tmp_dir!(), "rice-thumbs-#{System.unique_integer([:positive])}")
-    blobs = Path.join(root, "blobs/#{@did}")
+    blobs = Path.join(root, "blobs/#{String.replace(@did, ":", "_")}")
     File.mkdir_p!(blobs)
 
     {:ok, image} = Operation.black(1200, 900)

@@ -27,7 +27,8 @@ config :rice, Oban,
      crontab: [
        {"* * * * *", Rice.Workers.CloseProposals},
        {"* * * * *", Rice.Workers.ExpireTasks},
-       {"* * * * *", Rice.Workers.StartEvents}
+       {"* * * * *", Rice.Workers.StartEvents},
+       {"*/5 * * * *", Rice.Workers.ModeratePosts}
      ]}
   ]
 
