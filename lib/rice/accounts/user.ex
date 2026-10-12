@@ -28,6 +28,11 @@ defmodule Rice.Accounts.User do
     # 在视图里现查,是为了让 JSON 层保持"只读结构体"这条规矩。
     field :wallet_address, :string, virtual: true
 
+    # 后台的超级管理员(`admin_users.superuser`),同手机号即同一人。权威在管理端,
+    # 由 `Accounts.put_superuser/1` 在取当前用户时填进来 —— 一次请求里
+    # `can_manage?` 要被调用几十次,判权限不能再查一遍库。
+    field :superuser, :boolean, virtual: true, default: false
+
     belongs_to :avatar, Rice.Files.Attachment
 
     timestamps()

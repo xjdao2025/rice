@@ -93,6 +93,47 @@ defmodule RiceWeb.Api.TaskControllerTest do
              Rice.Repo.get!(Rice.Accounts.User, person.id)
   end
 
+  # 后台超管自动拿到两样:个人出资发任务(不必先打 can_publish_tasks)、管全平台的任务
+  test "后台超管用个人稻米发任务,也能管别人的任务" do
+    {superuser, token} = superuser_with_token()
+    Rice.Grains.grant(superuser, 50)
+
+    created =
+      build_conn()
+      |> authed(token)
+      |> post(~p"/api/tasks", %{
+        title: "巡查河道",
+        description: "超管自己出资",
+        organizer_contact: "我的电话",
+        reward_amount: 20,
+        client_request_id: "superuser-personal"
+      })
+      |> json_response(201)
+
+    assert created["data"]["funding_node_id"] == nil
+    assert created["data"]["can_manage"]
+
+    assert %{grain_balance: 30, grain_frozen_balance: 20} =
+             Rice.Repo.get!(Rice.Accounts.User, superuser.id)
+
+    # 节点出资、别人创建的任务,超管照样管得着
+    publisher = task_publisher_fixture()
+    funded_node_fixture(publisher, 1_000)
+    other = task_fixture(publisher, %{title: "整理档案"})
+
+    detail =
+      build_conn() |> authed(token) |> get(~p"/api/tasks/#{other.id}") |> json_response(200)
+
+    assert detail["data"]["can_manage"]
+    assert "cancel" in detail["data"]["allowed_actions"]
+    assert "edit" in detail["data"]["allowed_actions"]
+
+    build_conn()
+    |> authed(token)
+    |> post(~p"/api/tasks/#{other.id}/cancel")
+    |> json_response(200)
+  end
+
   # 个人出资的任务没有节点:申请、指派、交付、验收、编辑都不能去读节点
   test "个人出资的任务走完整流程,奖励从发布者自己的稻米发出" do
     {person, token} = user_with_token()

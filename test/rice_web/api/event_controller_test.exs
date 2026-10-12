@@ -283,4 +283,41 @@ defmodule RiceWeb.Api.EventControllerTest do
 
     assert build_conn() |> get(~p"/api/events/not-an-id") |> json_response(404)
   end
+
+  # 后台超管管得着全平台的活动,但办活动要花节点的钱,仍然只认节点管理员
+  test "后台超管能管别人的活动,却不能在别人的节点下办活动" do
+    {host, host_token} = user_with_token()
+    node = node_fixture(%{user_id: host.id})
+    now = DateTime.utc_now()
+
+    attrs = %{
+      organizer_contact: "社区服务台",
+      node_id: node.id,
+      title: "公共客厅修理",
+      description: "一起修好木凳",
+      location: "公共客厅",
+      fee_amount: 20,
+      capacity: 1,
+      client_request_id: "superuser-event-#{System.unique_integer([:positive])}",
+      application_deadline: DateTime.add(now, 1800),
+      starts_at: DateTime.add(now, 3600),
+      ends_at: DateTime.add(now, 7200)
+    }
+
+    created =
+      build_conn() |> authed(host_token) |> post(~p"/api/events", attrs) |> json_response(201)
+
+    {_superuser, token} = superuser_with_token()
+
+    detail =
+      build_conn()
+      |> authed(token)
+      |> get(~p"/api/events/#{created["data"]["id"]}")
+      |> json_response(200)
+
+    assert detail["data"]["can_manage"]
+    assert "cancel" in detail["data"]["allowed_actions"]
+
+    assert build_conn() |> authed(token) |> post(~p"/api/events", attrs) |> json_response(403)
+  end
 end

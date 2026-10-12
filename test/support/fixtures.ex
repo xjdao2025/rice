@@ -49,6 +49,24 @@ defmodule Rice.Fixtures do
     publisher
   end
 
+  @doc """
+  返回 {后台超管的 C 端用户, 明文令牌}。同手机号挂着一条 `admin_users.superuser`,
+  两者靠手机号对应 —— 库里没有外键,线上也是这么关联的。
+  """
+  def superuser_with_token(attrs \\ %{}) do
+    attrs = Map.new(attrs)
+    # 手机号要过 `\d{5,20}`,而 unique_integer 一开始只有三四位,补到 11 位
+    digits = String.pad_leading(to_string(System.unique_integer([:positive])), 11, "1")
+    phone = Map.get(attrs, :phone, digits)
+
+    {user, token} = user_with_token(Map.put(attrs, :phone, phone))
+    admin = admin_fixture(%{phone: phone, phone_region: user.phone_region})
+    # superuser 不在 AdminUser.changeset 的 cast 列表里,置位只能直接改结构体
+    Repo.update!(Ecto.Changeset.change(admin, superuser: true))
+
+    {user, token}
+  end
+
   def funded_node_fixture(publisher, amount) do
     node = Repo.get_by!(Rice.Community.Node, user_id: publisher.id)
     {:ok, _} = Rice.Grains.grant(publisher, amount)
