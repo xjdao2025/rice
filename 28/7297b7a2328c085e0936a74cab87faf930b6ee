@@ -1,0 +1,64 @@
+docs/tasks.md
+  s_8c80ad8d2af680::t_bba13688fe3efc 96-97,99,101-102,106-109,112
+  s_8c80ad8d2af680::t_741ba81cdfb12b 75,78
+test/rice/tasks_test.exs
+  s_8c80ad8d2af680::t_fa611ea248258f 879
+  s_8c80ad8d2af680::t_8a551466e20ce2 21,80,123,201,278,325,336,363,369,375,415,421,447,653,792,980,1031,1079,1188,1252,1304
+  s_8c80ad8d2af680::t_c9c32568443230 88-89,205-207,260-263,282-285,304-306
+  s_8c80ad8d2af680::t_23ae50d83dc0eb 9,103,183,245,291,312,349,398,426,625,1152,1207,1276
+  s_8c80ad8d2af680::t_fd571171e583f8 389
+  s_8c80ad8d2af680::t_181334c6fcf139 87
+test/rice/task_application_concurrency_test.exs
+  s_8c80ad8d2af680::t_c7cd464ef59b62 116
+  s_8c80ad8d2af680::t_48986d97c9f559 84,88,97
+  s_8c80ad8d2af680::t_95c835e9d5ec2f 18,143
+  s_8c80ad8d2af680::t_df246141c38151 81,125,223
+test/rice_web/api/task_controller_test.exs
+  s_8c80ad8d2af680::t_23ae50d83dc0eb 792
+  s_8c80ad8d2af680::t_df246141c38151 8,121,279,494,810
+test/rice_web/api/task_flow_test.exs
+  s_8c80ad8d2af680::t_af9c7292f7b5b8 47,58,86,91,104,155,179,218,294,338,353
+  s_8c80ad8d2af680::t_ce06bc00ee45c0 46,48
+test/rice_web/api/grain_flow_test.exs
+  s_8c80ad8d2af680::t_a775303414b351 208-209,218,223-225,227
+  s_8c80ad8d2af680::t_17c2389ac2009c 280-282,289
+  s_8c80ad8d2af680::t_3e7300003e86b1 299-300,303-304,308-311,314-316,321
+  s_8c80ad8d2af680::t_c02434718ac51f 362,389,408,410
+test/rice/task_application_rejection_test.exs
+  s_8c80ad8d2af680::t_23ae50d83dc0eb 11
+  s_8c80ad8d2af680::t_df246141c38151 47
+test/rice/task_application_state_test.exs
+  s_8c80ad8d2af680::t_611bf18db437af 321,324
+  s_8c80ad8d2af680::t_af9c7292f7b5b8 165,178,184,293,299,309,322,331,334,350,382,391,397,403,406,416,429,436,448
+lib/rice/inbox.ex
+  s_8c80ad8d2af680::t_68a8f4962fd683 94
+  s_8c80ad8d2af680::t_e78d543e11455b 99
+test/support/fixtures.ex
+  s_8c80ad8d2af680::t_0112065f51ae40 70-72,75
+lib/rice/tasks.ex
+  s_8c80ad8d2af680::t_c9c32568443230 803
+  s_8c80ad8d2af680::t_e1c84f4eb17755 184-187
+  s_8c80ad8d2af680::t_6694c04959cf31 1405
+  s_8c80ad8d2af680::t_44e9e11182cfea 770
+  s_8c80ad8d2af680::t_2bec971b2fe7c2 1625
+  s_8c80ad8d2af680::t_e0434db50da885 1428-1430
+  s_8c80ad8d2af680::t_5b8caeaccd2e60 5-9
+test/rice_web/api/business_visibility_test.exs
+  s_8c80ad8d2af680::t_b41a60acb4787f 124,127,142
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "287297b7a2328c085e0936a74cab87faf930b6ee",
+  "prompts": {},
+  "sessions": {
+    "s_8c80ad8d2af680": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1cacbb5-9264-4c9e-8d1e-0245a530ded4",
+        "model": "mimo-v2.6-flash"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
