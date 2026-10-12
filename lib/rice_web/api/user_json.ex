@@ -16,6 +16,10 @@ defmodule RiceWeb.Api.UserJSON do
       grain_frozen_balance: user.grain_frozen_balance,
       node_member: user.node_member,
       can_publish_tasks: user.can_publish_tasks,
+      # 后台超管(由 Accounts.put_superuser/1 按手机号填进虚拟字段)。前端拿它决定
+      # 发布页给不给「任务」入口 —— 接口本来就放行,别让人在页面上找不到按钮。
+      # 只在这儿,不进 public/1。
+      superuser: user.superuser,
       email: user.email,
       phone: user.phone,
       phone_region: user.phone_region,
