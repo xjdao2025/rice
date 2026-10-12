@@ -1,0 +1,32 @@
+test/rice_web/api/task_controller_test.exs
+  s_8c80ad8d2af680::t_73cb9577820486 137-154
+  s_8c80ad8d2af680::t_663a9e826581dd 155-183
+docs/tasks.md
+  s_8c80ad8d2af680::t_e42eb5f09e7b63 93-94,97-102
+lib/rice_web/api/user_json.ex
+  s_8c80ad8d2af680::t_520cec8e5c9bc8 19-22
+lib/rice/accounts.ex
+  s_8c80ad8d2af680::t_848431b0dec334 546,548-552
+  s_8c80ad8d2af680::t_59652f4a7f4642 547
+lib/rice/tasks.ex
+  s_8c80ad8d2af680::t_eadf0cd0304a89 1089-1091
+lib/rice/events.ex
+  s_8c80ad8d2af680::t_b00c348c6ad3b7 113,116-117
+  s_8c80ad8d2af680::t_848431b0dec334 114-115
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3b927e28e31d7284c83be94b9d8f197781f53bab",
+  "prompts": {},
+  "sessions": {
+    "s_8c80ad8d2af680": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1cacbb5-9264-4c9e-8d1e-0245a530ded4",
+        "model": "mimo-v2.6-flash"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
