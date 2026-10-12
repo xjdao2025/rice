@@ -1,0 +1,28 @@
+lib/rice_web/api/node_json.ex
+  s_8c80ad8d2af680::t_7296d6e1a9d4f4 34,38-45
+  s_8c80ad8d2af680::t_9ce71a8e7c97a1 2
+  s_8c80ad8d2af680::t_4511f26ded1d14 46
+lib/rice_web/api/admin/catalog_json.ex
+  s_8c80ad8d2af680::t_3a767f12ec5733 28
+test/rice_web/api/node_controller_test.exs
+  s_8c80ad8d2af680::t_7395d6a1a4fc10 20
+  s_8c80ad8d2af680::t_74935f541ddfc4 100-101
+  s_8c80ad8d2af680::t_3da17f712443eb 79,84-85
+  s_8c80ad8d2af680::t_1e3af23a4d63e4 86-87
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d5e70015bfbc29194bb8d24cc6883af389dfbcde",
+  "prompts": {},
+  "sessions": {
+    "s_8c80ad8d2af680": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1cacbb5-9264-4c9e-8d1e-0245a530ded4",
+        "model": "mimo-v2.6-flash"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
