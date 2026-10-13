@@ -22,7 +22,9 @@ defmodule RiceWeb.Api.ModerationController do
           if Rice.Moderation.enabled?(),
             do: Rice.Moderation.remember_pass(user.did, params["text"], cids)
 
-          json(conn, %{data: %{allowed: true}})
+          # 顺手把发布地点一起给了:rice-front 拿到客户端 IP 后只有这一个地方问 rice,
+          # 地点要写进帖子记录里,不值得为它再单独跑一趟
+          json(conn, %{data: %{allowed: true, place: Rice.Geo.place(params["ip"])}})
 
         {:blocked, _reasons} ->
           {:error, :content_blocked}

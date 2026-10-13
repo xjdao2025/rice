@@ -37,5 +37,8 @@ npm-debug.log
 
 /priv/storage/
 
+# IP地点库(ip2region 的 xdb,构建时按 Dockerfile 里钉的 commit 下载)
+/priv/geo/
+
 # Dialyzer PLT
 /priv/plts/

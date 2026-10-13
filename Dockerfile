@@ -57,6 +57,12 @@ RUN mix assets.setup
 
 COPY priv priv
 
+# IP 地点库(ip2region 的离线 xdb,境内到城市、境外到国家/省州)。共 48MB,不进
+# git,构建时从上游按 commit 取 —— 换版本只改这个 sha。开发机不下载也能跑,
+# 只是发帖没有地点。见 lib/rice/geo.ex。
+ADD https://raw.githubusercontent.com/lionsoul2014/ip2region/02f04aa559acd954d94f77086e8ebe32483b365b/data/ip2region_v4.xdb priv/geo/ip2region_v4.xdb
+ADD https://raw.githubusercontent.com/lionsoul2014/ip2region/02f04aa559acd954d94f77086e8ebe32483b365b/data/ip2region_v6.xdb priv/geo/ip2region_v6.xdb
+
 COPY lib lib
 
 # Compile the release

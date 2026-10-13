@@ -26,7 +26,7 @@ defmodule RiceWeb.Api.ModerationControllerTest do
 
   test "正常内容和带链接的帖子放行,涉政拦下且不说命中了什么", %{token: token} do
     assert check(token, %{text: "今天去插秧"}) |> json_response(200) == %{
-             "data" => %{"allowed" => true}
+             "data" => %{"allowed" => true, "place" => nil}
            }
 
     assert check(token, %{text: "村里新修了水渠 https://www.gov.cn/"}) |> json_response(200)
@@ -68,6 +68,28 @@ defmodule RiceWeb.Api.ModerationControllerTest do
   test "阿里云出错时拒绝发布;没登录不能用", %{token: token} do
     assert check(token, %{text: "宕机"}) |> json_response(503)
     assert build_conn() |> post(~p"/api/moderation/check", %{text: "x"}) |> json_response(401)
+  end
+
+  # 发布地点写在帖子记录里,而 rice 只有这一次请求能拿到客户端 IP
+  test "带上发布者 IP 就回一个地点", %{token: token} do
+    path =
+      Path.join(System.tmp_dir!(), "moderation-xdb-#{System.unique_integer([:positive])}.xdb")
+
+    Rice.XdbFixture.write(path, :v4, {{1, 2, 0, 0}, {1, 2, 255, 255}}, "中国|广东省|广州市|电信|CN")
+    Application.put_env(:rice, Rice.Geo, v4: path)
+
+    on_exit(fn ->
+      Application.delete_env(:rice, Rice.Geo)
+      File.rm(path)
+    end)
+
+    assert check(token, %{text: "今天去插秧", ip: "1.2.3.4"}) |> json_response(200) == %{
+             "data" => %{"allowed" => true, "place" => "广东省·广州市"}
+           }
+
+    # 查不到的 IP 还是给 null,发布不受影响
+    assert %{"data" => %{"place" => nil}} =
+             check(token, %{text: "今天去插秧", ip: "8.8.8.8"}) |> json_response(200)
   end
 
   test "没配密钥时不审" do
