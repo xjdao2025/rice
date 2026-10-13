@@ -1,0 +1,49 @@
+test/rice_web/api/moderation_controller_test.exs
+  s_8c80ad8d2af680::t_c5603fb463f47a 75-77,80-84,91-92
+  s_8c80ad8d2af680::t_a7002cd4691218 29
+  s_8c80ad8d2af680::t_04de9cb3a2abf3 73-74,79,85-90,93-94
+  s_8c80ad8d2af680::t_17c511b3d8a752 78
+test/rice/geo_test.exs
+  s_8c80ad8d2af680::t_c5603fb463f47a 16-21,48-49,61-64
+  s_8c80ad8d2af680::t_dfe806e9bd5326 23
+  s_8c80ad8d2af680::t_d7a83cc27ce848 47,51
+  s_8c80ad8d2af680::t_d9e93ba3fef7f7 28,33-35,39,42,50
+  s_8c80ad8d2af680::t_75ea7189660aa0 1-6,8-15,22,24-27,29-32,36-38,40-41,43-46,52-60,65-72
+  s_8c80ad8d2af680::t_978839eca22790 7
+.gitignore
+  s_8c80ad8d2af680::t_361601e00de86b 40-42
+lib/rice/geo.ex
+  s_8c80ad8d2af680::t_7bc70be71f0ab7 200,203-204,208
+  s_8c80ad8d2af680::t_ff9ef26bad6ad3 37
+  s_8c80ad8d2af680::t_380ac8e262eedf 143-148,153-158,163-168
+  s_8c80ad8d2af680::t_47e2d639cb87de 85,89-91
+  s_8c80ad8d2af680::t_5e69791e3f0188 183
+  s_8c80ad8d2af680::t_97d3af5a4efb8b 136
+  s_8c80ad8d2af680::t_c5603fb463f47a 84,86-87,99-107,114-115
+  s_8c80ad8d2af680::t_15edf280da109d 1-36,38-83,88,92-98,108-113,116-135,137-142,149-152,159-162,169-182,184-196,199,201,205-207,209-211
+  s_8c80ad8d2af680::t_7a2321c9f1097f 197-198,202
+Dockerfile
+  s_8c80ad8d2af680::t_2605e12ef042e0 60-65
+lib/rice_web/api/moderation_controller.ex
+  s_8c80ad8d2af680::t_d7dbedbf53ebc8 25-27
+test/support/xdb_fixture.ex
+  s_8c80ad8d2af680::t_8b897b59387c73 13-16,18-21,30,37-38
+  s_8c80ad8d2af680::t_c5603fb463f47a 40-42,45,53,59-61
+  s_8c80ad8d2af680::t_6e37669012422c 1-12,17,22-29,31-36,39,43-44,46-52,54-58,62-67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f93dda3183b55ee692437fe5e09abe267cbcc41e",
+  "prompts": {},
+  "sessions": {
+    "s_8c80ad8d2af680": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1cacbb5-9264-4c9e-8d1e-0245a530ded4",
+        "model": "mimo-v2.6-flash"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
