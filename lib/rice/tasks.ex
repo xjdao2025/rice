@@ -866,8 +866,10 @@ defmodule Rice.Tasks do
                Ecto.Changeset.change(task,
                  status: next,
                  reward_status: reward_status,
-                 assignee_id: nil,
-                 appointed_at: nil
+                 assignee_id:
+                   if(next == "completed" and task.capacity == 1, do: task.assignee_id),
+                 appointed_at:
+                   if(next == "completed" and task.capacity == 1, do: task.appointed_at)
                )
              ),
            {:ok, _} <- Repo.insert(event_changeset(task.id, actor_id, task.status, next, detail)),
@@ -910,6 +912,8 @@ defmodule Rice.Tasks do
 
       true ->
         ids = Enum.map(working, & &1.user_id)
+        payers = Enum.map(1..task.capacity, &reserved_reward_account(Repo, task, &1))
+        Grains.lock_business_accounts(Repo, ids ++ payers)
 
         Repo.update_all(
           from(s in Submission,
@@ -1406,7 +1410,8 @@ defmodule Rice.Tasks do
   # Core terms and the reviewed submission must come from the same locked task state.
   defp with_locked_task(task_id, action) do
     Repo.transaction(fn ->
-      with %Task{} = task <- Repo.one(from t in Task, where: t.id == ^task_id, lock: "FOR UPDATE"),
+      with %Task{} = task <-
+             Repo.one(from t in Task, where: t.id == ^task_id, lock: "FOR UPDATE"),
            {:ok, result} <- action.(task) do
         result
       else
@@ -1696,8 +1701,8 @@ defmodule Rice.Tasks do
 
   defp reward_detail(_task, _action), do: nil
 
-  # 申请、交付要通知的人:节点的管理员们;个人出资的任务没有节点,就是发起人自己
-  defp manager_ids(%Task{node_id: nil, creator_id: id}), do: [id]
+  # 个人出资通知发布者；节点出资通知节点管理员，与管理权限一致。
+  defp manager_ids(%Task{funding_node_id: nil, creator_id: id}), do: [id]
 
   defp manager_ids(task),
     do: Rice.Community.admin_ids(Repo.get!(Rice.Community.Node, task.node_id))

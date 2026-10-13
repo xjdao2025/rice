@@ -243,6 +243,89 @@ defmodule Rice.TaskApplicationConcurrencyTest do
     end)
   end
 
+  test "batch completion and another task's review sharing a payer do not lock each other out" do
+    supervisor = start_supervised!(Task.Supervisor)
+    parent = self()
+
+    Sandbox.unboxed_run(Repo, fn ->
+      manager = task_publisher_fixture()
+      [first, second] = for _ <- 1..2, do: user_fixture()
+      ids = [manager.id, first.id, second.id]
+
+      try do
+        node = funded_node_fixture(manager, 100)
+        attrs = %{title: "批量完成", description: "共用节点账户", organizer_contact: "节点服务台"}
+
+        {:ok, batch} =
+          Tasks.create_task(manager, Map.merge(attrs, %{capacity: 3, reward_amount: 20}))
+
+        for worker <- [first, second] do
+          {:ok, application} = Tasks.apply(worker, batch, %{contact: "电话"})
+          {:ok, _} = Tasks.appoint(manager, batch, application.id)
+        end
+
+        {:ok, separate} = Tasks.create_task(manager, Map.put(attrs, :reward_amount, 10))
+        {:ok, application} = Tasks.apply(second, separate, %{contact: "电话"})
+        {:ok, separate} = Tasks.appoint(manager, separate, application.id)
+        {:ok, separate} = Tasks.submit_result(second, separate, %{body: "单独任务成果"})
+        submission = hd(separate.submissions)
+
+        review =
+          Task.Supervisor.async_nolink(supervisor, fn ->
+            Sandbox.unboxed_run(Repo, fn ->
+              Repo.transaction(fn ->
+                Rice.Grains.lock_business_accounts(Repo, [second.id])
+                send(parent, {:recipient_locked, self()})
+
+                receive do
+                  :review -> Tasks.approve_result(manager, separate, submission.id)
+                after
+                  5_000 -> raise "review barrier timed out"
+                end
+              end)
+            end)
+          end)
+
+        assert_receive {:recipient_locked, reviewer}, 5_000
+
+        completion =
+          Task.Supervisor.async_nolink(supervisor, fn ->
+            Sandbox.unboxed_run(Repo, fn ->
+              %{rows: [[pid]]} = Repo.query!("SELECT pg_backend_pid()")
+              send(parent, {:batch_started, pid})
+              Tasks.complete(manager, batch)
+            end)
+          end)
+
+        assert_receive {:batch_started, pid}, 5_000
+        await_blocked(pid, System.monotonic_time(:millisecond) + 5_000)
+        send(reviewer, :review)
+
+        assert {:ok, {:ok, _}} = Task.await(review, 15_000)
+        assert {:ok, %{status: "completed"}} = Task.await(completion, 15_000)
+
+        assert %{grain_balance: 50, grain_frozen_balance: 0} =
+                 Repo.get!(Rice.Community.Node, node.id)
+
+        assert Repo.get!(Rice.Accounts.User, first.id).grain_balance == 20
+        assert Repo.get!(Rice.Accounts.User, second.id).grain_balance == 30
+        assert Rice.Grains.reconcile().ok?
+      after
+        cleanup(ids)
+      end
+    end)
+  end
+
+  defp await_blocked(pid, deadline) do
+    %{rows: [[blockers]]} = Repo.query!("SELECT pg_blocking_pids($1)", [pid])
+
+    cond do
+      blockers != [] -> :ok
+      System.monotonic_time(:millisecond) < deadline -> await_blocked(pid, deadline)
+      true -> raise "batch did not reach the held recipient lock"
+    end
+  end
+
   defp race(supervisor, actions) do
     parent = self()
 
