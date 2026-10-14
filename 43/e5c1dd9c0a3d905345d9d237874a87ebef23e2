@@ -1,0 +1,29 @@
+test/rice_web/api/task_controller_test.exs
+  s_8c80ad8d2af680::t_0683dbbe5ce27a 294-296,300-302
+  s_8c80ad8d2af680::t_69a63080fe51b1 273-293,297-299,303-312,314-317
+  s_8c80ad8d2af680::t_14e666154ec146 313
+lib/rice_web/api/fallback_controller.ex
+  s_8c80ad8d2af680::t_5cddc459f9a6e5 21
+lib/rice/tasks.ex
+  s_8c80ad8d2af680::t_dd619f32e6aaab 894
+  s_8c80ad8d2af680::t_68d56bdc283ea0 1565-1573
+  s_8c80ad8d2af680::t_0683dbbe5ce27a 871-874
+  s_8c80ad8d2af680::t_a67bd202302b60 869-870
+  s_8c80ad8d2af680::t_b5ce79e6c81f04 915-918
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "43e5c1dd9c0a3d905345d9d237874a87ebef23e2",
+  "prompts": {},
+  "sessions": {
+    "s_8c80ad8d2af680": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1cacbb5-9264-4c9e-8d1e-0245a530ded4",
+        "model": "deepseek/deepseek-v4.1-flash"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
