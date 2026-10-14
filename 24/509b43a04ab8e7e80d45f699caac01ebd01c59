@@ -1,0 +1,31 @@
+lib/rice_web/api/fallback_controller.ex
+  s_8c80ad8d2af680::t_79d537db599b6d 21
+test/rice_web/api/task_controller_test.exs
+  s_8c80ad8d2af680::t_6a08ecf8a0ce2c 326
+  s_8c80ad8d2af680::t_9427f58ab95cdd 273-293,297-299,303-314,319-325,327-345,349-364,369-375
+  s_8c80ad8d2af680::t_bef627b3416075 294-296,300-302,315-318,346-348,365-368
+lib/rice/tasks.ex
+  s_8c80ad8d2af680::t_0c231cdb924aaa 869-870
+  s_8c80ad8d2af680::t_8af3fe15d4a2a5 893-895,908-919,928-931,933-934,946,951-953,958-959
+  s_8c80ad8d2af680::t_bef627b3416075 871-874
+test/rice_web/api/task_flow_test.exs
+  s_8c80ad8d2af680::t_fe8574a1587bec 150,152-153,155
+  s_8c80ad8d2af680::t_cea336cfb78fe7 169-170
+  s_8c80ad8d2af680::t_2e15aafc2beae4 98-99
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "24509b43a04ab8e7e80d45f699caac01ebd01c59",
+  "prompts": {},
+  "sessions": {
+    "s_8c80ad8d2af680": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1cacbb5-9264-4c9e-8d1e-0245a530ded4",
+        "model": "deepseek/deepseek-v4.1-flash"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
