@@ -18,6 +18,7 @@ defmodule RiceWeb.Api.FallbackController do
     conflict: {:conflict, %{detail: "资源状态已经变化，请刷新后重试"}},
     too_many_requests: {:too_many_requests, %{detail: "操作太频繁，请稍后再试"}},
     capacity_full: {:conflict, %{detail: "人数已满，暂无可用名额"}},
+    no_result_submitted: {:conflict, %{detail: "承做人未提交成果"}},
     grain_reservation_missing: {:conflict, %{detail: "资金记录暂时无法处理，本次操作未生效"}},
     missing_request_id: {:unprocessable_entity, %{client_request_id: ["缺少有效请求标识"]}},
     insufficient_balance: {:unprocessable_entity, %{amount: ["可用稻米不足"]}},

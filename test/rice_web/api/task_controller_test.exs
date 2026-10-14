@@ -270,6 +270,109 @@ defmodule RiceWeb.Api.TaskControllerTest do
     assert Rice.Grains.reconcile().ok?
   end
 
+  # 承做人接了活但没交成果时点「完成任务」,不能凭空把奖励发出去,要说清楚为什么
+  test "单人任务:没交成果时不能确认完成,交了就结算给他" do
+    publisher = task_publisher_fixture()
+    {:ok, publisher_token} = Rice.Accounts.issue_token(publisher)
+    {worker, worker_token} = user_with_token()
+    funded_node_fixture(publisher, 100)
+    as = fn t -> build_conn() |> authed(t) end
+
+    {:ok, task} =
+      Rice.Tasks.create_task(publisher, %{
+        title: "一个人的活",
+        description: "线下做完再说",
+        organizer_contact: "节点服务台",
+        reward_amount: 30,
+        application_deadline: DateTime.add(DateTime.utc_now(), 3600),
+        execution_deadline: DateTime.add(DateTime.utc_now(), 7200)
+      })
+
+    {:ok, application} = Rice.Tasks.apply(worker, task, %{contact: "电话"})
+    {:ok, _task} = Rice.Tasks.appoint(publisher, task, application.id)
+
+    refused =
+      as.(publisher_token) |> post(~p"/api/tasks/#{task.id}/complete") |> json_response(409)
+
+    assert refused["errors"]["detail"] == "承做人未提交成果"
+
+    # 拦下之后钱还冻着,谁也没拿到
+    assert %{grain_frozen_balance: 30} =
+             Rice.Repo.get_by!(Rice.Community.Node, user_id: publisher.id)
+
+    assert Rice.Repo.get!(Rice.Accounts.User, worker.id).grain_balance == 0
+
+    as.(worker_token)
+    |> post(~p"/api/tasks/#{task.id}/submissions", %{body: "做完了"})
+    |> json_response(201)
+
+    done = as.(publisher_token) |> post(~p"/api/tasks/#{task.id}/complete") |> json_response(200)
+    assert done["data"]["status"] == "completed"
+    assert done["data"]["reward_status"] == "settled"
+    # 单人任务结束时承做人还留在任务上(库里有约束,清掉就报错)
+    assert Rice.Repo.get!(Rice.Tasks.Task, task.id).assignee_id == worker.id
+    assert Rice.Repo.get!(Rice.Accounts.User, worker.id).grain_balance == 30
+
+    assert %{grain_balance: 70, grain_frozen_balance: 0} =
+             Rice.Repo.get_by!(Rice.Community.Node, user_id: publisher.id)
+
+    assert Rice.Grains.reconcile().ok?
+  end
+
+  # 多人任务里一个人都没交,和单人一样拦住;有人交了,没交的人不拿钱、名额退回
+  test "多人任务:一个人都没交不能确认完成,没交的人不结算" do
+    publisher = task_publisher_fixture()
+    {:ok, publisher_token} = Rice.Accounts.issue_token(publisher)
+    {first, _first_token} = user_with_token()
+    {second, second_token} = user_with_token()
+    funded_node_fixture(publisher, 100)
+    as = fn t -> build_conn() |> authed(t) end
+
+    {:ok, task} =
+      Rice.Tasks.create_task(publisher, %{
+        title: "三个人的活",
+        description: "分头做",
+        organizer_contact: "节点服务台",
+        capacity: 3,
+        reward_amount: 20
+      })
+
+    task =
+      Enum.reduce([first, second], task, fn worker, current ->
+        {:ok, application} = Rice.Tasks.apply(worker, current, %{contact: "电话"})
+        {:ok, updated} = Rice.Tasks.appoint(publisher, current, application.id)
+        updated
+      end)
+
+    refused =
+      as.(publisher_token) |> post(~p"/api/tasks/#{task.id}/complete") |> json_response(409)
+
+    assert refused["errors"]["detail"] == "承做人未提交成果"
+
+    as.(second_token)
+    |> post(~p"/api/tasks/#{task.id}/submissions", %{body: "我的那段做完了"})
+    |> json_response(201)
+
+    done = as.(publisher_token) |> post(~p"/api/tasks/#{task.id}/complete") |> json_response(200)
+    assert done["data"]["status"] == "completed"
+
+    assert Map.new(done["data"]["applications"], &{&1["user"]["nickname"], &1["state"]}) ==
+             %{first.nickname => "released", second.nickname => "completed"}
+
+    # 交了的那份发出去,没交的和空名额都退回节点
+    assert Rice.Repo.get!(Rice.Accounts.User, first.id).grain_balance == 0
+    assert Rice.Repo.get!(Rice.Accounts.User, second.id).grain_balance == 20
+
+    assert %{grain_balance: 80, grain_frozen_balance: 0} =
+             Rice.Repo.get_by!(Rice.Community.Node, user_id: publisher.id)
+
+    assert Rice.Grains.reconcile().ok?
+
+    # 已经结束,再点一次是状态冲突,不是又发一遍钱
+    assert as.(publisher_token) |> post(~p"/api/tasks/#{task.id}/complete") |> json_response(409)
+    assert Rice.Repo.get!(Rice.Accounts.User, second.id).grain_balance == 20
+  end
+
   test "多人任务公开承作人及每人奖励，个人仅能查看自己的申请和成果" do
     publisher = task_publisher_fixture()
     {:ok, publisher_token} = Rice.Accounts.issue_token(publisher)

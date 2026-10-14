@@ -866,8 +866,12 @@ defmodule Rice.Tasks do
                Ecto.Changeset.change(task,
                  status: next,
                  reward_status: reward_status,
-                 assignee_id: nil,
-                 appointed_at: nil
+                 # capacity = 1 的任务以 completed 收尾时,库里的约束要求承做人还挂着;
+                 # 取消(或多人任务)照旧清空
+                 assignee_id:
+                   if(next == "completed" and task.capacity == 1, do: task.assignee_id),
+                 appointed_at:
+                   if(next == "completed" and task.capacity == 1, do: task.appointed_at)
                )
              ),
            {:ok, _} <- Repo.insert(event_changeset(task.id, actor_id, task.status, next, detail)),
@@ -886,8 +890,9 @@ defmodule Rice.Tasks do
   defp close_current(%User{}, %Task{}, _label), do: {:error, :conflict}
 
   @doc """
-  负责人确认任务完成:还在承接的人(含待验收)都记为完成并发放奖励,其余按提前结束处理。
-  线下已经做完、没人在系统里交付成果时,用它代替逐个验收。
+  负责人确认任务完成:交过成果的人(含待验收)记为完成并发放奖励,没交的人释放、名额退回
+  出资账户,其余按提前结束处理。至少要有人交过成果 —— 谁都没交就拒绝,不能让点一下
+  就把奖励发出去。
   """
   @spec complete(User.t(), Task.t()) :: {:ok, Task.t()} | {:error, error()}
   def complete(user, %Task{} = task),
@@ -900,6 +905,18 @@ defmodule Rice.Tasks do
         from(a in round_applications(task), where: a.status in ~w(appointed overdue under_review))
       )
 
+    # 这一轮交过成果、且没被打回的人;被打回的还欠一版,不算交付
+    delivered_ids =
+      Repo.all(
+        from(s in Submission,
+          where: s.task_id == ^task.id and s.round == ^task.round and is_nil(s.review_reason),
+          select: s.user_id,
+          distinct: true
+        )
+      )
+
+    {delivered, undelivered} = Enum.split_with(working, &(&1.user_id in delivered_ids))
+
     cond do
       working == [] ->
         {:error, :conflict}
@@ -908,8 +925,13 @@ defmodule Rice.Tasks do
       Enum.any?(working, &(&1.user_id == actor_id)) ->
         {:error, :forbidden}
 
+      # 一个成果都没交:没人有资格拿奖,先让负责人看到成果
+      delivered == [] ->
+        {:error, :no_result_submitted}
+
       true ->
-        ids = Enum.map(working, & &1.user_id)
+        ids = Enum.map(delivered, & &1.user_id)
+        undelivered_scope = from(a in Application, where: a.id in ^Enum.map(undelivered, & &1.id))
 
         Repo.update_all(
           from(s in Submission,
@@ -921,16 +943,20 @@ defmodule Rice.Tasks do
         )
 
         with :ok <-
-               all_ok(working, fn application ->
+               all_ok(delivered, fn application ->
                  with :ok <- settle_application_reward(task, application),
                       :ok <- move_one(app_scope(application), "completed"),
                       do: {:ok, application}
                end),
+             # 没交成果的人不结算,名额跟着退回(close_current 按空出来的名额退款)
+             {:ok, released} <-
+               move_applications(Repo, undelivered_scope, "released", reward_slot: nil),
              :ok <-
                notify(
                  task,
                  actor_id,
-                 Enum.map(ids, &{&1, "result_approved", reward_detail(task, :settled)})
+                 Enum.map(ids, &{&1, "result_approved", reward_detail(task, :settled)}) ++
+                   Enum.map(released, &{&1, "appointment_released", "未提交成果，名额已退回"})
                ),
              do: close_current(user, task, "已确认完成")
     end

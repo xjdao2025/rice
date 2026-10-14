@@ -95,8 +95,8 @@ defmodule RiceWeb.Api.TaskFlowTest do
     assert Rice.Grains.reconcile().ok?
   end
 
-  # 人招满了、活在线下做完了,没人在系统里交付:负责人直接确认完成,而不是只能取消
-  test "负责人确认完成:承接中和待验收的都结算,空名额退回,之后可以删除" do
+  # 人招满了、活线下做完了:交了成果的结算,没交的释放、名额退回,之后可以删除
+  test "负责人确认完成:交过成果的结算,没交的释放并退回名额,之后可以删除" do
     {manager, manager_token} = actor("manager")
     {worker_a, token_a} = actor("worker_a")
     {worker_b, token_b} = actor("worker_b")
@@ -147,11 +147,12 @@ defmodule RiceWeb.Api.TaskFlowTest do
     assert done["data"]["allowed_actions"] == ["delete"]
 
     assert Map.new(done["data"]["applications"], &{&1["user"]["nickname"], &1["state"]}) ==
-             %{"阿青" => "completed", "小林" => "completed"}
+             %{"阿青" => "released", "小林" => "completed"}
 
-    assert balance(worker_a) == 20
+    # 阿青一个字都没交,不拿奖励,那个名额的钱退回节点
+    assert balance(worker_a) == 0
     assert balance(worker_b) == 20
-    assert node_balance(manager) == {60, 0}
+    assert node_balance(manager) == {80, 0}
     assert post_as(manager_token, ~p"/api/tasks/#{task_id}/complete") |> json_response(409)
     assert Rice.Grains.reconcile().ok?
 
@@ -165,7 +166,8 @@ defmodule RiceWeb.Api.TaskFlowTest do
             |> get(~p"/api/tasks?mine=created")
             |> json_response(200))["data"] == []
 
-    assert balance(worker_a) == 20
+    assert balance(worker_a) == 0
+    assert balance(worker_b) == 20
   end
 
   test "多人任务:发布、申请、指派、撤销、补位、交付、验收、提前结束,五个身份各自看到什么" do
