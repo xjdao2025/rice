@@ -1,0 +1,25 @@
+lib/rice_web/api/fallback_controller.ex
+  s_8c80ad8d2af680::t_11909c0117a8d2 59-65
+lib/rice_web/api/attachment_controller.ex
+  s_8c80ad8d2af680::t_11909c0117a8d2 11-12,38-53
+test/rice_web/api/attachment_controller_test.exs
+  s_8c80ad8d2af680::t_3333653cfb03a9 341-343
+  s_8c80ad8d2af680::t_11909c0117a8d2 344-413
+  s_8c80ad8d2af680::t_6d4b9b5f0d50a1 339-340
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c6b34f4d05de69358639680de37ca08444f62254",
+  "prompts": {},
+  "sessions": {
+    "s_8c80ad8d2af680": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1cacbb5-9264-4c9e-8d1e-0245a530ded4",
+        "model": "deepseek/deepseek-v4.1-flash"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
