@@ -8,6 +8,8 @@ defmodule RiceWeb.Api.AttachmentController do
   """
   use RiceWeb, :controller
 
+  require Logger
+
   alias Rice.Files
 
   action_fallback RiceWeb.Api.FallbackController
@@ -33,8 +35,22 @@ defmodule RiceWeb.Api.AttachmentController do
       |> put_view(json: RiceWeb.Api.AttachmentJSON)
       |> render(:show, attachment: attachment)
     else
-      {:error, %Ecto.Changeset{} = changeset} -> {:error, changeset}
-      {:error, _reason} -> {:error, :unprocessable_entity}
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:error, changeset}
+
+      # 落盘失败**不是**客户端的错。原来这里和 changeset 一起被兜成 422,
+      # 于是"目录不可写"和"不支持的文件类型"在响应里长得一模一样,还一行日志
+      # 都不留 —— 2026-09-08 生产上传全挂就是这么隐形的:rice 容器以 nobody 跑,
+      # 而 /opt/xjdao/data/rice-storage 是 root:root 0755,读得到写不进,
+      # 每次上传都回 422,像是文件本身有问题。
+      {:error, {:storage, reason}} ->
+        Logger.error("附件落盘失败: #{inspect(reason)}")
+        {:error, :storage_unavailable}
+
+      # 读不了 Plug 自己写下的临时文件,同样是服务端的问题。
+      {:error, reason} ->
+        Logger.error("读取上传的临时文件失败: #{inspect(reason)}")
+        {:error, :storage_unavailable}
     end
   end
 
