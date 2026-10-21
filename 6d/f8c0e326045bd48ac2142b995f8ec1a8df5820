@@ -1,0 +1,22 @@
+lib/rice/moderation.ex
+  h_b053bf74bef223 8-10,13,19-20,95,99,101-104,106-108,110-111
+test/rice/moderation/posts_test.exs
+  h_b053bf74bef223 48-58,73-75,80
+test/rice_web/api/admin/moderation_controller_test.exs
+  h_b053bf74bef223 583-608
+test/rice_web/api/moderation_controller_test.exs
+  h_b053bf74bef223 33,47,54-55
+test/support/fake_green.ex
+  h_b053bf74bef223 20-39,49-59
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6df8c0e326045bd48ac2142b995f8ec1a8df5820",
+  "prompts": {},
+  "humans": {
+    "h_b053bf74bef223": {
+      "author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
