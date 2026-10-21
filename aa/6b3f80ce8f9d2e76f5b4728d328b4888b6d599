@@ -1,0 +1,28 @@
+docs/tasks.md
+  h_b053bf74bef223 60,88,106-111,114
+lib/rice/events.ex
+  h_b053bf74bef223 579
+lib/rice/grains.ex
+  h_b053bf74bef223 139-177,212-263
+lib/rice/tasks.ex
+  h_b053bf74bef223 3,5-7,188-189,211-216,654,659-695,697-704,1279,1511-1516,1526-1527,1531-1549,1556-1559,1562-1567,1578-1593,1596-1598,1600-1605,1617-1630
+test/rice/events_test.exs
+  h_b053bf74bef223 15-23
+test/rice/minimal_funds_test.exs
+  h_b053bf74bef223 94-175
+test/rice/tasks_test.exs
+  h_b053bf74bef223 139,156-164,347-363,369-478,800,819
+test/rice_web/api/task_controller_test.exs
+  h_b053bf74bef223 96-132
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "aa6b3f80ce8f9d2e76f5b4728d328b4888b6d599",
+  "prompts": {},
+  "humans": {
+    "h_b053bf74bef223": {
+      "author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
