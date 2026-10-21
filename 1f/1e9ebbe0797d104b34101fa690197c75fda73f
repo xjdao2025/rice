@@ -1,0 +1,16 @@
+lib/rice_web/api/attachment_controller.ex
+  h_b053bf74bef223 64-65,67-68,103-144,146
+test/rice_web/api/attachment_controller_test.exs
+  h_b053bf74bef223 295-332
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1f1e9ebbe0797d104b34101fa690197c75fda73f",
+  "prompts": {},
+  "humans": {
+    "h_b053bf74bef223": {
+      "author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
