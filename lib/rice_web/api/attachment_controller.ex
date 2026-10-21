@@ -61,9 +61,11 @@ defmodule RiceWeb.Api.AttachmentController do
   def show(conn, %{"id" => id}) do
     with {:ok, attachment} <- Files.fetch_attachment(id),
          {:ok, content} <- read(attachment) do
+      presented = present_download(attachment, content)
+
       conn
-      |> put_resp_content_type(attachment.content_type || "application/octet-stream", nil)
-      |> put_resp_header("content-disposition", disposition(conn, attachment))
+      |> put_resp_content_type(presented.content_type || "application/octet-stream", nil)
+      |> put_resp_header("content-disposition", disposition(conn, presented))
       # 附件内容按 id 不可变(改内容就是新 id),可以放心长缓存
       |> put_resp_header("cache-control", "public, max-age=31536000, immutable")
       |> put_resp_header("etag", etag(attachment))
@@ -98,8 +100,50 @@ defmodule RiceWeb.Api.AttachmentController do
   #
   # 文件名做 RFC 5987 编码 —— 线上文件名含中文、空格和全角括号,
   # 直接塞进头里会被截断甚至构造出额外的响应头。
+  # 提案正文是 HTML，但历史上传把它存成了 text/plain 的 proposal_content.txt。
+  # 字节不动，下载时按内容交回 HTML，避免浏览器存成一份打不开的 txt。
+  defp present_download(attachment, content) do
+    if html_saved_as_text?(attachment, content) do
+      %{
+        attachment
+        | content_type: "text/html; charset=utf-8",
+          filename: html_filename(attachment.filename)
+      }
+    else
+      attachment
+    end
+  end
+
+  defp html_saved_as_text?(attachment, content) do
+    text_plain?(attachment.content_type) and txt_name?(attachment.filename) and
+      html_document?(content)
+  end
+
+  defp text_plain?(type), do: media_type(type) == "text/plain"
+
+  defp media_type(type) when is_binary(type) do
+    type |> String.split(";", parts: 2) |> hd() |> String.trim() |> String.downcase()
+  end
+
+  defp media_type(_), do: nil
+
+  defp txt_name?(name) when is_binary(name), do: String.ends_with?(String.downcase(name), ".txt")
+  defp txt_name?(_), do: false
+
+  defp html_document?(content) when is_binary(content) do
+    content
+    |> String.trim_leading()
+    |> String.match?(
+      ~r/\A<(?:!doctype|html|body|p|div|h[1-6]|img|ul|ol|li|br|table|blockquote|a|span|strong)(?:\s|>)/i
+    )
+  end
+
+  defp html_document?(_), do: false
+
+  defp html_filename(name) when is_binary(name), do: Regex.replace(~r/\.txt\z/i, name, ".html")
+
   defp disposition(conn, attachment) do
-    forced = attachment.content_type in @executable
+    forced = media_type(attachment.content_type) in @executable
     asked = conn.params["download"] in ~w(1 true)
     kind = if forced or asked, do: "attachment", else: "inline"
 

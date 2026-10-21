@@ -292,6 +292,44 @@ defmodule RiceWeb.Api.AttachmentControllerTest do
       assert disposition =~ "inline;"
     end
 
+    test "HTML 正文被存成 txt 时按 HTML 下载", %{conn: conn} do
+      body = ~s(<div class="proposal-content">提案正文</div>)
+      expect(Rice.Files.StorageMock, :get, fn _ -> {:ok, body} end)
+
+      attachment =
+        stored_fixture(%{
+          kind: "file",
+          filename: "proposal_content.txt",
+          content_type: "text/plain"
+        })
+
+      {:ok, attachment} =
+        Rice.Repo.update(Ecto.Changeset.change(attachment, content_type: "text/plain; charset=utf-8"))
+
+      conn = get(conn, ~p"/api/attachments/#{attachment.id}?download=1")
+
+      assert response(conn, 200) == body
+      assert get_resp_header(conn, "content-type") == ["text/html; charset=utf-8"]
+      assert [disposition] = get_resp_header(conn, "content-disposition")
+      assert disposition =~ "attachment;"
+      assert disposition =~ "proposal_content.html"
+      refute disposition =~ "proposal_content.txt"
+    end
+
+    test "普通 txt 仍按文本下载", %{conn: conn} do
+      expect(Rice.Files.StorageMock, :get, fn _ -> {:ok, "只是一段文字"} end)
+
+      attachment =
+        stored_fixture(%{kind: "file", filename: "note.txt", content_type: "text/plain"})
+
+      conn = get(conn, ~p"/api/attachments/#{attachment.id}?download=1")
+
+      assert get_resp_header(conn, "content-type") == ["text/plain"]
+      assert [disposition] = get_resp_header(conn, "content-disposition")
+      assert disposition =~ "note.txt"
+      refute disposition =~ ".html"
+    end
+
     test "?download=1 时才下载", %{conn: conn} do
       expect(Rice.Files.StorageMock, :get, fn _ -> {:ok, "PNG"} end)
       attachment = stored_fixture(%{filename: "banner.png", content_type: "image/png"})
