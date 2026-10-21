@@ -5,18 +5,19 @@ defmodule Rice.Moderation do
     * 文本:`TextModerationPlus` + `comment_detection_pro`
     * 图片:`ImageModeration` + `baselineCheck`,阿里云自己从 PDS 公开地址取图
 
-  中风险及以上都拦,唯一放行的是「站外引流 / 联系方式」两类 —— 这个服务把带任何链接的
-  帖子(连 gov.cn)都标成引流,拦它等于不让发链接。链接本身有问题(比如反动网站)会落到
-  涉政等标签上,照样拦下。
+  只因政治敏感隐藏:中风险及以上、且标签以 `political_` 开头(文本如
+  `political_figure`,图片如 `political_politicalFigure`)。色情、低俗、广告、引流、
+  暴力等标签都放行。同一条里只要有一个政治标签,仍隐藏。
 
   没配密钥时不审(开发、测试);配了但阿里云出错时返回 `:unavailable`,由调用方拒绝发布
-  —— 和 core 一样,宁可发不出去也不放过。
+  —— 审核服务不可用时分不清是不是涉政,宁可发不出去也不放过。
   """
   import Ecto.Query, only: [from: 2]
   require Logger
 
   @version "2022-03-02"
-  @allowed_labels ~w(nonLabel pt_to_sites pt_to_contact)
+  # 阿里云文本 PLUS 与图片 baselineCheck 的涉政标签都用这个前缀
+  @political_prefix "political_"
   # TextModerationPlus 单次最多 2000 字
   @chunk 2000
 
@@ -91,22 +92,23 @@ defmodule Rice.Moderation do
         "TextModerationPlus",
         "comment_detection_pro",
         %{"content" => content},
-        &risks(&1, @allowed_labels)
+        &risks/1
       )
 
   defp request({:image, url}),
-    do: call("ImageModeration", "baselineCheck", %{"imageUrl" => url}, &risks(&1, ["nonLabel"]))
+    do: call("ImageModeration", "baselineCheck", %{"imageUrl" => url}, &risks/1)
 
-  # 中风险及以上,除放行的标签外命中了什么
-  defp risks(%{"RiskLevel" => level} = data, allowed) when level in ~w(medium high),
-    do:
-      for(
-        %{"Label" => label} = r <- data["Result"] || [],
-        label not in allowed,
+  # 中风险及以上里的政治敏感标签。低风险和其余类别不隐藏。
+  defp risks(%{"RiskLevel" => level} = data) when level in ~w(medium high) do
+    for %{"Label" => label} = r <- data["Result"] || [],
+        political?(label),
         do: r["Description"] || label
-      )
+  end
 
-  defp risks(_data, _allowed), do: []
+  defp risks(_data), do: []
+
+  defp political?(label) when is_binary(label), do: String.starts_with?(label, @political_prefix)
+  defp political?(_label), do: false
 
   defp call(action, service, parameters, reasons) do
     cfg = config()

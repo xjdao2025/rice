@@ -17,13 +17,26 @@ defmodule Rice.FakeGreen do
          %{
            "Code" => 200,
            "Data" =>
-             if(url =~ "bad",
-               do: %{
-                 "RiskLevel" => "high",
-                 "Result" => [%{"Label" => "pornographic_adult", "Description" => "疑似色情"}]
-               },
-               else: %{"RiskLevel" => "none", "Result" => [%{"Label" => "nonLabel"}]}
-             )
+             cond do
+               url =~ "political" ->
+                 %{
+                   "RiskLevel" => "high",
+                   "Result" => [
+                     %{"Label" => "political_politicalFigure", "Description" => "疑似政治人物"}
+                   ]
+                 }
+
+               url =~ "bad" ->
+                 %{
+                   "RiskLevel" => "high",
+                   "Result" => [
+                     %{"Label" => "pornographic_adultContent", "Description" => "疑似色情"}
+                   ]
+                 }
+
+               true ->
+                 %{"RiskLevel" => "none", "Result" => [%{"Label" => "nonLabel"}]}
+             end
          }}
     end
   end
@@ -33,7 +46,17 @@ defmodule Rice.FakeGreen do
       content =~ "领导人" ->
         %{
           "RiskLevel" => "high",
-          "Result" => [%{"Label" => "political_figure", "Description" => "疑似政治人物"}]
+          "Result" => [
+            %{"Label" => "pornographic_adult", "Description" => "疑似色情内容"},
+            %{"Label" => "political_figure", "Description" => "疑似政治人物"}
+          ]
+        }
+
+      # 非政治类别即使高风险也放行
+      content =~ "色情" ->
+        %{
+          "RiskLevel" => "high",
+          "Result" => [%{"Label" => "pornographic_adult", "Description" => "疑似色情内容"}]
         }
 
       # 带链接的正常帖子:这个服务一律标成引流,要放行

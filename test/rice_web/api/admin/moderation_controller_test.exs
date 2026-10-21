@@ -580,6 +580,32 @@ defmodule RiceWeb.Api.Admin.ModerationControllerTest do
       assert created["email"] == "both@example.com"
     end
 
+    test "列表带出同手机号的 C 端昵称和用户名，不改管理员自己的昵称", %{conn: conn, token: token} do
+      user =
+        user_fixture(%{
+          phone: "13900001111",
+          phone_region: "86",
+          nickname: "严晓辉",
+          handle: "yan-link.web5.xjdao.test"
+        })
+
+      admin_fixture(%{phone: "13900001111", phone_region: "86", nickname: ""})
+      admin_fixture(%{phone: "13900002222", phone_region: "86", nickname: ""})
+
+      assert %{"data" => data} =
+               conn |> authed(token) |> get(~p"/api/admin/admin_users") |> json_response(200)
+
+      linked = Enum.find(data, &(&1["phone"] == "13900001111"))
+      assert linked["nickname"] == ""
+      assert linked["user"]["id"] == user.id
+      assert linked["user"]["nickname"] == "严晓辉"
+      assert linked["user"]["handle"] == "yan-link.web5.xjdao.test"
+      assert linked["user"]["did"] == user.did
+
+      missing = Enum.find(data, &(&1["phone"] == "13900002222"))
+      assert missing["user"] == nil
+    end
+
     test "角色只能是 admin 或 operator", %{conn: conn, token: token} do
       assert conn
              |> authed(token)

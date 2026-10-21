@@ -30,6 +30,7 @@ defmodule RiceWeb.Api.ModerationControllerTest do
            }
 
     assert check(token, %{text: "村里新修了水渠 https://www.gov.cn/"}) |> json_response(200)
+    assert check(token, %{text: "这是一段色情内容"}) |> json_response(200)
 
     blocked = check(token, %{text: "转发领导人讲话"}) |> json_response(422)
     assert blocked["errors"]["detail"] =~ "违规"
@@ -43,14 +44,15 @@ defmodule RiceWeb.Api.ModerationControllerTest do
                      }}
   end
 
-  test "图片按 PDS 公开地址交给阿里云取,有一张违规就拦", %{user: user, token: token} do
+  test "图片按 PDS 公开地址交给阿里云取,只有涉政的图拦", %{user: user, token: token} do
     assert check(token, %{text: "", images: ["bafygood"]}) |> json_response(200)
     assert_received {:green, _, %{"Action" => "ImageModeration", "ServiceParameters" => params}}
     url = Jason.decode!(params)["imageUrl"]
     assert url =~ "/xrpc/com.atproto.sync.getBlob?"
     assert url =~ "cid=bafygood" and url =~ URI.encode_www_form(user.did)
 
-    assert check(token, %{text: "插秧", images: ["bafygood", "bafybad"]}) |> json_response(422)
+    assert check(token, %{text: "插秧", images: ["bafygood", "bafybad"]}) |> json_response(200)
+    assert check(token, %{text: "插秧", images: ["bafypolitical"]}) |> json_response(422)
     assert check(token, %{images: List.duplicate("bafygood", 10)}) |> json_response(422)
   end
 

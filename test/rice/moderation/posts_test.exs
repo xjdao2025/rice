@@ -45,7 +45,17 @@ defmodule Rice.Moderation.PostsTest do
       "items" => [%{"image" => %{"ref" => %{"$link" => "bad"}}}]
     }
 
-    posts = [post("1", "去插秧"), post("2", "转发领导人讲话"), post("3", "", gallery)]
+    political = %{
+      "$type" => "app.bsky.embed.gallery",
+      "items" => [%{"image" => %{"ref" => %{"$link" => "political"}}}]
+    }
+
+    posts = [
+      post("1", "去插秧"),
+      post("2", "转发领导人讲话"),
+      post("3", "", gallery),
+      post("4", "", political)
+    ]
 
     expect(Rice.PostClientMock, :query, 2, fn query ->
       assert query[:takenDown] == "false" and query[:since]
@@ -60,12 +70,14 @@ defmodule Rice.Moderation.PostsTest do
     assert Posts.scan() == :ok
     assert_received {:hidden, "at://did:plc:alice/app.bsky.feed.post/2", "cid-2", comment}
     assert comment =~ "疑似政治人物"
-    assert_received {:hidden, "at://did:plc:alice/app.bsky.feed.post/3", "cid-3", _}
+    assert_received {:hidden, "at://did:plc:alice/app.bsky.feed.post/4", "cid-4", image_comment}
+    assert image_comment =~ "疑似政治人物"
+    refute_received {:hidden, "at://did:plc:alice/app.bsky.feed.post/3", _, _}
     assert_received {:green, _, %{"Action" => "ImageModeration", "ServiceParameters" => image}}
     assert image =~ "getBlob" and image =~ "did%3Aplc%3Aalice"
 
     assert Repo.all(from c in PostCheck, order_by: c.uri, select: {c.cid, c.verdict}) ==
-             [{"cid-1", "ok"}, {"cid-2", "hidden"}, {"cid-3", "hidden"}]
+             [{"cid-1", "ok"}, {"cid-2", "hidden"}, {"cid-3", "ok"}, {"cid-4", "hidden"}]
 
     # 第二轮全是审过的:不再找阿里云,也不翻下一页
     flush_green()
