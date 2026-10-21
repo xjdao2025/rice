@@ -140,4 +140,123 @@ defmodule Rice.BridgeTest do
       assert Accounts.get_user_by_did("did:plc:erin").nickname == "我自己改的"
     end
   end
+
+  describe "按已验证联系方式认领已有账号" do
+    test "已验证邮箱对上已有用户时绑定该 DID,不新建 PDS 账号" do
+      user = Rice.Fixtures.user_fixture(%{email: "same@example.com", nickname: "原来的名字"})
+
+      expect(Rice.PDSMock, :email_domain, fn -> "web5.xjdao.test" end)
+      expect(Rice.PDSMock, :update_account_password, fn did, password ->
+        assert did == user.did
+        assert is_binary(password) and password != ""
+        :ok
+      end)
+      expect(Rice.PDSMock, :create_session, fn did, _ ->
+        assert did == user.did
+        {:ok, session(user.did, user.handle)}
+      end)
+      expect(Rice.PDSMock, :get_profile, fn _, _ -> {:ok, %{}} end)
+
+      info =
+        userinfo(%{
+          "email" => "Same@example.com",
+          "email_verified" => true,
+          "handle" => "someone-else"
+        })
+
+      assert {:ok, identity} = Bridge.session_for(info)
+      assert identity.did == user.did
+      assert Accounts.get_link_by_sub(info["sub"]).did == user.did
+      assert Accounts.get_user_by_did(user.did).nickname == "原来的名字"
+      assert Accounts.get_user_by_did(user.did).id == user.id
+    end
+
+    test "已验证手机号同样认领" do
+      user = Rice.Fixtures.user_fixture(%{phone: "13800138000", phone_region: "86"})
+
+      did = user.did
+
+      expect(Rice.PDSMock, :update_account_password, fn ^did, _ -> :ok end)
+      expect(Rice.PDSMock, :create_session, fn ^did, _ ->
+        {:ok, session(user.did, user.handle)}
+      end)
+      expect(Rice.PDSMock, :get_profile, fn _, _ -> {:ok, %{}} end)
+
+      info = userinfo(%{"phone" => "+86 138-0013-8000", "phone_verified" => true})
+
+      assert {:ok, identity} = Bridge.session_for(info)
+      assert identity.did == user.did
+    end
+
+    test "邮箱未验证、或只是 PDS 自己的邮箱时仍然新建账号" do
+      Rice.Fixtures.user_fixture(%{email: "same@example.com"})
+      Rice.Fixtures.user_fixture(%{email: "local@web5.xjdao.test"})
+
+      expect_provision("did:plc:fresh", "fresh.web5.xjdao.test")
+
+      info =
+        userinfo(%{
+          "handle" => "fresh",
+          "email" => "same@example.com",
+          "email_verified" => false
+        })
+
+      assert {:ok, %{did: "did:plc:fresh"}} = Bridge.session_for(info)
+
+      expect_provision("did:plc:mbox", "mbox.web5.xjdao.test")
+      expect(Rice.PDSMock, :email_domain, fn -> "web5.xjdao.test" end)
+
+      assert {:ok, %{did: "did:plc:mbox"}} =
+               Bridge.session_for(
+                 userinfo(%{
+                   "handle" => "mbox",
+                   "email" => "local@web5.xjdao.test",
+                   "email_verified" => true
+                 })
+               )
+    end
+
+    test "邮箱和手机号指向不同的人时不认领" do
+      Rice.Fixtures.user_fixture(%{email: "a@example.com"})
+      Rice.Fixtures.user_fixture(%{phone: "13800138000", phone_region: "86"})
+      expect_provision("did:plc:split", "split.web5.xjdao.test")
+      expect(Rice.PDSMock, :email_domain, fn -> "web5.xjdao.test" end)
+
+      assert {:ok, %{did: "did:plc:split"}} =
+               Bridge.session_for(
+                 userinfo(%{
+                   "handle" => "split",
+                   "email" => "a@example.com",
+                   "email_verified" => true,
+                   "phone" => "13800138000",
+                   "phone_verified" => true
+                 })
+               )
+    end
+
+    test "目标账号已经绑了别的 Semi 时不抢走" do
+      user = Rice.Fixtures.user_fixture(%{email: "taken@example.com"})
+      assert {:ok, _} =
+               Accounts.create_link(%{
+                 semi_sub: "other-sub",
+                 did: user.did,
+                 handle: user.handle,
+                 account_password_ciphertext: Rice.Vault.encrypt("secret")
+               })
+
+      expect_provision("did:plc:other", "other.web5.xjdao.test")
+      expect(Rice.PDSMock, :email_domain, fn -> "web5.xjdao.test" end)
+
+      assert {:ok, %{did: "did:plc:other"}} =
+               Bridge.session_for(
+                 userinfo(%{
+                   "handle" => "other",
+                   "email" => "taken@example.com",
+                   "email_verified" => true
+                 })
+               )
+
+      assert Accounts.get_link_by_did(user.did).semi_sub == "other-sub"
+    end
+  end
 end

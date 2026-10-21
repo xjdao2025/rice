@@ -73,6 +73,28 @@ defmodule RiceWeb.Api.Admin.UserControllerTest do
       assert one["id"] == plain.id
     end
 
+    test "节点稻米是该账号名下节点的余额合计，个人余额另算", %{conn: conn, token: token} do
+      owner = user_fixture()
+      give_grain(owner, 12)
+
+      node_a = node_fixture(%{user_id: owner.id})
+      node_b = node_fixture(%{user_id: owner.id})
+      Rice.Repo.update!(Ecto.Changeset.change(node_a, grain_balance: 100))
+      Rice.Repo.update!(Ecto.Changeset.change(node_b, grain_balance: 250))
+
+      other = user_fixture()
+
+      assert %{"data" => data} =
+               conn |> authed(token) |> get(~p"/api/admin/users") |> json_response(200)
+
+      owner_row = Enum.find(data, &(&1["id"] == owner.id))
+      assert owner_row["grain_balance"] == 12
+      assert owner_row["node_grain_balance"] == 350
+
+      other_row = Enum.find(data, &(&1["id"] == other.id))
+      assert other_row["node_grain_balance"] == 0
+    end
+
     test "软删的用户不出现", %{conn: conn, token: token} do
       deleted = user_fixture()
       Rice.Repo.update!(Ecto.Changeset.change(deleted, deleted_at: DateTime.utc_now()))

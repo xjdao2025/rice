@@ -2,7 +2,12 @@ defmodule RiceWeb.Api.Admin.AdminUserJSON do
   alias RiceWeb.Api.AttachmentJSON
 
   def index(%{page: page}) do
-    %{data: Enum.map(page.entries, &data/1), meta: Rice.Pagination.meta(page)}
+    linked = Rice.Admin.linked_users(page.entries)
+
+    %{
+      data: Enum.map(page.entries, &data(&1, linked)),
+      meta: Rice.Pagination.meta(page)
+    }
   end
 
   def show(%{admin: admin}), do: %{data: data(admin)}
@@ -12,7 +17,7 @@ defmodule RiceWeb.Api.Admin.AdminUserJSON do
     %{data: Map.put(data(admin), :initial_password, password)}
   end
 
-  def data(admin) do
+  def data(admin, linked \\ %{}) do
     %{
       id: admin.id,
       nickname: admin.nickname,
@@ -23,7 +28,8 @@ defmodule RiceWeb.Api.Admin.AdminUserJSON do
       superuser: admin.superuser,
       avatar: AttachmentJSON.embed(admin.avatar),
       last_login_at: admin.last_login_at,
-      inserted_at: admin.inserted_at
+      inserted_at: admin.inserted_at,
+      user: Map.get(linked, {admin.phone_region || "86", admin.phone})
     }
   end
 end

@@ -24,9 +24,8 @@ defmodule RiceWeb.Api.UserJSON do
       phone: user.phone,
       phone_region: user.phone_region,
       # Semi 登录用户的钱包地址(来自 semi_links,由 Accounts.put_semi_wallet/1
-      # 填进虚拟字段)。非 Semi 用户是 null。**只在这里出现,不进 public/1** ——
-      # 地址本身在链上是公开的,但和社交身份绑一起就把可关联性拉高了,
-      # 该不该外露是产品决定,不是默认行为。
+      # 填进虚拟字段)。非 Semi 用户是 null。搜索、帖子作者这些列表仍走 public/1,
+      # 不带这个字段;公开主页用 profile/1,会带上。
       wallet_address: user.wallet_address,
       inserted_at: user.inserted_at
     }
@@ -43,6 +42,11 @@ defmodule RiceWeb.Api.UserJSON do
       avatar: AttachmentJSON.embed(user.avatar),
       node_member: user.node_member
     }
+  end
+
+  @doc "公开主页。在 public/1 上多一个 Semi 钱包地址,没有绑定就是 null。"
+  def profile(user) do
+    Map.put(public(user), :wallet_address, user.wallet_address)
   end
 
   @doc "嵌在别的资源里的用户(作者、转账双方等);没预加载或为空都是 null。"

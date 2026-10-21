@@ -33,6 +33,49 @@ defmodule Rice.Admin do
   end
 
   @doc """
+  同一手机号的 C 端账号。只用来在管理员列表里显示昵称和用户名，不写回 `admin_users`。
+
+  键是 `{phone_region, phone}`。没有对应 C 端账号的管理员不在结果里。
+  """
+  @spec linked_users([AdminUser.t()]) :: %{
+          {String.t(), String.t()} => %{
+            id: String.t(),
+            did: String.t(),
+            handle: String.t(),
+            nickname: String.t() | nil
+          }
+        }
+  def linked_users(admins) when is_list(admins) do
+    phones =
+      admins
+      |> Enum.flat_map(fn
+        %{phone: phone, phone_region: region} when is_binary(phone) and phone != "" ->
+          [{region || "86", phone}]
+
+        _ ->
+          []
+      end)
+      |> Enum.uniq()
+
+    if phones == [] do
+      %{}
+    else
+      numbers = Enum.map(phones, &elem(&1, 1))
+
+      from(u in Rice.Accounts.User,
+        where: is_nil(u.deleted_at) and u.phone in ^numbers,
+        select: {u.phone_region, u.phone, u.id, u.did, u.handle, u.nickname}
+      )
+      |> Repo.all()
+      |> Map.new(fn {region, phone, id, did, handle, nickname} ->
+        {{region || "86", phone},
+         %{id: id, did: did, handle: handle, nickname: nickname}}
+      end)
+      |> Map.take(phones)
+    end
+  end
+
+  @doc """
   新建管理员。返回 `{:ok, admin, 初始密码}` —— 初始密码只在这一刻可见,
   库里只有摘要。core 也是这个做法。
   """

@@ -6,12 +6,16 @@ defmodule RiceWeb.Api.Admin.UserJSON do
   alias RiceWeb.Api.AttachmentJSON
 
   def index(%{page: page}) do
-    %{data: Enum.map(page.entries, &data/1), meta: Rice.Pagination.meta(page)}
+    grains = Rice.Community.node_grain_balances(Enum.map(page.entries, & &1.id))
+
+    %{data: Enum.map(page.entries, &data(&1, grains)), meta: Rice.Pagination.meta(page)}
   end
 
-  def show(%{user: user}), do: %{data: data(user)}
+  def show(%{user: user}) do
+    %{data: data(user, Rice.Community.node_grain_balances([user.id]))}
+  end
 
-  def data(user) do
+  def data(user, grains \\ %{}) do
     %{
       id: user.id,
       did: user.did,
@@ -20,6 +24,7 @@ defmodule RiceWeb.Api.Admin.UserJSON do
       bio: user.bio,
       avatar: AttachmentJSON.embed(user.avatar),
       grain_balance: user.grain_balance,
+      node_grain_balance: Map.get(grains, user.id, 0),
       node_member: user.node_member,
       can_publish_tasks: user.can_publish_tasks,
       email: user.email,

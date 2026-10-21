@@ -17,7 +17,8 @@ defmodule RiceWeb.Api.UserController do
 
   def profile(conn, %{"identifier" => identifier}) do
     with {:ok, user} <- Rice.Repo.found(Accounts.get_public_user(identifier)) do
-      json(conn, %{data: RiceWeb.Api.UserJSON.public(user)})
+      user = Accounts.put_semi_wallet(user)
+      json(conn, %{data: RiceWeb.Api.UserJSON.profile(user)})
     end
   end
 

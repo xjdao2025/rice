@@ -146,6 +146,32 @@ defmodule Rice.Accounts do
 
   def get_user_by_identifier(_), do: nil
 
+  @doc "按邮箱找未注销的用户。空邮箱不查。"
+  @spec get_user_by_email(term()) :: User.t() | nil
+  def get_user_by_email(email) when is_binary(email) and email != "" do
+    normalized = String.downcase(String.trim(email))
+
+    Repo.one(
+      from u in active_users(),
+        where: fragment("lower(?)", u.email) == ^normalized
+    )
+  end
+
+  def get_user_by_email(_), do: nil
+
+  @doc "按手机号和区号找未注销的用户。"
+  @spec get_user_by_phone(term(), term()) :: User.t() | nil
+  def get_user_by_phone(phone, region) when is_binary(phone) and phone != "" do
+    region = if is_binary(region) and region != "", do: region, else: "86"
+
+    Repo.one(
+      from u in active_users(),
+        where: u.phone == ^phone and u.phone_region == ^region
+    )
+  end
+
+  def get_user_by_phone(_, _), do: nil
+
   @doc """
   按公开标识找人:rice id / DID / handle。
 

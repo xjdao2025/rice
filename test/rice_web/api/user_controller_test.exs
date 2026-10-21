@@ -160,6 +160,31 @@ defmodule RiceWeb.Api.UserControllerTest do
       refute Map.has_key?(member, "wallet_address")
     end
 
+    test "公开主页返回 Semi 钱包，没有绑定则是 null", %{conn: conn} do
+      user = user_fixture()
+
+      assert %{"data" => data} =
+               conn |> get(~p"/api/users/#{user.did}/profile") |> json_response(200)
+
+      assert data["wallet_address"] == nil
+      refute Map.has_key?(data, "email")
+
+      {:ok, _} =
+        Rice.Accounts.create_link(%{
+          semi_sub: "semi-sub-profile",
+          did: user.did,
+          handle: user.handle,
+          account_password_ciphertext: Rice.Vault.encrypt("pw"),
+          wallet_address: "0xabc1230000000000000000000000000000000001"
+        })
+
+      assert %{"data" => data} =
+               conn |> get(~p"/api/users/#{user.handle}/profile") |> json_response(200)
+
+      assert data["wallet_address"] == "0xabc1230000000000000000000000000000000001"
+      assert data["did"] == user.did
+    end
+
     test "未认证 401", %{conn: conn} do
       assert conn |> get(~p"/api/users/me") |> json_response(401)
     end

@@ -3,9 +3,11 @@ defmodule Rice.Bridge do
   Turns a Semi identity into an AT Protocol PDS session.
 
   A known Semi subject reuses the account rice provisioned for it (decrypt the
-  stored password → `createSession`). An unknown subject gets a fresh
-  `*.<handle_domain>` account auto-provisioned, its generated password stored
-  encrypted, and a session returned.
+  stored password → `createSession`). An unknown subject is first matched to an
+  existing rice user by a verified email or phone number. A match adopts that
+  account: rice resets the PDS password to one it can store, then links the
+  Semi subject to that DID. Otherwise a fresh `*.<handle_domain>` account is
+  auto-provisioned.
 
   Returns `{:ok, %{did, handle, access_jwt, refresh_jwt}}` or `{:error, reason}`.
   """
@@ -28,8 +30,14 @@ defmodule Rice.Bridge do
   def session_for(%{"sub" => sub} = userinfo) when is_binary(sub) do
     result =
       case Accounts.get_link_by_sub(sub) do
-        nil -> provision(sub, userinfo)
-        link -> login_existing(link, userinfo)
+        nil ->
+          case claimable_user(userinfo) do
+            %Accounts.User{} = user -> adopt(sub, user, userinfo)
+            nil -> provision(sub, userinfo)
+          end
+
+        link ->
+          login_existing(link, userinfo)
       end
 
     with {:ok, identity} <- result do
@@ -94,6 +102,78 @@ defmodule Rice.Bridge do
     case String.trim(userinfo["handle"] || "") do
       "" -> pds_handle |> String.split(".") |> hd()
       s -> String.slice(s, 0, 64)
+    end
+  end
+
+  # 已验证的邮箱或手机号对上唯一一个还没绑 Semi 的账号,就认领它,不再另开 PDS。
+  # 未验证的联系方式不能用:否则别人在 Semi 填一个别人的邮箱就能拿走账号。
+  # PDS 自己的 `*@<email_domain>` 邮箱也不是用户的联系方式。
+  defp claimable_user(userinfo) do
+    email = verified_email(userinfo)
+    phone = verified_phone(userinfo)
+
+    users =
+      [Accounts.get_user_by_email(email), Accounts.get_user_by_phone(phone, "86")]
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq_by(& &1.id)
+
+    case users do
+      [%Accounts.User{disabled_at: nil, did: did} = user] when is_binary(did) ->
+        if Accounts.get_link_by_did(did), do: nil, else: user
+
+      _ ->
+        nil
+    end
+  end
+
+  defp verified_email(%{"email" => email, "email_verified" => true}) when is_binary(email) do
+    email = email |> String.trim() |> String.downcase()
+
+    cond do
+      email == "" -> nil
+      String.ends_with?(email, "@" <> String.downcase(pds().email_domain())) -> nil
+      true -> email
+    end
+  end
+
+  defp verified_email(_), do: nil
+
+  defp verified_phone(userinfo) do
+    verified = userinfo["phone_verified"] == true or userinfo["phone_number_verified"] == true
+    raw = userinfo["phone"] || userinfo["phone_number"] || userinfo["mobile"]
+    if verified, do: normalize_phone(raw), else: nil
+  end
+
+  defp normalize_phone(raw) when is_binary(raw) do
+    digits = String.replace(raw, ~r/\D/, "")
+
+    cond do
+      String.match?(digits, ~r/^86\d{11}$/) -> String.slice(digits, 2, 11)
+      String.match?(digits, ~r/^\d{11}$/) -> digits
+      true -> nil
+    end
+  end
+
+  defp normalize_phone(_), do: nil
+
+  # 认领要把 PDS 密码换成 rice 保管的随机密码,否则下次 Semi 登录无法 createSession。
+  # 用户原来的密码登录会失效,需要走找回密码。失败时不退回去新建账号,避免又拆出一个号。
+  defp adopt(sub, %Accounts.User{} = user, userinfo) do
+    password = gen_password()
+
+    with :ok <- pds().update_account_password(user.did, password),
+         {:ok, session} <- pds().create_session(user.did, password),
+         {:ok, _} <-
+           Accounts.create_link(%{
+             semi_sub: sub,
+             did: user.did,
+             handle: user.handle,
+             account_password_ciphertext: Vault.encrypt(password),
+             wallet_address: userinfo["wallet_address"]
+           }) do
+      {:ok, identity(session)}
+    else
+      {:error, reason} -> {:error, {:adopt, reason}}
     end
   end
 

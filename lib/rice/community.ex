@@ -40,6 +40,24 @@ defmodule Rice.Community do
 
   def managed_node_ids(_), do: []
 
+  @doc "这些用户名下节点的稻米合计。一个账号有多个节点时加在一起。没有节点就是 0。"
+  @spec node_grain_balances([Rice.Tsid.t()]) :: %{Rice.Tsid.t() => non_neg_integer()}
+  def node_grain_balances([]), do: %{}
+
+  def node_grain_balances(user_ids) do
+    from(n in Node,
+      where: n.user_id in ^user_ids,
+      group_by: n.user_id,
+      select: {n.user_id, sum(n.grain_balance)}
+    )
+    |> Repo.all()
+    |> Map.new(fn {user_id, total} -> {user_id, grain_sum(total)} end)
+  end
+
+  defp grain_sum(nil), do: 0
+  defp grain_sum(%Decimal{} = total), do: Decimal.to_integer(total)
+  defp grain_sum(total) when is_integer(total), do: total
+
   @spec admin_ids(Node.t()) :: [Rice.Tsid.t()]
   def admin_ids(%Node{} = node) do
     members =
