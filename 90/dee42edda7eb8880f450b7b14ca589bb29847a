@@ -1,0 +1,34 @@
+lib/rice/accounts.ex
+  h_b053bf74bef223 149-174
+lib/rice/admin.ex
+  h_b053bf74bef223 35-77
+lib/rice/bridge.ex
+  h_b053bf74bef223 6-10,33-40,108-179
+lib/rice/community.ex
+  h_b053bf74bef223 43-60
+lib/rice_web/api/admin/admin_user_json.ex
+  h_b053bf74bef223 5-10,20,31-32
+lib/rice_web/api/admin/user_json.ex
+  h_b053bf74bef223 9-11,14-16,18,27
+lib/rice_web/api/user_controller.ex
+  h_b053bf74bef223 20-21
+lib/rice_web/api/user_json.ex
+  h_b053bf74bef223 27-28,47-51
+test/rice/bridge_test.exs
+  h_b053bf74bef223 143-261
+test/rice_web/api/admin/user_controller_test.exs
+  h_b053bf74bef223 76-97
+test/rice_web/api/user_controller_test.exs
+  h_b053bf74bef223 163-187
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "90dee42edda7eb8880f450b7b14ca589bb29847a",
+  "prompts": {},
+  "humans": {
+    "h_b053bf74bef223": {
+      "author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
