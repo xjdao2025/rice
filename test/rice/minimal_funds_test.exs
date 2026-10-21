@@ -91,6 +91,88 @@ defmodule Rice.MinimalFundsTest do
     assert Grains.wallet(user_fixture()).entries == []
   end
 
+  test "一笔冻结可以分次发放，剩下的一次退回，重复划出不重复扣" do
+    payer = user_fixture()
+    [first, second] = for _ <- 1..2, do: user_fixture()
+    {:ok, _} = Grains.grant(payer, 100)
+    uri = "rice://tasks/#{Rice.Tsid.generate()}"
+
+    assert {:ok, _} = transact(fn -> Grains.reserve_business(Repo, payer.id, 50, uri) end)
+
+    assert {:ok, paid} =
+             transact(fn ->
+               Grains.draw_reservation(
+                 Repo,
+                 payer.id,
+                 first.id,
+                 20,
+                 uri,
+                 "#{uri}/slots/1",
+                 "settled"
+               )
+             end)
+
+    assert {:ok, repeated} =
+             transact(fn ->
+               Grains.draw_reservation(
+                 Repo,
+                 payer.id,
+                 first.id,
+                 20,
+                 uri,
+                 "#{uri}/slots/1",
+                 "settled"
+               )
+             end)
+
+    assert repeated.id == paid.id
+
+    assert {:error, :conflict} =
+             transact(fn ->
+               Grains.draw_reservation(
+                 Repo,
+                 payer.id,
+                 second.id,
+                 40,
+                 uri,
+                 "#{uri}/slots/2",
+                 "settled"
+               )
+             end)
+
+    assert {:ok, _} =
+             transact(fn ->
+               Grains.draw_reservation(
+                 Repo,
+                 payer.id,
+                 second.id,
+                 20,
+                 uri,
+                 "#{uri}/slots/2",
+                 "settled"
+               )
+             end)
+
+    assert {:ok, refunded} =
+             transact(fn ->
+               Grains.draw_reservation(Repo, payer.id, nil, 10, uri, "#{uri}/refund", "refunded")
+             end)
+
+    assert {:ok, repeated_refund} =
+             transact(fn ->
+               Grains.draw_reservation(Repo, payer.id, nil, 10, uri, "#{uri}/refund", "refunded")
+             end)
+
+    assert repeated_refund.id == refunded.id
+    assert %{balance: 60, frozen: 0, earned: 100} = Grains.wallet(payer)
+    assert %{balance: 20} = Grains.wallet(first)
+    assert %{balance: 20} = Grains.wallet(second)
+    assert Enum.count(Grains.wallet(payer).entries, &(&1.kind == "reserved")) == 1
+    assert Enum.count(Grains.wallet(payer).entries, &(&1.kind == "refunded")) == 1
+    assert Enum.count(Grains.wallet(payer).entries, &(&1.kind == "task_reward")) == 2
+    assert Grains.reconcile().ok?
+  end
+
   defp transact(operation) do
     Repo.transaction(fn ->
       case operation.() do

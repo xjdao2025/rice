@@ -338,8 +338,6 @@ defmodule Rice.Events do
           result(:not_found | :forbidden | :conflict | :capacity_full | :insufficient_balance)
   def apply(user, event, attrs) do
     with_event(event.id, fn current ->
-      require!(current.creator_id != user.id and not can_manage?(current, user), :forbidden)
-
       existing =
         Repo.one(
           from(a in Application,
@@ -578,7 +576,7 @@ defmodule Rice.Events do
       {"finish",
        host? and event.status in ["open", "in_progress"] and not before?(now, event.ends_at)},
       {"apply",
-       not host? and event.creator_id != user.id and (is_nil(own) or own.status in @reapplicable) and
+       (is_nil(own) or own.status in @reapplicable) and
          event.status == "open" and
          before?(now, event.application_deadline) and before?(now, event.starts_at) and
          Enum.count(current, &(&1.status == "approved")) < event.capacity}

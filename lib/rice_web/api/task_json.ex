@@ -213,7 +213,6 @@ defmodule RiceWeb.Api.TaskJSON do
     )
     |> maybe_add(
       Rice.Tasks.accepting_applications?(task) and
-        task.creator_id != user_id and not manager? and
         not Enum.any?(applications, &(&1.user_id == user_id)),
       "apply"
     )

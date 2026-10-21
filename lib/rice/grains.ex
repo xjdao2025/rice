@@ -136,6 +136,45 @@ defmodule Rice.Grains do
   def settle_business(repo, account, recipient, amount, uri),
     do: finish_business(repo, account, recipient, amount, uri, "settled")
 
+  @doc """
+  从一笔已经冻结的总额里划出 `amount`。划出的凭证记在 `outcome_uri` 上，
+  冻结凭证留在 `reservation_uri`，金额不变。
+
+  同一 `outcome_uri` 重试时，付款方、金额、收款方一致就返回原凭证，否则 `:conflict`。
+  已划出的合计加上这次超过冻结总额也是 `:conflict`。`outcome_uri` 必须是
+  `reservation_uri` 下面的路径，这样多次发放和一次退回才能对上同一笔冻结。
+  """
+  @spec draw_reservation(
+          Ecto.Repo.t(),
+          account(),
+          account() | nil,
+          pos_integer(),
+          String.t(),
+          String.t(),
+          String.t()
+        ) ::
+          {:ok, Rice.Grains.Receipt.t()}
+          | {:error,
+             :conflict
+             | :grain_reservation_missing
+             | :recipient_not_found
+             | Ecto.Changeset.t()}
+  def draw_reservation(repo, payer, recipient, amount, reservation_uri, outcome_uri, kind)
+      when is_integer(amount) and amount > 0 and kind in ["settled", "refunded"] do
+    if String.starts_with?(outcome_uri, reservation_uri <> "/") do
+      lock_business_accounts(repo, [payer, recipient])
+      reserved = repo.get_by(Rice.Grains.Receipt, subject_uri: reservation_uri, kind: "reserved")
+
+      if is_nil(reserved) or not matches_account?(reserved, :from, payer) do
+        {:error, :grain_reservation_missing}
+      else
+        draw_outcome(repo, payer, recipient, amount, reservation_uri, outcome_uri, kind, reserved)
+      end
+    else
+      {:error, :conflict}
+    end
+  end
+
   # All users, then all nodes, sorted by ID. Callers settling multiple applications
   # acquire the complete set first, so opposite transfers cannot reverse lock order.
   @spec lock_business_accounts(Ecto.Repo.t(), [account() | nil]) :: [[User.t() | Node.t()]]
@@ -168,6 +207,58 @@ defmodule Rice.Grains do
     else
       {:error, :grain_reservation_missing}
     end
+  end
+
+  defp draw_outcome(repo, payer, recipient, amount, reservation_uri, outcome_uri, kind, reserved) do
+    case repo.get_by(Rice.Grains.Receipt, subject_uri: outcome_uri, kind: kind) do
+      %Rice.Grains.Receipt{} = existing ->
+        if existing.amount == amount and matches_account?(existing, :from, payer) and
+             matches_account?(existing, :to, recipient) do
+          {:ok, existing}
+        else
+          {:error, :conflict}
+        end
+
+      nil ->
+        other_outcome? =
+          repo.exists?(
+            from r in Rice.Grains.Receipt,
+              where: r.subject_uri == ^outcome_uri and r.kind != "reserved"
+          )
+
+        cond do
+          other_outcome? ->
+            {:error, :conflict}
+
+          consumed_amount(repo, reservation_uri) + amount > reserved.amount ->
+            {:error, :conflict}
+
+          true ->
+            release_business(repo, payer, recipient, amount, outcome_uri, kind)
+        end
+    end
+  end
+
+  # 只加总这条冻结自己名下的发放和退回。重开任务会换一条更长的冻结地址，
+  # 不能把旧任务地址当成前缀，否则会把下一轮的流水算进来。
+  defp consumed_amount(repo, reservation_uri) do
+    prefix = reservation_uri <> "/"
+
+    pattern =
+      prefix
+      |> String.replace("\\", "\\\\")
+      |> String.replace("%", "\\%")
+      |> String.replace("_", "\\_")
+      |> Kernel.<>("%")
+
+    repo.one(
+      from r in Rice.Grains.Receipt,
+        where:
+          r.kind in ["settled", "refunded"] and
+            fragment("? LIKE ? ESCAPE '\\'", r.subject_uri, ^pattern),
+        select: coalesce(sum(r.amount), 0)
+    )
+    |> to_integer()
   end
 
   defp reserve_balance(repo, payer, amount) do

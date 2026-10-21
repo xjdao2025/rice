@@ -136,7 +136,7 @@ defmodule Rice.TasksTest do
     Repo.update!(Ecto.Changeset.change(task, reward_amount: 20, reward_status: "reserved"))
   end
 
-  test "多人任务按名额冻结，每人独立退回、交付、验收及幂等发放" do
+  test "多人任务整笔冻结，每人独立交付、验收及幂等发放" do
     publisher = task_publisher_fixture()
     [first, second, third, visitor] = for _ <- 1..4, do: user_fixture()
     node = funded_node_fixture(publisher, 120)
@@ -152,6 +152,15 @@ defmodule Rice.TasksTest do
 
     assert %{grain_balance: 60, grain_frozen_balance: 60} =
              Repo.get!(Rice.Community.Node, node.id)
+
+    reserved_uri = "rice://tasks/#{task.id}"
+
+    assert [%{amount: 60, subject_uri: ^reserved_uri}] =
+             Repo.all(
+               from r in Rice.Grains.Receipt,
+                 where: r.kind == "reserved",
+                 select: %{amount: r.amount, subject_uri: r.subject_uri}
+             )
 
     applications =
       for worker <- [first, second, third] do
@@ -335,10 +344,135 @@ defmodule Rice.TasksTest do
     assert completed.status == "completed"
     assert %{grain_balance: 43, grain_frozen_balance: 0} = Repo.get!(Rice.Community.Node, node.id)
 
-    assert Repo.aggregate(from(r in Rice.Grains.Receipt, where: r.kind == "refunded"), :count) ==
-             2
+    reserved_uri = "rice://tasks/#{task.id}"
+
+    assert [%{amount: 21, subject_uri: ^reserved_uri}] =
+             Repo.all(
+               from r in Rice.Grains.Receipt,
+                 where: r.kind == "reserved",
+                 select: %{amount: r.amount, subject_uri: r.subject_uri}
+             )
+
+    refund_uri = "#{reserved_uri}/refund"
+
+    assert [%{amount: 14, subject_uri: ^refund_uri}] =
+             Repo.all(
+               from r in Rice.Grains.Receipt,
+                 where: r.kind == "refunded",
+                 select: %{amount: r.amount, subject_uri: r.subject_uri}
+             )
 
     assert {:ok, []} = Tasks.check_due_tasks(now)
+    assert Rice.Grains.reconcile().ok?
+  end
+
+  test "十个名额只发出两份时，冻结和退回各记一笔，领奖按人记" do
+    publisher = task_publisher_fixture()
+    [first, second] = for _ <- 1..2, do: user_fixture()
+    node = funded_node_fixture(publisher, 200)
+
+    {:ok, task} =
+      Tasks.create_task(publisher, %{
+        title: "十个名额",
+        description: "只完成两人",
+        organizer_contact: "节点服务台",
+        capacity: 10,
+        reward_amount: 3
+      })
+
+    for worker <- [first, second], reduce: task do
+      current ->
+        {:ok, application} = Tasks.apply(worker, current, %{contact: "联系方式"})
+        {:ok, appointed} = Tasks.appoint(publisher, current, application.id)
+        {:ok, submitted} = Tasks.submit_result(worker, appointed, %{body: "已完成"})
+        submission = Enum.find(submitted.submissions, &(&1.user_id == worker.id))
+        {:ok, approved} = Tasks.approve_result(publisher, submitted, submission.id)
+        approved
+    end
+
+    {:ok, closed} = Tasks.close(publisher, task)
+    assert closed.status == "completed"
+    assert closed.reward_status == "settled"
+
+    assert %{grain_balance: 194, grain_frozen_balance: 0} =
+             Repo.get!(Rice.Community.Node, node.id)
+
+    assert %{grain_balance: 3} = Repo.get!(Rice.Accounts.User, first.id)
+    assert %{grain_balance: 3} = Repo.get!(Rice.Accounts.User, second.id)
+
+    wallet = Rice.Grains.wallet(Repo.get!(Rice.Community.Node, node.id))
+    assert Enum.count(wallet.entries, &(&1.kind == "reserved")) == 1
+    assert Enum.count(wallet.entries, &(&1.kind == "refunded")) == 1
+    assert Enum.count(wallet.entries, &(&1.kind == "task_reward")) == 2
+    assert Enum.find(wallet.entries, &(&1.kind == "reserved")).amount == 30
+    assert Enum.find(wallet.entries, &(&1.kind == "refunded")).amount == 24
+
+    assert Repo.aggregate(
+             from(r in Rice.Grains.Receipt,
+               where: like(r.subject_uri, "%/slots/%") and r.kind == "reserved"
+             ),
+             :count
+           ) == 0
+
+    assert Rice.Grains.reconcile().ok?
+  end
+
+  test "已按名额冻结的进行中任务仍按名额结算和退回" do
+    publisher = task_publisher_fixture()
+    worker = user_fixture()
+    node = funded_node_fixture(publisher, 120)
+
+    {:ok, task} =
+      Tasks.create_task(publisher, %{
+        title: "旧账本",
+        description: "按名额冻结",
+        organizer_contact: "节点服务台",
+        capacity: 2,
+        reward_amount: 30
+      })
+
+    [reserved] = Repo.all(from r in Rice.Grains.Receipt, where: r.kind == "reserved")
+    Repo.delete!(reserved)
+
+    for slot <- 1..2 do
+      {:ok, _} =
+        Repo.insert(
+          Rice.Grains.Receipt.changeset(%Rice.Grains.Receipt{}, %{
+            kind: "reserved",
+            amount: 30,
+            subject_uri: "rice://tasks/#{task.id}/slots/#{slot}",
+            from_node_id: node.id
+          })
+        )
+    end
+
+    {:ok, application} = Tasks.apply(worker, task, %{contact: "联系方式"})
+    {:ok, task} = Tasks.appoint(publisher, task, application.id)
+    {:ok, task} = Tasks.submit_result(worker, task, %{body: "已完成"})
+    {:ok, _} = Tasks.approve_result(publisher, task, hd(task.submissions).id)
+    {:ok, closed} = Tasks.close(publisher, task)
+    assert closed.status == "completed"
+
+    assert %{grain_balance: 90, grain_frozen_balance: 0} =
+             Repo.get!(Rice.Community.Node, node.id)
+
+    assert %{grain_balance: 30} = Repo.get!(Rice.Accounts.User, worker.id)
+
+    assert Repo.aggregate(
+             from(r in Rice.Grains.Receipt, where: r.kind == "reserved"),
+             :count
+           ) == 2
+
+    assert Repo.aggregate(
+             from(r in Rice.Grains.Receipt, where: r.kind == "refunded"),
+             :count
+           ) == 1
+
+    refute Repo.exists?(
+             from r in Rice.Grains.Receipt,
+               where: r.subject_uri == ^"rice://tasks/#{task.id}/refund"
+           )
+
     assert Rice.Grains.reconcile().ok?
   end
 
@@ -663,7 +797,7 @@ defmodule Rice.TasksTest do
     assert Enum.all?(Tasks.list_notifications(worker), &match?(%DateTime{}, &1.read_at))
   end
 
-  test "只有社区唯一管理员可发布，管理员不能申请自己的任务" do
+  test "只有社区唯一管理员可发布，管理员也能申请自己的任务" do
     user = user_fixture()
 
     assert {:error, :forbidden} =
@@ -682,7 +816,7 @@ defmodule Rice.TasksTest do
                description: "公开参与"
              })
 
-    assert {:error, :forbidden} = Tasks.apply(publisher, task, %{contact: "测试联系方式"})
+    assert {:ok, _} = Tasks.apply(publisher, task, %{contact: "测试联系方式"})
 
     assert {:error, :forbidden} =
              Tasks.create_task(user, %{

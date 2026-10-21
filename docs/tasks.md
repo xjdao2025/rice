@@ -57,7 +57,7 @@ pending ──指派──▶ appointed ──提交──▶ under_review ─�
 | 超期 | 指派时不判,由定时任务记(交付时还没记就先补记),事件带说明并提醒;退回修改回到超期不再提醒 | 每次汇总都追平,任务变成 `overdue` 时提醒 |
 | 验收通过的事件 | 带发放说明(单人任务的事件说明对承接人可见) | 不带 |
 | 撤销指派 | 没有,用提前结束 | 有 |
-| 奖励账本 | `rice://tasks/<id>`,不分名额 | `rice://tasks/<id>/slots/<n>` |
+| 奖励账本 | `rice://tasks/<id>` 上冻结、结算或退回 | 冻结和退回各一笔,记在 `rice://tasks/<id>` 和 `.../refund`;每人的发放记在 `.../slots/<n>`,钱包里不展示结算凭证,只展示对应的一笔转账 |
 
 因此任务状态不能用来判断某个人能做什么,个人动作一律看自己的申请状态(`my_status`)。
 `my_status` 的 `appointed` / `overdue` 以交付截止时间实时判断,落库的 `overdue` 由定时任务
@@ -85,7 +85,7 @@ pending ──指派──▶ appointed ──提交──▶ under_review ─�
 | --- | --- |
 | `task_applications` | 每个申请人一行:`status`、`appointed_at`、`appointment_reason`、`reward_slot`(1..capacity,`(task_id, round, reward_slot)` 唯一)、`rejected_at` |
 | `task_submissions` | 每人每轮的交付成果,各自审核 |
-| `grain_receipts` | 每个名额一条冻结/结算/退款记录,`subject_uri` 形如 `rice://tasks/<id>/slots/<n>`(单人任务是 `rice://tasks/<id>`) |
+| `grain_receipts` | 一笔冻结(`rice://tasks/<id>`,金额是 `reward_amount × capacity`)、每人一笔结算(`.../slots/<n>`)、没用上的名额合成一笔退回(`.../refund`)。单人任务的结算和退回仍记在任务地址本身。按名额各冻一笔的旧任务不改历史,结算和退回仍走原来的名额地址 |
 | `tasks` | `capacity`、汇总状态;单人任务另有 `assignee_id` |
 
 ## 谁能发任务
@@ -103,13 +103,15 @@ pending ──指派──▶ appointed ──提交──▶ under_review ─�
 
 ## 奖励
 
-- `reward_amount` 是**每人**的奖励。发布时从出资方一次性冻结 `reward_amount × capacity`:
-  节点任务从**节点账户**(`funding_node_id`),个人任务从发布者本人的余额。余额不足,发布返回 422。
-- 每个名额在指派时分配 `reward_slot`(取 1..capacity 里最小的空号);该人验收通过时只结算他那一份。
-  撤销指派不动账,只是把号让出来。
-- 任务整体完成或提前结束时,没有结算的名额按份退回节点。
+- `reward_amount` 是**每人**的奖励。发布时从出资方一次性冻结 `reward_amount × capacity`,
+  账本上是**一笔**冻结:节点任务从**节点账户**(`funding_node_id`),个人任务从发布者本人的余额。
+  余额不足,发布返回 422。
+- 每个名额在指派时分配 `reward_slot`(取 1..capacity 里最小的空号);该人验收通过时只结算他那一份,
+  每人一笔转账。撤销指派不动账,只是把号让出来。
+- 任务整体完成或提前结束时,没有结算的名额合成**一笔**退回出资账户。
 - 任务 `reward_status` 在部分结算期间保持 `reserved`,完成后才是 `settled`;个人结算以
   `grain_receipts` 为准。
+- 已经按名额各写了一笔冻结的任务保持原样,不改历史流水。
 
 ## 发布后能改什么
 

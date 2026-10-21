@@ -93,6 +93,43 @@ defmodule RiceWeb.Api.TaskControllerTest do
              Rice.Repo.get!(Rice.Accounts.User, person.id)
   end
 
+  test "节点用户没有可管节点时用自己的稻米发任务，不能花别人的节点" do
+    {member, token} = node_member_with_token()
+    Rice.Grains.grant(member, 40)
+    owner = task_publisher_fixture()
+    node = funded_node_fixture(owner, 1_000)
+
+    created =
+      build_conn()
+      |> authed(token)
+      |> post(~p"/api/tasks", %{
+        title: "村里记一笔账",
+        description: "节点用户发起",
+        organizer_contact: "我的电话",
+        reward_amount: 15,
+        client_request_id: "node-member-personal"
+      })
+      |> json_response(201)
+
+    assert created["data"]["node"] == nil
+    assert created["data"]["funding_node_id"] == nil
+
+    assert %{grain_balance: 25, grain_frozen_balance: 15} =
+             Rice.Repo.get!(Rice.Accounts.User, member.id)
+
+    assert build_conn()
+           |> authed(token)
+           |> post(~p"/api/tasks", %{
+             title: "动别人的节点",
+             description: "不行",
+             organizer_contact: "我的电话",
+             reward_amount: 1,
+             node_id: node.id,
+             client_request_id: "node-member-foreign"
+           })
+           |> response(403)
+  end
+
   # 后台超管自动拿到两样:个人出资发任务(不必先打 can_publish_tasks)、管全平台的任务
   test "后台超管用个人稻米发任务,也能管别人的任务" do
     {superuser, token} = superuser_with_token()

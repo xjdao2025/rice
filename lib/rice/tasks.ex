@@ -1,10 +1,10 @@
 defmodule Rice.Tasks do
   @moduledoc """
-  节点任务：草稿、发布、申请、接收、交付与验收，每个名额独立结算。
+  节点任务：草稿、发布、申请、接收、交付与验收。奖励按人发放；冻结和退回各记一笔。
 
-  节点管理员发布时可选择节点或个人钱包，默认节点账户出资；没有可管节点、但有 `can_publish_tasks`
-  的人（后台超管同等待遇）以个人名义发布，由自己的余额出资。单人任务就是只有一个
-  名额的多人任务，两者剩下的差别见 docs/tasks.md。
+  节点管理员发布时可选择节点或个人钱包，默认节点账户出资；没有可管节点、但有
+  `can_publish_tasks`、是节点用户，或是后台超管的人，以个人名义发布，由自己的余额出资。
+  单人任务就是只有一个名额的多人任务，两者剩下的差别见 docs/tasks.md。
   """
   import Ecto.Query
 
@@ -185,8 +185,8 @@ defmodule Rice.Tasks do
     do: task.status == "open" or (task.capacity > 1 and task.status in @running)
 
   # 发任务的资格是"或":节点管理员用节点的稻米;没有可管节点、但平台给了
-  # `can_publish_tasks` 的人用自己的稻米(返回 nil 节点,即个人出资)。
-  # 后台超管按 `can_publish_tasks` 同等对待,不额外放开节点出资 —— 那是花别人的钱。
+  # `can_publish_tasks`、账号是节点用户、或是后台超管的人用自己的稻米
+  # (返回 nil 节点,即个人出资)。节点用户不因此获得节点出资。
   defp publishing_node(user, nil) do
     ids = Rice.Community.managed_node_ids(user)
 
@@ -208,8 +208,12 @@ defmodule Rice.Tasks do
 
   defp personal_publisher(%User{superuser: true}), do: {:ok, nil}
 
-  defp personal_publisher(user) do
-    if Repo.get!(User, user.id).can_publish_tasks, do: {:ok, nil}, else: {:error, :forbidden}
+  defp personal_publisher(%User{id: id}) do
+    case Repo.get!(User, id) do
+      %User{can_publish_tasks: true} -> {:ok, nil}
+      %User{node_member: true} -> {:ok, nil}
+      _ -> {:error, :forbidden}
+    end
   end
 
   # 资金账户和所属节点分开；个人出资只能由发布者本人授权。
@@ -647,63 +651,57 @@ defmodule Rice.Tasks do
   @spec apply(User.t(), Task.t(), map()) ::
           {:ok, Application.t()}
           | {:error, :forbidden | :conflict | :capacity_full | Ecto.Changeset.t()}
-  def apply(%User{id: user_id}, %Task{creator_id: user_id}, _attrs),
-    do: {:error, :forbidden}
-
+  # 节点管理员、任务发起人也能领自己节点上的任务。验收发奖仍然不能自己批给自己。
   def apply(%User{} = user, %Task{status: status} = task, attrs)
       when status in ~w(open in_progress overdue under_review) do
     now = DateTime.utc_now()
 
-    if can_manage?(task, user) do
-      {:error, :forbidden}
-    else
-      Multi.new()
-      |> Multi.run(:task, fn repo, _ -> lock_open_task(repo, task.id, now) end)
-      |> Multi.run(:existing_application, fn repo, %{task: current_task} ->
-        {:ok,
-         repo.get_by(Application,
-           task_id: task.id,
-           round: current_task.round,
-           user_id: user.id
-         )}
-      end)
-      |> Multi.run(:application, fn
-        repo, %{task: current_task, existing_application: nil} ->
-          %Application{task_id: task.id, round: current_task.round, user_id: user.id}
-          |> Application.create_changeset(attrs)
-          |> repo.insert()
+    Multi.new()
+    |> Multi.run(:task, fn repo, _ -> lock_open_task(repo, task.id, now) end)
+    |> Multi.run(:existing_application, fn repo, %{task: current_task} ->
+      {:ok,
+       repo.get_by(Application,
+         task_id: task.id,
+         round: current_task.round,
+         user_id: user.id
+       )}
+    end)
+    |> Multi.run(:application, fn
+      repo, %{task: current_task, existing_application: nil} ->
+        %Application{task_id: task.id, round: current_task.round, user_id: user.id}
+        |> Application.create_changeset(attrs)
+        |> repo.insert()
 
-        _repo, %{existing_application: existing} ->
-          {:ok, existing}
-      end)
-      |> Multi.run(:announce, fn repo, %{task: current_task, existing_application: existing} ->
-        if existing do
-          {:ok, :already_applied}
-        else
-          event =
-            event_changeset(
-              task.id,
-              user.id,
-              current_task.status,
-              current_task.status,
-              "收到任务申请"
-            )
+      _repo, %{existing_application: existing} ->
+        {:ok, existing}
+    end)
+    |> Multi.run(:announce, fn repo, %{task: current_task, existing_application: existing} ->
+      if existing do
+        {:ok, :already_applied}
+      else
+        event =
+          event_changeset(
+            task.id,
+            user.id,
+            current_task.status,
+            current_task.status,
+            "收到任务申请"
+          )
 
-          rows = Enum.map(manager_ids(current_task), &{&1, "application_created", nil})
+        rows = Enum.map(manager_ids(current_task), &{&1, "application_created", nil})
 
-          with {:ok, _} <- repo.insert(event),
-               :ok <- notify(current_task, user.id, rows),
-               do: {:ok, :applied}
-        end
-      end)
-      |> Repo.transaction()
-      |> case do
-        {:ok, %{application: application}} ->
-          {:ok, Repo.preload(application, user: :avatar)}
-
-        {:error, _step, reason, _changes} ->
-          {:error, reason}
+        with {:ok, _} <- repo.insert(event),
+             :ok <- notify(current_task, user.id, rows),
+             do: {:ok, :applied}
       end
+    end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{application: application}} ->
+        {:ok, Repo.preload(application, user: :avatar)}
+
+      {:error, _step, reason, _changes} ->
+        {:error, reason}
     end
   end
 
@@ -1267,7 +1265,6 @@ defmodule Rice.Tasks do
 
   defp filter_available(query, %User{id: id}, value) when value in [true, "true", "1"] do
     now = DateTime.utc_now()
-    managed_ids = Rice.Community.managed_node_ids(%User{id: id})
     applied = from(a in current_round_applications(), where: a.user_id == ^id)
 
     from(t in query,
@@ -1279,8 +1276,7 @@ defmodule Rice.Tasks do
             t.id,
             t.round,
             ^@appointed
-          ) < t.capacity and t.creator_id != ^id and
-          (is_nil(t.funding_node_id) or t.node_id not in ^managed_ids) and
+          ) < t.capacity and
           not exists(applied) and
           (is_nil(t.application_deadline) or t.application_deadline > ^now)
     )
@@ -1512,10 +1508,12 @@ defmodule Rice.Tasks do
   # 已冻结的奖励以凭证为准，兼容曾由发布者个人出资的节点任务。
   # 新发布 / 重开仍由 reward_account/1 决定账户，不挪动历史冻结资金。
   defp reserved_reward_account(repo, task, slot) do
-    case repo.get_by(Rice.Grains.Receipt,
-           subject_uri: slot_subject(task, slot),
-           kind: "reserved"
-         ) do
+    uri =
+      if slot_reservations?(repo, task),
+        do: slot_subject(task, slot),
+        else: reward_subject(task)
+
+    case repo.get_by(Rice.Grains.Receipt, subject_uri: uri, kind: "reserved") do
       %Rice.Grains.Receipt{from_user_id: id} when not is_nil(id) -> id
       %Rice.Grains.Receipt{from_node_id: id} when not is_nil(id) -> {:node, id}
       _ -> reward_account(task)
@@ -1525,27 +1523,48 @@ defmodule Rice.Tasks do
   defp reward_subject(%Task{reward_subject_uri: nil, id: id}), do: "rice://tasks/#{id}"
   defp reward_subject(%Task{reward_subject_uri: subject}), do: subject
 
-  # 单人任务的冻结、结算和退款一直记在任务本身(没有 /slots/1),账本不迁移,这里照旧
+  # 单人任务的冻结、结算和退款一直记在任务本身(没有 /slots/1)。
+  # 多人任务的发放仍用 /slots/<n> 区分每个人，但这只是结算凭证，不是各自一笔冻结。
   defp slot_subject(%Task{capacity: 1} = task, _slot), do: reward_subject(task)
   defp slot_subject(task, slot), do: "#{reward_subject(task)}/slots/#{slot}"
 
-  defp reserve_task_reward(repo, task) do
-    all_ok(1..task.capacity, fn slot ->
-      Grains.reserve_business(
-        repo,
-        reward_account(task),
-        task.reward_amount,
-        slot_subject(task, slot)
-      )
-    end)
+  # 上线前的多人任务按名额各冻了一笔。那些凭证还在，结算和退回仍按名额走。
+  # 新任务只在任务地址上冻一笔总额，不能回头改已经写下的流水。
+  defp slot_reservations?(repo, %Task{capacity: capacity} = task) when capacity > 1 do
+    repo.exists?(
+      from r in Rice.Grains.Receipt,
+        where: r.subject_uri == ^slot_subject(task, 1) and r.kind == "reserved"
+    )
+  end
+
+  defp slot_reservations?(_repo, _task), do: false
+
+  defp reserve_task_reward(repo, %Task{reward_amount: amount, capacity: capacity} = task)
+       when amount > 0 do
+    total = if capacity == 1, do: amount, else: amount * capacity
+
+    case Grains.reserve_business(repo, reward_account(task), total, reward_subject(task)) do
+      {:ok, _} -> :ok
+      error -> error
+    end
   end
 
   defp refund_task_reward(repo, task),
     do: refund_reward_slots(repo, task, Enum.to_list(1..task.capacity))
 
   defp refund_reward_slots(_repo, %Task{reward_amount: 0}, _slots), do: :ok
+  defp refund_reward_slots(_repo, _task, []), do: :ok
+
+  defp refund_reward_slots(repo, %Task{capacity: 1} = task, slots),
+    do: refund_each_slot(repo, task, slots)
 
   defp refund_reward_slots(repo, task, slots) do
+    if slot_reservations?(repo, task),
+      do: refund_each_slot(repo, task, slots),
+      else: refund_unused_once(repo, task, slots)
+  end
+
+  defp refund_each_slot(repo, task, slots) do
     all_ok(slots, fn slot ->
       Grains.refund_business(
         repo,
@@ -1556,9 +1575,34 @@ defmodule Rice.Tasks do
     end)
   end
 
+  # 没用上的名额合成一笔退回。调用方传入的是还没结算的名额，金额就是这些名额的合计。
+  defp refund_unused_once(repo, task, slots) do
+    case Grains.draw_reservation(
+           repo,
+           reserved_reward_account(repo, task, hd(slots)),
+           nil,
+           task.reward_amount * length(slots),
+           reward_subject(task),
+           "#{reward_subject(task)}/refund",
+           "refunded"
+         ) do
+      {:ok, _} -> :ok
+      error -> error
+    end
+  end
+
   defp settle_application_reward(%Task{reward_amount: 0}, _application), do: :ok
 
+  defp settle_application_reward(%Task{capacity: 1} = task, application),
+    do: settle_slot(task, application)
+
   defp settle_application_reward(task, application) do
+    if slot_reservations?(Repo, task),
+      do: settle_slot(task, application),
+      else: draw_slot(task, application)
+  end
+
+  defp settle_slot(task, application) do
     with {:ok, _} <-
            Grains.settle_business(
              Repo,
@@ -1566,6 +1610,20 @@ defmodule Rice.Tasks do
              application.user_id,
              task.reward_amount,
              slot_subject(task, application.reward_slot)
+           ),
+         do: :ok
+  end
+
+  defp draw_slot(task, application) do
+    with {:ok, _} <-
+           Grains.draw_reservation(
+             Repo,
+             reserved_reward_account(Repo, task, application.reward_slot),
+             application.user_id,
+             task.reward_amount,
+             reward_subject(task),
+             slot_subject(task, application.reward_slot),
+             "settled"
            ),
          do: :ok
   end
