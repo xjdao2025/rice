@@ -9,6 +9,7 @@ defmodule Rice.Files do
   上传需要认证；新增业务图片须由操作者上传，已有图片可继续引用。
   """
   import Ecto.Query
+  require Logger
 
   alias Rice.Files.{Attachment, Storage}
   alias Rice.Repo
@@ -61,7 +62,8 @@ defmodule Rice.Files do
   建一个附件:先校验,再落盘,最后写元数据。
 
   顺序是刻意的 —— 先写库再落盘的话,落盘失败会留下一条指向不存在文件的记录;
-  反过来,写库失败最多留下一个孤儿文件,由清理任务回收,不会让接口返回坏数据。
+  反过来，元数据写入明确失败时只清理本次刚生成的 key；清理失败记录告警。
+  不扫描或删除尚未关联的历史附件，它们可能仍在编辑中。
   """
   @spec create_attachment(binary(), map(), Rice.Tsid.t() | nil) ::
           {:ok, Attachment.t()} | {:error, Ecto.Changeset.t() | {:storage, term()}}
@@ -83,7 +85,21 @@ defmodule Rice.Files do
 
     with {:ok, _} <- Ecto.Changeset.apply_action(changeset, :insert),
          :ok <- Storage.put(key, content) do
-      Repo.insert(changeset)
+      case Repo.insert(changeset) do
+        {:ok, attachment} ->
+          {:ok, attachment}
+
+        {:error, _} = error ->
+          case Storage.delete(key) do
+            :ok ->
+              :ok
+
+            {:error, reason} ->
+              Logger.warning("attachment compensation failed for #{id}: #{inspect(reason)}")
+          end
+
+          error
+      end
     else
       {:error, %Ecto.Changeset{} = invalid} -> {:error, invalid}
       {:error, reason} -> {:error, {:storage, reason}}

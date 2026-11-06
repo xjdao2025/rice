@@ -16,6 +16,8 @@ defmodule RiceWeb.Api.FallbackController do
   # 错误原因 → {状态码, errors}。文案是对外契约,改一个字前端就要跟着改。
   @errors %{
     conflict: {:conflict, %{detail: "资源状态已经变化，请刷新后重试"}},
+    account_has_balance: {:conflict, %{detail: "账号仍有可用或冻结稻米，请先结清后再注销"}},
+    account_has_responsibilities: {:conflict, %{detail: "账号仍有节点管理职责或未完成的任务、活动，请先处理后再注销"}},
     too_many_requests: {:too_many_requests, %{detail: "操作太频繁，请稍后再试"}},
     capacity_full: {:conflict, %{detail: "人数已满，暂无可用名额"}},
     no_result_submitted: {:conflict, %{detail: "承做人未提交成果"}},

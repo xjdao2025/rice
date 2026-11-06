@@ -146,15 +146,18 @@ defmodule Rice.BridgeTest do
       user = Rice.Fixtures.user_fixture(%{email: "same@example.com", nickname: "原来的名字"})
 
       expect(Rice.PDSMock, :email_domain, fn -> "web5.xjdao.test" end)
+
       expect(Rice.PDSMock, :update_account_password, fn did, password ->
         assert did == user.did
         assert is_binary(password) and password != ""
         :ok
       end)
+
       expect(Rice.PDSMock, :create_session, fn did, _ ->
         assert did == user.did
         {:ok, session(user.did, user.handle)}
       end)
+
       expect(Rice.PDSMock, :get_profile, fn _, _ -> {:ok, %{}} end)
 
       info =
@@ -177,9 +180,11 @@ defmodule Rice.BridgeTest do
       did = user.did
 
       expect(Rice.PDSMock, :update_account_password, fn ^did, _ -> :ok end)
+
       expect(Rice.PDSMock, :create_session, fn ^did, _ ->
         {:ok, session(user.did, user.handle)}
       end)
+
       expect(Rice.PDSMock, :get_profile, fn _, _ -> {:ok, %{}} end)
 
       info = userinfo(%{"phone" => "+86 138-0013-8000", "phone_verified" => true})
@@ -236,6 +241,7 @@ defmodule Rice.BridgeTest do
 
     test "目标账号已经绑了别的 Semi 时不抢走" do
       user = Rice.Fixtures.user_fixture(%{email: "taken@example.com"})
+
       assert {:ok, _} =
                Accounts.create_link(%{
                  semi_sub: "other-sub",

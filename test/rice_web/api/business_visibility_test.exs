@@ -51,6 +51,18 @@ defmodule RiceWeb.Api.BusinessVisibilityTest do
           ends_at: DateTime.add(now, 7200)
         })
 
+      # Legacy notifications derive money from the recipient's historical
+      # application, never from a mutable current event fee.
+      Rice.Repo.insert!(%Rice.Events.Application{
+        event_id: event.id,
+        round: event.round,
+        user_id: recipient.id,
+        fee_amount: fee,
+        contact: "历史联系方式",
+        status: "pending",
+        payment_status: if(fee > 0, do: "reserved", else: "none")
+      })
+
       for {action, detail} <- [
             {"event_application_created", "有新的活动申请"},
             {"event_application_approved", "活动申请已通过"},

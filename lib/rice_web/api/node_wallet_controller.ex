@@ -34,8 +34,13 @@ defmodule RiceWeb.Api.NodeWalletController do
            ) do
       render_transfer(conn, transfer, user)
     else
-      {:ok, _amount} -> {:error, :invalid_amount}
-      error -> error
+      {:ok, _amount} ->
+        RiceWeb.Api.TransferDiagnostics.log_failure(:node, {:error, :invalid_amount})
+        {:error, :invalid_amount}
+
+      error ->
+        RiceWeb.Api.TransferDiagnostics.log_failure(:node, error)
+        error
     end
   end
 

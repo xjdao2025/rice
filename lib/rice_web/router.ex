@@ -98,6 +98,7 @@ defmodule RiceWeb.Router do
     get "/nodes/:node_id/members", NodeController, :members
     get "/nodes/:id", NodeController, :show
     get "/users/search", UserController, :search
+    post "/users/profiles", UserController, :profiles
     get "/users/:identifier/profile", UserController, :profile
     get "/events", EventController, :index
     get "/events/:id", EventController, :show

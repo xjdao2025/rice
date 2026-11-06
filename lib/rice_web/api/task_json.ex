@@ -63,7 +63,8 @@ defmodule RiceWeb.Api.TaskJSON do
         ),
       reward_amount: task.reward_amount,
       reward_status: task.reward_status,
-      application_count: length(applications),
+      application_count:
+        if(task.list_summary, do: task.list_summary.application_count, else: length(applications)),
       my_application_status: own && application_status(own, task),
       my_application: own && application(own, task, detail?),
       allowed_actions: allowed_actions(task, applications, submissions, current_user),
@@ -179,16 +180,23 @@ defmodule RiceWeb.Api.TaskJSON do
   defp allowed_actions(task, applications, submissions, %User{id: user_id} = user) do
     manager? = Rice.Tasks.can_manage?(task, user)
 
+    reviewable? =
+      if task.list_summary,
+        do: task.list_summary.reviewable_applications > 0,
+        else: Enum.any?(applications, &(is_nil(&1.rejected_at) and is_nil(&1.appointed_at)))
+
     can_review_applications? =
-      Rice.Tasks.accepting_applications?(task) and manager? and
-        Enum.any?(applications, &(is_nil(&1.rejected_at) and is_nil(&1.appointed_at)))
+      Rice.Tasks.accepting_applications?(task) and manager? and reviewable?
 
     running? = manager? and task.status in ~w(in_progress overdue under_review)
     working = Enum.filter(applications, &(&1.status in ~w(appointed overdue under_review)))
 
-    can_review_results? =
-      running? and
-        Enum.any?(submissions, &(is_nil(&1.review_reason) and is_nil(&1.final_status)))
+    pending_results? =
+      if task.list_summary,
+        do: task.list_summary.pending_results,
+        else: Enum.any?(submissions, &(is_nil(&1.review_reason) and is_nil(&1.final_status)))
+
+    can_review_results? = running? and pending_results?
 
     []
     |> maybe_add(task.status == "draft" and manager?, "publish")
@@ -267,6 +275,8 @@ defmodule RiceWeb.Api.TaskJSON do
   defp loaded(items) when is_list(items), do: items
 
   defp published_at(%{status: "draft"}, _events), do: nil
+
+  defp published_at(%{list_summary: %{published_at: at}}, _events), do: at
 
   defp published_at(task, events) do
     case events

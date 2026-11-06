@@ -16,6 +16,7 @@ defmodule Rice.Events.Event do
     field :fee_amount, :integer, default: 0
     field :capacity, :integer
     field :client_request_id, :string
+    field :list_summary, :map, virtual: true
     belongs_to :creator, Rice.Accounts.User
     belongs_to :node, Rice.Community.Node
     belongs_to :settlement_node, Rice.Community.Node

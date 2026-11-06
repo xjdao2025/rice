@@ -26,7 +26,7 @@ defmodule Rice.Bridge do
              refresh_jwt: String.t(),
              rice_token: String.t() | nil
            }}
-          | {:error, {:login | :provision, term()}}
+          | {:error, {:login | :provision | :adopt, term()}}
   def session_for(%{"sub" => sub} = userinfo) when is_binary(sub) do
     result =
       case Accounts.get_link_by_sub(sub) do
@@ -159,10 +159,27 @@ defmodule Rice.Bridge do
   # 认领要把 PDS 密码换成 rice 保管的随机密码,否则下次 Semi 登录无法 createSession。
   # 用户原来的密码登录会失效,需要走找回密码。失败时不退回去新建账号,避免又拆出一个号。
   defp adopt(sub, %Accounts.User{} = user, userinfo) do
+    {:ok, result} =
+      Rice.Repo.transaction(fn ->
+        Accounts.lock_pds_identity(user.did)
+
+        case Accounts.get_link_by_did(user.did) do
+          %{semi_sub: ^sub} = link -> login_existing(link, userinfo)
+          %{} -> {:error, {:adopt, :already_linked}}
+          nil -> adopt_locked(sub, user, userinfo)
+        end
+      end)
+
+    result
+  end
+
+  defp adopt_locked(sub, user, userinfo) do
     password = gen_password()
 
-    with :ok <- pds().update_account_password(user.did, password),
+    with :ok <- Accounts.require_active_user(user.id),
+         :ok <- pds().update_account_password(user.did, password),
          {:ok, session} <- pds().create_session(user.did, password),
+         true <- session["did"] == user.did,
          {:ok, _} <-
            Accounts.create_link(%{
              semi_sub: sub,
@@ -173,20 +190,30 @@ defmodule Rice.Bridge do
            }) do
       {:ok, identity(session)}
     else
+      false -> {:error, {:adopt, :identity_mismatch}}
       {:error, reason} -> {:error, {:adopt, reason}}
     end
   end
 
   defp login_existing(link, userinfo) do
-    with {:ok, password} <- Vault.decrypt(link.account_password_ciphertext),
-         {:ok, session} <- pds().create_session(link.did, password) do
-      # 钱包每次登录都刷新 —— 用户可能是先用 Semi 注册、之后才绑的钱包,
-      # 只在建链接时写一次的话那批人永远看不到地址。
-      Accounts.update_link_wallet(link, userinfo["wallet_address"])
-      {:ok, identity(session)}
-    else
-      {:error, reason} -> {:error, {:login, reason}}
-    end
+    {:ok, result} =
+      Rice.Repo.transaction(fn ->
+        Accounts.lock_pds_identity(link.did)
+        # A reset may have completed while this request waited for the lock.
+        link = Accounts.get_link_by_did(link.did)
+
+        with {:ok, password} <- Vault.decrypt(link.account_password_ciphertext),
+             {:ok, session} <- pds().create_session(link.did, password),
+             true <- session["did"] == link.did do
+          Accounts.update_link_wallet(link, userinfo["wallet_address"])
+          {:ok, identity(session)}
+        else
+          false -> {:error, {:login, :identity_mismatch}}
+          {:error, reason} -> {:error, {:login, reason}}
+        end
+      end)
+
+    result
   end
 
   defp provision(sub, userinfo) do

@@ -304,7 +304,9 @@ defmodule RiceWeb.Api.AttachmentControllerTest do
         })
 
       {:ok, attachment} =
-        Rice.Repo.update(Ecto.Changeset.change(attachment, content_type: "text/plain; charset=utf-8"))
+        Rice.Repo.update(
+          Ecto.Changeset.change(attachment, content_type: "text/plain; charset=utf-8")
+        )
 
       conn = get(conn, ~p"/api/attachments/#{attachment.id}?download=1")
 

@@ -76,6 +76,55 @@ defmodule Rice.FilesTest do
       assert attachment.storage_key == Files.storage_key(attachment.id)
     end
 
+    test "元数据插入失败只补偿删除本次新 key，不删除已有附件" do
+      existing = attachment_fixture(%{legacy_id: "legacy-conflict"})
+
+      expect(Rice.Files.StorageMock, :put, fn key, "bytes" ->
+        send(self(), {:new_key, key})
+        :ok
+      end)
+
+      expect(Rice.Files.StorageMock, :delete, fn key ->
+        assert_received {:new_key, ^key}
+        assert key != existing.storage_key
+        :ok
+      end)
+
+      assert {:error, changeset} =
+               Files.create_attachment("bytes", %{
+                 kind: "image",
+                 filename: "new.png",
+                 content_type: "image/png",
+                 legacy_id: existing.legacy_id
+               })
+
+      assert errors_on(changeset)[:legacy_id]
+      assert Rice.Repo.get!(Attachment, existing.id)
+      assert Rice.Repo.aggregate(Attachment, :count) == 1
+    end
+
+    test "补偿清理失败有告警，保留原始数据库错误" do
+      existing = attachment_fixture(%{legacy_id: "cleanup-conflict"})
+      expect(Rice.Files.StorageMock, :put, fn _, _ -> :ok end)
+      expect(Rice.Files.StorageMock, :delete, fn _ -> {:error, :eacces} end)
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert {:error, changeset} =
+                   Files.create_attachment("bytes", %{
+                     kind: "image",
+                     filename: "new.png",
+                     content_type: "image/png",
+                     legacy_id: existing.legacy_id
+                   })
+
+          assert errors_on(changeset)[:legacy_id]
+        end)
+
+      assert log =~ "attachment compensation failed"
+      assert Rice.Repo.get!(Attachment, existing.id)
+    end
+
     test "拒绝空文件" do
       assert {:error, changeset} =
                Files.create_attachment("", %{

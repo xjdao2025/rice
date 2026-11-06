@@ -28,6 +28,13 @@ defmodule Rice.Community do
   @spec admin_memberships() :: Ecto.Query.t()
   def admin_memberships, do: from(m in Membership, where: m.role == "admin")
 
+  @doc "列表只加载当前读者的管理身份，不加载其他管理员。"
+  @spec admin_memberships(User.t() | nil) :: Ecto.Query.t()
+  def admin_memberships(%User{id: id}),
+    do: from(m in admin_memberships(), where: m.user_id == ^id)
+
+  def admin_memberships(nil), do: from(m in Membership, where: false)
+
   @spec managed_node_ids(User.t() | nil) :: [Rice.Tsid.t()]
   def managed_node_ids(%User{id: user_id}) do
     memberships =
@@ -77,6 +84,9 @@ defmodule Rice.Community do
       when role in ~w(admin member) do
     if Rice.Tsid.valid?(user_id) do
       Repo.transaction(fn ->
+        if role == "admin" and Rice.Accounts.require_active_user(user_id) != :ok,
+          do: Repo.rollback(:forbidden)
+
         node = Repo.one!(from n in Node, where: n.id == ^node.id, lock: "FOR UPDATE")
         if node.user_id != user.id or node.user_id == user_id, do: Repo.rollback(:forbidden)
         member = Repo.get_by(Membership, node_id: node.id, user_id: user_id)
@@ -104,7 +114,33 @@ defmodule Rice.Community do
     |> filter_node_query(params["q"])
     |> filter_node_identity(user, params["mine"])
     |> Repo.all()
-    |> preload_nodes(user)
+    |> preload_node_list(user)
+  end
+
+  defp preload_node_list(nodes, user) do
+    # A directory row needs only this reader's membership and newest application.
+    # Admin application queues and member profiles belong to the detail endpoint.
+    memberships =
+      if user,
+        do: from(m in Membership, where: m.user_id == ^user.id),
+        else: from(m in Membership, where: false)
+
+    applications =
+      if user do
+        from a in JoinApplication,
+          where: a.user_id == ^user.id,
+          distinct: a.node_id,
+          order_by: [asc: a.node_id, desc: a.id]
+      else
+        from a in JoinApplication, where: false
+      end
+
+    Repo.preload(nodes, [
+      :logo,
+      user: :avatar,
+      memberships: memberships,
+      applications: applications
+    ])
   end
 
   @spec fetch_node(String.t(), User.t() | nil) :: {:ok, Node.t()} | {:error, :not_found}
@@ -179,6 +215,7 @@ defmodule Rice.Community do
           {:ok, JoinApplication.t()} | {:error, :forbidden | :conflict | Ecto.Changeset.t()}
   def apply_to_node(%User{} = user, %Node{} = node, attrs) do
     Repo.transaction(fn ->
+      if Rice.Accounts.require_active_user(user.id) != :ok, do: Repo.rollback(:forbidden)
       node = Repo.one!(from n in Node, where: n.id == ^node.id, lock: "FOR UPDATE")
 
       cond do
@@ -221,6 +258,12 @@ defmodule Rice.Community do
       when status in ~w(approved rejected) do
     if Rice.Tsid.valid?(application_id) do
       Repo.transaction(fn ->
+        candidate = Repo.get_by(JoinApplication, id: application_id, node_id: node.id)
+
+        if (status == "approved" and candidate) &&
+             Rice.Accounts.require_active_user(candidate.user_id) != :ok,
+           do: Repo.rollback(:forbidden)
+
         node = Repo.one!(from n in Node, where: n.id == ^node.id, lock: "FOR UPDATE")
         if not admin?(node, user), do: Repo.rollback(:forbidden)
 

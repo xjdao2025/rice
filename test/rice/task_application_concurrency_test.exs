@@ -243,6 +243,96 @@ defmodule Rice.TaskApplicationConcurrencyTest do
     end)
   end
 
+  test "批量结算与反向个人转账并发，先锁完整账户集合避免锁顺序反转" do
+    supervisor = start_supervised!(Task.Supervisor)
+    parent = self()
+
+    Sandbox.unboxed_run(Repo, fn ->
+      publisher = task_publisher_fixture()
+      [low, high] = Enum.sort_by(for(_ <- 1..2, do: user_fixture()), & &1.id)
+      ids = [publisher.id, low.id, high.id]
+
+      try do
+        node = funded_node_fixture(publisher, 100)
+        {:ok, _} = Rice.Grains.grant(low, 5)
+
+        {:ok, task} =
+          Tasks.create_task(publisher, %{
+            title: "锁顺序",
+            description: "批量结算",
+            organizer_contact: "服务台",
+            capacity: 2,
+            reward_amount: 10
+          })
+
+        for worker <- [high, low] do
+          {:ok, application} = Tasks.apply(worker, task, %{contact: "联系方式"})
+          {:ok, _} = Tasks.appoint(publisher, task, application.id)
+          {:ok, _} = Tasks.submit_result(worker, task, %{body: "交付成果"})
+        end
+
+        locker =
+          Task.Supervisor.async_nolink(supervisor, fn ->
+            Sandbox.unboxed_run(Repo, fn ->
+              Repo.transaction(fn ->
+                Repo.one!(
+                  from u in Rice.Accounts.User, where: u.id == ^low.id, lock: "FOR UPDATE"
+                )
+
+                send(parent, {:low_locked, self()})
+
+                receive do
+                  :transfer -> Rice.Grains.transfer(low, high, 1)
+                after
+                  5_000 -> raise "transfer barrier timed out"
+                end
+              end)
+            end)
+          end)
+
+        assert_receive {:low_locked, locker_pid}, 5_000
+
+        batch =
+          Task.Supervisor.async_nolink(supervisor, fn ->
+            Sandbox.unboxed_run(Repo, fn ->
+              %{rows: [[pid]]} = Repo.query!("SELECT pg_backend_pid()")
+              send(parent, {:batch_backend, pid})
+              Tasks.complete(publisher, task)
+            end)
+          end)
+
+        try do
+          assert_receive {:batch_backend, backend_pid}, 5_000
+          wait_for_lock(backend_pid, System.monotonic_time(:millisecond) + 5_000)
+          send(locker_pid, :transfer)
+          assert {:ok, {:ok, _}} = Task.await(locker, 10_000)
+          assert {:ok, completed} = Task.await(batch, 10_000)
+          assert completed.status == "completed"
+          assert Repo.get!(Rice.Accounts.User, low.id).grain_balance == 14
+          assert Repo.get!(Rice.Accounts.User, high.id).grain_balance == 11
+          assert Repo.get!(Rice.Community.Node, node.id).grain_frozen_balance == 0
+          assert Rice.Grains.reconcile().ok?
+        after
+          Task.shutdown(locker, :brutal_kill)
+          Task.shutdown(batch, :brutal_kill)
+        end
+      after
+        cleanup(ids)
+      end
+    end)
+  end
+
+  defp wait_for_lock(pid, deadline) do
+    %{rows: [[blocked?]]} = Repo.query!("SELECT cardinality(pg_blocking_pids($1)) > 0", [pid])
+
+    unless blocked? do
+      assert System.monotonic_time(:millisecond) < deadline,
+             "batch did not wait on the held account"
+
+      wait_for_lock(pid, deadline)
+    end
+  end
+
   defp race(supervisor, actions) do
     parent = self()
 

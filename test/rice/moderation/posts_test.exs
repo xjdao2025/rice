@@ -79,7 +79,7 @@ defmodule Rice.Moderation.PostsTest do
     assert Repo.all(from c in PostCheck, order_by: c.uri, select: {c.cid, c.verdict}) ==
              [{"cid-1", "ok"}, {"cid-2", "hidden"}, {"cid-3", "ok"}, {"cid-4", "hidden"}]
 
-    # 第二轮全是审过的:不再找阿里云,也不翻下一页
+    # 第二轮全是审过的:不再找阿里云；有游标时仍应继续翻页。
     flush_green()
     assert Posts.scan() == :ok
     refute_received {:green, _, _}
@@ -98,6 +98,18 @@ defmodule Rice.Moderation.PostsTest do
 
     assert Posts.scan() == {:error, :unavailable}
     assert Repo.all(from c in PostCheck, select: c.cid) == ["cid-1"]
+    state = Repo.get!(Rice.Moderation.ScanState, "posts")
+    assert state.cursor == "next"
+
+    expect(Rice.PostClientMock, :query, fn query ->
+      assert query[:cursor] == "next"
+      assert query[:until] == DateTime.to_iso8601(state.until)
+      page([post("2", "恢复后可审核"), post("3", "去插秧")])
+    end)
+
+    assert Posts.scan(DateTime.add(DateTime.utc_now(), 3, :day)) == :ok
+    assert Repo.aggregate(PostCheck, :count) == 3
+    assert Repo.get!(Rice.Moderation.ScanState, "posts").watermark == state.until
   end
 
   test "发布前审过的内容不再找阿里云,改了内容的照审;过期指纹清掉" do
@@ -117,6 +129,71 @@ defmodule Rice.Moderation.PostsTest do
     refute_received {:green, _, _}
     assert Repo.aggregate(PostCheck, :count) == 2
     assert Repo.aggregate(Rice.Moderation.Pass, :count) == 1
+  end
+
+  test "整页都审过也继续游标，不能跳过后面的失败积压" do
+    seen = post("seen", "已审核")
+    Repo.insert!(%PostCheck{uri: seen["uri"], cid: seen["cid"], verdict: "ok", reasons: []})
+
+    expect(Rice.PostClientMock, :query, fn query ->
+      assert query[:include_replies]
+      page([seen], "backlog")
+    end)
+
+    expect(Rice.PostClientMock, :query, fn query ->
+      assert query[:cursor] == "backlog"
+      page([post("missed", "积压内容")])
+    end)
+
+    assert Posts.scan() == :ok
+    assert Repo.aggregate(PostCheck, :count) == 2
+  end
+
+  test "十页预算后保存游标，停机数天仍接续原窗口" do
+    expect(Rice.PostClientMock, :query, 10, fn query ->
+      n =
+        if query[:cursor],
+          do: query[:cursor] |> String.replace_prefix("page-", "") |> String.to_integer(),
+          else: 0
+
+      page([post("budget-#{n}", "普通内容")], "page-#{n + 1}")
+    end)
+
+    assert Posts.scan() == :ok
+    state = Repo.get!(Rice.Moderation.ScanState, "posts")
+    assert state.cursor == "page-10"
+
+    expect(Rice.PostClientMock, :query, fn query ->
+      assert query[:cursor] == "page-10"
+      assert query[:since] == DateTime.to_iso8601(state.since)
+      assert query[:until] == DateTime.to_iso8601(state.until)
+      page([post("budget-10", "最后一页")])
+    end)
+
+    assert Posts.scan(DateTime.add(DateTime.utc_now(), 3, :day)) == :ok
+    completed = Repo.get!(Rice.Moderation.ScanState, "posts")
+    assert completed.watermark == state.until
+    assert is_nil(completed.cursor) and is_nil(completed.until)
+    assert Repo.aggregate(PostCheck, :count) == 11
+  end
+
+  test "评论包含在补审中，违规回复同样打隐藏标签" do
+    reply =
+      post("reply", "转发领导人讲话")
+      |> put_in(["record", "reply"], %{"parent" => %{"uri" => "at://parent"}})
+
+    expect(Rice.PostClientMock, :query, fn query ->
+      assert query[:include_replies]
+      page([reply])
+    end)
+
+    expect(Rice.PostClientMock, :label, fn %{"uri" => uri}, "!hide", _ ->
+      assert uri == reply["uri"]
+      :ok
+    end)
+
+    assert Posts.scan() == :ok
+    assert Repo.get_by!(PostCheck, uri: reply["uri"]).verdict == "hidden"
   end
 
   test "没配密钥时不审,也不记" do

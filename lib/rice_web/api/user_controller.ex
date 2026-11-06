@@ -15,6 +15,22 @@ defmodule RiceWeb.Api.UserController do
     })
   end
 
+  # A bounded, public projection for feed hydration. Never use self/profile JSON
+  # here: callers do not need contact details, balances or Semi wallets.
+  def profiles(conn, %{"dids" => dids}) when is_list(dids) and length(dids) <= 100 do
+    if Enum.all?(
+         dids,
+         &(is_binary(&1) and byte_size(&1) <= 256 and String.starts_with?(&1, "did:"))
+       ) do
+      users = Accounts.public_users_by_dids(Enum.uniq(dids))
+      json(conn, %{data: Enum.map(users, &RiceWeb.Api.UserJSON.public/1)})
+    else
+      {:error, :unprocessable_entity}
+    end
+  end
+
+  def profiles(_conn, _params), do: {:error, :unprocessable_entity}
+
   def profile(conn, %{"identifier" => identifier}) do
     with {:ok, user} <- Rice.Repo.found(Accounts.get_public_user(identifier)) do
       user = Accounts.put_semi_wallet(user)

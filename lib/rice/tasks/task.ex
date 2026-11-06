@@ -26,6 +26,7 @@ defmodule Rice.Tasks.Task do
     field(:round, :integer, default: 1)
     field(:deleted_at, :utc_datetime_usec)
     field(:search_cursor, :string, virtual: true)
+    field(:list_summary, :map, virtual: true)
 
     belongs_to(:creator, Rice.Accounts.User)
     belongs_to(:assignee, Rice.Accounts.User)
@@ -61,7 +62,7 @@ defmodule Rice.Tasks.Task do
     |> validate_length(:title, min: 1, max: 128)
     |> validate_length(:description, min: 1, max: 4000)
     |> validate_number(:reward_amount, greater_than_or_equal_to: 0)
-    |> validate_required([:capacity])
+    |> validate_required([:capacity, :reward_amount])
     |> validate_number(:capacity, greater_than: 0, less_than_or_equal_to: @max_capacity)
     |> validate_total_reward()
     |> validate_execution_deadline(opts)

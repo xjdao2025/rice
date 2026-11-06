@@ -47,9 +47,11 @@ defmodule RiceWeb.Api.GrainTransferController do
     else
       # 和 fallback 的"可用稻米不足"措辞不同,C 端一直是这句
       {:error, :insufficient_balance} ->
+        RiceWeb.Api.TransferDiagnostics.log_failure(:user, {:error, :insufficient_balance})
         conn |> put_status(:unprocessable_entity) |> json(%{errors: %{amount: ["稻米不足"]}})
 
       error ->
+        RiceWeb.Api.TransferDiagnostics.log_failure(:user, error)
         error
     end
   end

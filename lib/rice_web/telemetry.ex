@@ -52,6 +52,9 @@ defmodule RiceWeb.Telemetry do
         unit: {:native, :millisecond}
       ),
 
+      # No token, DID or user identifier in legacy migration metrics.
+      sum("rice.auth.legacy.count", tags: [:result]),
+
       # Database Metrics
       summary("rice.repo.query.total_time",
         unit: {:native, :millisecond},

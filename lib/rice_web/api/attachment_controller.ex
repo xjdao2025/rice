@@ -138,8 +138,6 @@ defmodule RiceWeb.Api.AttachmentController do
     )
   end
 
-  defp html_document?(_), do: false
-
   defp html_filename(name) when is_binary(name), do: Regex.replace(~r/\.txt\z/i, name, ".html")
 
   defp disposition(conn, attachment) do

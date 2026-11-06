@@ -45,7 +45,7 @@ defmodule Rice.Admin.Catalog do
 
     struct(schema)
     |> schema.changeset(with_default_position(kind, attrs))
-    |> Repo.insert()
+    |> persist(kind, :insert)
     |> Repo.preload_ok(preloads)
   end
 
@@ -55,9 +55,28 @@ defmodule Rice.Admin.Catalog do
     {schema, preloads} = fetch_resource(kind)
 
     with {:ok, record} <- fetch(kind, id) do
-      record |> schema.changeset(attrs) |> Repo.update() |> Repo.preload_ok(preloads)
+      record |> schema.changeset(attrs) |> persist(kind, :update) |> Repo.preload_ok(preloads)
     end
   end
+
+  # Binding an owner and retiring that account must not race. Do not take a
+  # financial User row lock here; the lifecycle advisory lock has its own order.
+  defp persist(changeset, :nodes, operation) do
+    Repo.transaction(fn ->
+      owner = Ecto.Changeset.get_change(changeset, :user_id)
+
+      if (changeset.valid? and owner) && Rice.Accounts.require_active_user(owner) != :ok do
+        Repo.rollback(Ecto.Changeset.add_error(changeset, :user_id, "负责人账号不存在或已停用"))
+      end
+
+      case apply(Repo, operation, [changeset]) do
+        {:ok, node} -> node
+        {:error, invalid} -> Repo.rollback(invalid)
+      end
+    end)
+  end
+
+  defp persist(changeset, _kind, operation), do: apply(Repo, operation, [changeset])
 
   @spec delete(kind(), String.t()) :: {:ok, item()} | {:error, :not_found | Ecto.Changeset.t()}
   def delete(kind, id) do
@@ -72,7 +91,15 @@ defmodule Rice.Admin.Catalog do
   """
   @spec reorder(kind(), term()) ::
           {:ok, :ok} | {:error, :invalid_ids | {:unknown_ids, [String.t()]}}
-  def reorder(kind, ids) when is_list(ids) do
+  def reorder(kind, ids) when is_list(ids) and length(ids) <= 10_000 do
+    if Enum.all?(ids, &Rice.Tsid.valid?/1) and length(Enum.uniq(ids)) == length(ids),
+      do: reorder_valid(kind, ids),
+      else: {:error, :invalid_ids}
+  end
+
+  def reorder(_kind, _), do: {:error, :invalid_ids}
+
+  defp reorder_valid(kind, ids) do
     {schema, _} = fetch_resource(kind)
 
     Repo.transaction(fn ->
@@ -93,8 +120,6 @@ defmodule Rice.Admin.Catalog do
       end
     end)
   end
-
-  def reorder(_kind, _), do: {:error, :invalid_ids}
 
   # 新建的排到最后 —— core 是新的排最前,但后台列表本来就是拖拽排序的,
   # 追加到末尾更符合"我刚加了一个"的直觉。

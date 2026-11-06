@@ -68,8 +68,7 @@ defmodule Rice.Admin do
       )
       |> Repo.all()
       |> Map.new(fn {region, phone, id, did, handle, nickname} ->
-        {{region || "86", phone},
-         %{id: id, did: did, handle: handle, nickname: nickname}}
+        {{region || "86", phone}, %{id: id, did: did, handle: handle, nickname: nickname}}
       end)
       |> Map.take(phones)
     end
@@ -150,7 +149,22 @@ defmodule Rice.Admin do
 
   # 两步登录都要过这一关 —— 第二步要是不数失败次数,带着错验证码反复试密码
   # 就绕开了锁定。
-  defp check_password(region, phone, password) do
+  defp check_password(region, phone, password) when is_binary(region) and is_binary(phone) do
+    {:ok, result} =
+      Repo.transaction(fn ->
+        Repo.query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
+          "admin-login:#{region}:#{phone}"
+        ])
+
+        check_password_locked(region, phone, password)
+      end)
+
+    result
+  end
+
+  defp check_password(_, _, _), do: {:error, :invalid_credentials}
+
+  defp check_password_locked(region, phone, password) do
     now = DateTime.utc_now()
     attempt = get_login_attempt(region, phone)
     admin = get_admin_by_phone(region, phone)
@@ -244,16 +258,25 @@ defmodule Rice.Admin do
         join: a in assoc(t, :admin_user),
         where: t.token_hash == ^hash and t.expires_at > ^now,
         where: is_nil(a.deleted_at) and is_nil(a.disabled_at),
-        select: a
+        select: {a, t.last_used_at}
 
     case Repo.one(query) do
       nil ->
         nil
 
-      admin ->
-        Repo.update_all(from(t in AdminToken, where: t.token_hash == ^hash),
-          set: [last_used_at: now]
-        )
+      {admin, last_used_at} ->
+        cutoff = DateTime.add(now, -60, :second)
+
+        if is_nil(last_used_at) or DateTime.compare(last_used_at, cutoff) == :lt do
+          Repo.update_all(
+            from(t in AdminToken,
+              where:
+                t.token_hash == ^hash and
+                  (is_nil(t.last_used_at) or t.last_used_at < ^cutoff)
+            ),
+            set: [last_used_at: now]
+          )
+        end
 
         Repo.preload(admin, :avatar)
     end

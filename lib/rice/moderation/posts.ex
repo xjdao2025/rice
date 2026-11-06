@@ -1,18 +1,19 @@
 defmodule Rice.Moderation.Posts do
   @moduledoc """
   事后补审。发帖前的审核在 rice-front 里调 `/api/moderation/check`,但帖子是直接写进
-  用户自己的 PDS 的,绕过前端也能发。这里每 5 分钟从审核服务(aerox labeler 的 `queryPosts`)
-  取最近一天的新帖,没审过的交给 `Rice.Moderation`;不通过就让审核服务打 `!hide` 标签,
+  用户自己的 PDS 的,绕过前端也能发。这里每 5 分钟读取 AppView 的公开帖子和回复,
+  用持久化窗口/游标接续积压,没审过的版本交给 `Rice.Moderation`;不通过就打 `!hide` 标签,
   rice-front 见到这个标签就不显示,后台可以撤掉标签恢复。
 
   从前端正常发的帖子,发布前已经审过、留了指纹(`Rice.Moderation.remember_pass/3`),
   内容一模一样就直接记为通过,不再花一次阿里云的钱。
 
-  `queryPosts` 只给顶层帖,评论只有发布前那一道。
+  管理端的 `queryPosts` 仍只给顶层帖；补审走包含回复的 searchPosts。
+  首次从最近一天起步,此后停机/失败不会让未完成窗口随时间过期。
   """
   import Ecto.Query
 
-  alias Rice.Moderation.{Pass, PostCheck}
+  alias Rice.Moderation.{Pass, PostCheck, ScanState}
   alias Rice.Repo
 
   @pages 10
@@ -23,25 +24,77 @@ defmodule Rice.Moderation.Posts do
     if Rice.Moderation.enabled?() do
       # 指纹只用来对上一天之内的新帖,留两天足够
       Repo.delete_all(from p in Pass, where: p.inserted_at < ^DateTime.add(now, -2, :day))
-      since = now |> DateTime.add(-1, :day) |> DateTime.to_iso8601()
-      scan_page([since: since, takenDown: "false", limit: 100], @pages)
+
+      {:ok, result} =
+        Repo.transaction(fn ->
+          # Multiple schedulers must not advance the same checkpoint concurrently.
+          %{rows: [[locked?]]} =
+            Repo.query!("SELECT pg_try_advisory_xact_lock(hashtextextended('rice:post-scan', 0))")
+
+          if locked? do
+            state = Repo.get(ScanState, "posts") || Repo.insert!(%ScanState{id: "posts"})
+
+            state =
+              if state.until do
+                state
+              else
+                since = DateTime.add(state.watermark || now, -1, :day)
+                Repo.update!(Ecto.Changeset.change(state, since: since, until: now, cursor: nil))
+              end
+
+            scan_page(state, @pages)
+          else
+            :ok
+          end
+        end)
+
+      result
     else
       :ok
     end
   end
 
-  defp scan_page(_query, 0), do: :ok
+  defp scan_page(_state, 0), do: :ok
 
-  defp scan_page(query, pages) do
-    with {:ok, body} <- Rice.Admin.Posts.impl().query(query) do
-      posts = for %{"post" => post} <- body["posts"] || [], do: post
-      fresh = unchecked(posts)
+  defp scan_page(state, pages) do
+    query = [
+      since: DateTime.to_iso8601(state.since),
+      until: DateTime.to_iso8601(state.until),
+      takenDown: "false",
+      include_replies: true,
+      limit: 100
+    ]
 
-      with :ok <- Enum.reduce_while(fresh, :ok, &review/2) do
-        # 一页全是审过的,再往后(更早)的也都审过了
-        if fresh != [] and body["cursor"],
-          do: scan_page(Keyword.put(query, :cursor, body["cursor"]), pages - 1),
-          else: :ok
+    query = if state.cursor, do: Keyword.put(query, :cursor, state.cursor), else: query
+
+    with {:ok, body} <- Rice.Admin.Posts.impl().query(query),
+         :ok <-
+           Enum.reduce_while(
+             unchecked(for %{"post" => post} <- body["posts"] || [], do: post),
+             :ok,
+             &review/2
+           ) do
+      cursor = body["cursor"]
+
+      cond do
+        cursor in [nil, ""] ->
+          Repo.update!(
+            Ecto.Changeset.change(state,
+              watermark: state.until,
+              since: nil,
+              until: nil,
+              cursor: nil
+            )
+          )
+
+          :ok
+
+        not is_binary(cursor) or cursor == state.cursor ->
+          {:error, :invalid_cursor}
+
+        true ->
+          state = Repo.update!(Ecto.Changeset.change(state, cursor: cursor))
+          scan_page(state, pages - 1)
       end
     end
   end

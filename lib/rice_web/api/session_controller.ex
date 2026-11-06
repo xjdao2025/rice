@@ -37,7 +37,7 @@ defmodule RiceWeb.Api.SessionController do
   end
 
   def delete(conn, _params) do
-    if token = conn.assigns[:current_token], do: Accounts.revoke_token(token)
+    if token = conn.assigns[:current_token], do: Accounts.revoke_session_token(token)
     send_resp(conn, :no_content, "")
   end
 end

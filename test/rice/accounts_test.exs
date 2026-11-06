@@ -435,7 +435,9 @@ defmodule Rice.AccountsTest do
     end
 
     test "handle 登录", %{user: user} do
-      expect(Rice.PDSMock, :create_session, fn "alice.web5.xjdao.test", "pw" ->
+      expect(Rice.PDSMock, :create_session, fn did, "pw" ->
+        assert did == user.did
+
         {:ok,
          %{"did" => user.did, "handle" => user.handle, "accessJwt" => "a", "refreshJwt" => "r"}}
       end)
@@ -447,7 +449,7 @@ defmodule Rice.AccountsTest do
 
     test "邮箱和手机号也能登录,且大小写不敏感", %{user: user} do
       expect(Rice.PDSMock, :create_session, 3, fn handle, _ ->
-        assert handle == user.handle
+        assert handle == user.did
         {:ok, %{"did" => user.did, "handle" => user.handle, "accessJwt" => "a"}}
       end)
 
@@ -477,7 +479,8 @@ defmodule Rice.AccountsTest do
             {:error, {:pds, "createSession", 503, "Unavailable"}}
           ],
           identifier <- [user.handle, "nobody"] do
-        expect(Rice.PDSMock, :create_session, fn ^identifier, "pw" -> failure end)
+        expected_did = if identifier == user.handle, do: user.did, else: identifier
+        expect(Rice.PDSMock, :create_session, fn ^expected_did, "pw" -> failure end)
         assert {:error, :login_unavailable} = Accounts.login(identifier, "pw")
       end
     end

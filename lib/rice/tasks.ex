@@ -50,7 +50,7 @@ defmodule Rice.Tasks do
 
     page = paginate_tasks(query, params)
 
-    %{page | entries: preload_list(page.entries)}
+    %{page | entries: preload_list(page.entries, user)}
   end
 
   @spec fetch_task(String.t(), User.t() | nil) :: {:ok, Task.t()} | {:error, :not_found}
@@ -79,6 +79,7 @@ defmodule Rice.Tasks do
              | Ecto.Changeset.t()}
   def create_task(%User{} = user, attrs) do
     Repo.transaction(fn ->
+      if Rice.Accounts.require_active_user(user.id) != :ok, do: Repo.rollback(:forbidden)
       Repo.one!(from u in User, where: u.id == ^user.id, lock: "FOR UPDATE")
 
       with {:ok, node} <- publishing_node(user, attrs["node_id"] || attrs[:node_id]) do
@@ -351,7 +352,9 @@ defmodule Rice.Tasks do
           true -> task.status
         end
 
-      with {:ok, changeset} <- revise_reward(task, changeset, funding_node_id, reopening?),
+      with :ok <-
+             if(reopening?, do: Rice.Accounts.require_active_user(task.creator_id), else: :ok),
+           {:ok, changeset} <- revise_reward(task, changeset, funding_node_id, reopening?),
            {:ok, changeset} <- expire_edited_task(task, changeset, expiring?),
            {:ok, changeset} <- begin_next_round(task, changeset, reopening?),
            changeset = Ecto.Changeset.put_change(changeset, :status, status),
@@ -657,6 +660,12 @@ defmodule Rice.Tasks do
     now = DateTime.utc_now()
 
     Multi.new()
+    |> Multi.run(:active_user, fn _, _ ->
+      case Rice.Accounts.require_active_user(user.id) do
+        :ok -> {:ok, :active}
+        error -> error
+      end
+    end)
     |> Multi.run(:task, fn repo, _ -> lock_open_task(repo, task.id, now) end)
     |> Multi.run(:existing_application, fn repo, %{task: current_task} ->
       {:ok,
@@ -928,6 +937,10 @@ defmodule Rice.Tasks do
         {:error, :no_result_submitted}
 
       true ->
+        # Acquire the whole settlement/refund set once, before the first draw.
+        # A per-recipient sorted lock is not enough across a multi-draw transaction.
+        accounts = Enum.map(working, &reserved_reward_account(Repo, task, &1.reward_slot))
+        Grains.lock_business_accounts(Repo, Enum.map(delivered, & &1.user_id) ++ accounts)
         ids = Enum.map(delivered, & &1.user_id)
         undelivered_scope = from(a in Application, where: a.id in ^Enum.map(undelivered, & &1.id))
 
@@ -1209,30 +1222,21 @@ defmodule Rice.Tasks do
   defp filter_status(query, status, %User{id: user_id}, mine)
        when mine in ~w(assigned applied) and
               status in ~w(in_progress overdue under_review completed) do
-    latest =
-      from s in Submission,
-        group_by: [s.task_id, s.round, s.user_id],
-        select: %{task_id: s.task_id, round: s.round, user_id: s.user_id, id: max(s.id)}
-
     now = DateTime.utc_now()
 
     from(t in query,
       left_join: a in Application,
       on: a.task_id == t.id and a.round == t.round and a.user_id == ^user_id,
-      left_join: l in subquery(latest),
-      on: l.task_id == t.id and l.round == t.round and l.user_id == ^user_id,
-      left_join: s in Submission,
-      on: s.id == l.id,
       where:
         fragment(
-          "CASE WHEN ? = 1 OR ? IN ('draft', 'completed', 'expired', 'cancelled') OR ? IS NULL THEN ? WHEN ? = 'approved' THEN 'completed' WHEN ? IS NOT NULL AND ? IS NULL THEN 'under_review' WHEN ? <= ? THEN 'overdue' ELSE 'in_progress' END",
+          "CASE WHEN ? = 1 OR ? IN ('draft', 'completed', 'expired', 'cancelled') OR ? IS NULL OR ? NOT IN ('appointed', 'overdue', 'under_review', 'completed') THEN ? WHEN ? = 'completed' THEN 'completed' WHEN ? = 'under_review' THEN 'under_review' WHEN ? <= ? THEN 'overdue' ELSE 'in_progress' END",
           t.capacity,
           t.status,
-          a.appointed_at,
+          a.id,
+          a.status,
           t.status,
-          s.final_status,
-          s.id,
-          s.review_reason,
+          a.status,
+          a.status,
           t.execution_deadline,
           ^now
         ) == ^status
@@ -1881,23 +1885,87 @@ defmodule Rice.Tasks do
       else: move_applications(repo, from(a in scope, where: a.status == "overdue"), "appointed")
   end
 
-  defp preload_list(tasks) do
-    Repo.preload(
-      tasks,
-      base_preloads() ++
-        [
-          submissions: [],
-          events: from(e in Event, where: e.to_status == "open", order_by: [asc: e.id])
-        ]
+  defp preload_list([], _user), do: []
+
+  defp preload_list(tasks, user) do
+    ids = Enum.map(tasks, & &1.id)
+    own = if user, do: dynamic([a], a.user_id == ^user.id), else: dynamic(false)
+    included = dynamic([a, t], a.status in ^@appointed or a.user_id == t.assignee_id or ^own)
+
+    # Keep the existing assignees contract (bounded by capacity <= 1000), plus
+    # the reader's own application. Never load pending crowds or past rounds.
+    applications =
+      from a in Application,
+        join: t in Task,
+        on: t.id == a.task_id and t.round == a.round,
+        where: ^included,
+        preload: [user: :avatar]
+
+    summaries =
+      from(a in Application,
+        join: t in Task,
+        on: t.id == a.task_id and t.round == a.round,
+        where: a.task_id in ^ids,
+        group_by: a.task_id,
+        select:
+          {a.task_id,
+           %{
+             application_count: count(a.id),
+             reviewable_applications:
+               filter(count(a.id), is_nil(a.rejected_at) and is_nil(a.appointed_at))
+           }}
+      )
+      |> Repo.all()
+      |> Map.new()
+
+    pending_results =
+      from(s in Submission,
+        join: t in Task,
+        on: t.id == s.task_id and t.round == s.round,
+        where: s.task_id in ^ids and is_nil(s.review_reason) and is_nil(s.final_status),
+        distinct: s.task_id,
+        select: s.task_id
+      )
+      |> Repo.all()
+      |> MapSet.new()
+
+    published =
+      from(e in Event,
+        where:
+          e.task_id in ^ids and e.to_status == "open" and
+            (is_nil(e.from_status) or e.from_status != "open") and
+            (is_nil(e.detail) or e.detail != "状态记录从这里开始"),
+        distinct: e.task_id,
+        order_by: [asc: e.task_id, desc: e.id],
+        select: {e.task_id, e.inserted_at}
+      )
+      |> Repo.all()
+      |> Map.new()
+
+    tasks
+    |> Repo.preload(
+      base_preloads(Rice.Community.admin_memberships(user)) ++ [applications: applications]
     )
+    |> Enum.map(fn task ->
+      summary = Map.get(summaries, task.id, %{application_count: 0, reviewable_applications: 0})
+
+      summary =
+        Map.merge(summary, %{
+          pending_results: MapSet.member?(pending_results, task.id),
+          published_at: Map.get(published, task.id, task.inserted_at)
+        })
+
+      %{task | list_summary: summary}
+    end)
   end
 
   # 强制重读:动作之间传递的任务可能带着申请迁移之前的预加载
   defp preload_detail(task) do
     Repo.preload(
-      task,
+      %{task | list_summary: nil},
       base_preloads() ++
         [
+          applications: [user: :avatar],
           submissions: [user: :avatar],
           events: from(e in Event, order_by: [asc: e.id], preload: [actor: :avatar])
         ],
@@ -1905,13 +1973,12 @@ defmodule Rice.Tasks do
     )
   end
 
-  defp base_preloads do
+  defp base_preloads(memberships \\ Rice.Community.admin_memberships()) do
     [
       image_links: :attachment,
-      node: [:logo, user: :avatar, memberships: Rice.Community.admin_memberships()],
+      node: [:logo, user: :avatar, memberships: memberships],
       creator: :avatar,
-      assignee: :avatar,
-      applications: [user: :avatar]
+      assignee: :avatar
     ]
   end
 end

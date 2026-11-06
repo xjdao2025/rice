@@ -17,7 +17,12 @@ defmodule Rice.EventsTest do
     event = event!(ctx)
     assert "apply" in Events.allowed_actions(event, ctx.host)
     assert {:ok, applied} = Events.apply(ctx.host, event, %{contact: "主办方本人"})
-    assert Enum.any?(applied.applications, &(&1.user_id == ctx.host.id and &1.status == "pending"))
+
+    assert Enum.any?(
+             applied.applications,
+             &(&1.user_id == ctx.host.id and &1.status == "pending")
+           )
+
     refute "apply" in Events.allowed_actions(applied, ctx.host)
   end
 

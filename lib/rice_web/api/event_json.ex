@@ -57,8 +57,13 @@ defmodule RiceWeb.Api.EventJSON do
       application_deadline: event.application_deadline,
       starts_at: event.starts_at,
       ends_at: event.ends_at,
-      application_count: length(current),
-      approved_count: Enum.count(current, &(&1.status == "approved")),
+      application_count:
+        if(event.list_summary, do: event.list_summary.application_count, else: length(current)),
+      approved_count:
+        if(event.list_summary,
+          do: event.list_summary.approved_count,
+          else: Enum.count(current, &(&1.status == "approved"))
+        ),
       my_application: if(own, do: application(own, event, user, detail?)),
       applications: Enum.map(visible_current, &application(&1, event, user)),
       past_applications: Enum.map(visible_past, &application(&1, event, user)),

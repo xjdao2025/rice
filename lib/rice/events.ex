@@ -100,7 +100,7 @@ defmodule Rice.Events do
       end
 
     page = Pagination.paginate(query, Repo, Pagination.params(params))
-    %{page | entries: preload(page.entries)}
+    %{page | entries: preload_list(page.entries, user)}
   end
 
   @spec fetch_event(String.t(), User.t() | nil) :: {:ok, Event.t()} | {:error, :not_found}
@@ -137,6 +137,8 @@ defmodule Rice.Events do
 
       true ->
         transaction(fn ->
+          # Serialize retirement against new responsibilities before business locks.
+          unwrap!(Rice.Accounts.require_active_user(user.id))
           # Serialize one creator's draft and retry key without adding a draft service.
           Repo.one!(from(u in User, where: u.id == ^user.id, lock: "FOR UPDATE"))
           existing = if key, do: Repo.get_by(Event, creator_id: user.id, client_request_id: key)
@@ -231,6 +233,7 @@ defmodule Rice.Events do
 
     now = DateTime.utc_now()
     reopening? = event.status == "cancelled"
+    if reopening?, do: unwrap!(Rice.Accounts.require_active_user(event.creator_id))
 
     changeset =
       if event.status in ["open", "in_progress"] and Changeset.changed?(changeset, :node_id),
@@ -337,7 +340,7 @@ defmodule Rice.Events do
   @spec apply(User.t(), Event.t(), map()) ::
           result(:not_found | :forbidden | :conflict | :capacity_full | :insufficient_balance)
   def apply(user, event, attrs) do
-    with_event(event.id, fn current ->
+    with_event(event.id, user, fn current ->
       existing =
         Repo.one(
           from(a in Application,
@@ -534,7 +537,12 @@ defmodule Rice.Events do
             "approved"
           )
 
-          notify!(current, application.user_id, user.id, "event_completed", "活动已结束")
+          detail =
+            if application.fee_amount > 0,
+              do: "活动已结束，报名费 #{application.fee_amount} 稻米已结算",
+              else: "活动已结束"
+
+          notify!(current, application.user_id, user.id, "event_completed", detail)
         end)
 
         change_event!(current, user.id, "completed", "completed")
@@ -564,7 +572,6 @@ defmodule Rice.Events do
   def allowed_actions(event, user) do
     now = DateTime.utc_now()
     host? = can_manage?(event, user)
-    current = Enum.filter(event.applications, &(&1.round == event.round))
     own = own_application(event, user)
 
     [
@@ -579,7 +586,7 @@ defmodule Rice.Events do
        (is_nil(own) or own.status in @reapplicable) and
          event.status == "open" and
          before?(now, event.application_deadline) and before?(now, event.starts_at) and
-         Enum.count(current, &(&1.status == "approved")) < event.capacity}
+         current_approved_count(event) < event.capacity}
     ]
     |> Enum.filter(&elem(&1, 1))
     |> Enum.map(&elem(&1, 0))
@@ -609,12 +616,9 @@ defmodule Rice.Events do
         cond do
           application.status == "pending" and event.status == "open" and
               before?(DateTime.utc_now(), event.starts_at) ->
-            if Enum.count(
-                 event.applications,
-                 &(&1.round == event.round and &1.status == "approved")
-               ) < event.capacity,
-               do: ["approve", "reject"],
-               else: ["reject"]
+            if current_approved_count(event) < event.capacity,
+              do: ["approve", "reject"],
+              else: ["reject"]
 
           application.status == "approved" and event.status in ["open", "in_progress"] ->
             ["remove"]
@@ -667,7 +671,11 @@ defmodule Rice.Events do
     record!(event, actor_id, application.id, "application_#{status}", application.status, status)
 
     message = refund_message(status)
-    message = if application.fee_amount > 0, do: message <> "，报名费已退回", else: message
+
+    message =
+      if application.fee_amount > 0,
+        do: message <> "，报名费 #{application.fee_amount} 稻米已退回",
+        else: message
 
     notify!(
       event,
@@ -721,9 +729,13 @@ defmodule Rice.Events do
   defp require_capacity!(event),
     do: require!(approved_count(event) < event.capacity, :capacity_full)
 
-  defp with_event(id, fun) do
+  defp with_event(id, fun), do: with_event(id, nil, fun)
+
+  defp with_event(id, user, fun) do
     if Rice.Tsid.valid?(id) do
       transaction(fn ->
+        if user, do: unwrap!(Rice.Accounts.require_active_user(user.id))
+
         event =
           Repo.one(from(e in Event, where: e.id == ^id, lock: "FOR UPDATE")) ||
             Repo.rollback(:not_found)
@@ -784,6 +796,7 @@ defmodule Rice.Events do
   defp require!(true, _reason), do: :ok
   defp require!(_, reason), do: Repo.rollback(reason)
   defp require!(condition), do: require!(condition, :conflict)
+  defp unwrap!(:ok), do: :ok
   defp unwrap!({:ok, result}), do: result
   defp unwrap!({:error, reason}), do: Repo.rollback(reason)
   defp before?(time, other), do: DateTime.compare(time, other) == :lt
@@ -814,6 +827,55 @@ defmodule Rice.Events do
 
   defp notify!(event, recipient, actor, action, detail),
     do: unwrap!(Inbox.notify(Repo, recipient, actor, action, detail, "event", event.id))
+
+  defp current_approved_count(%{list_summary: %{approved_count: count}}), do: count
+
+  defp current_approved_count(event),
+    do: Enum.count(event.applications, &(&1.round == event.round and &1.status == "approved"))
+
+  defp preload_list([], _user), do: []
+
+  defp preload_list(events, user) do
+    ids = Enum.map(events, & &1.id)
+    own = if user, do: dynamic([a], a.user_id == ^user.id), else: dynamic(false)
+
+    applications =
+      from a in Application,
+        join: e in Event,
+        on: e.id == a.event_id and e.round == a.round,
+        where: ^own,
+        distinct: a.event_id,
+        order_by: [asc: a.event_id, desc: a.id],
+        preload: [user: :avatar]
+
+    summaries =
+      from(a in Application,
+        join: e in Event,
+        on: e.id == a.event_id and e.round == a.round,
+        where: a.event_id in ^ids,
+        group_by: a.event_id,
+        select:
+          {a.event_id,
+           %{
+             application_count: count(a.id),
+             approved_count: filter(count(a.id), a.status == "approved")
+           }}
+      )
+      |> Repo.all()
+      |> Map.new()
+
+    events
+    |> Repo.preload(
+      image_links: :attachment,
+      creator: :avatar,
+      node: [:logo, memberships: Rice.Community.admin_memberships(user)],
+      applications: applications
+    )
+    |> Enum.map(fn event ->
+      summary = Map.get(summaries, event.id, %{application_count: 0, approved_count: 0})
+      %{event | list_summary: summary}
+    end)
+  end
 
   defp preload(events),
     do:

@@ -100,7 +100,40 @@ defmodule Rice.Admin.Posts do
     end
 
     @impl true
-    def query(params), do: request(:get, "aerox.moderation.queryPosts", params: params)
+    def query(params) do
+      if params[:include_replies] do
+        # searchPosts includes replies. Do not send the labeler's Basic admin
+        # credential to a public AppView endpoint.
+        cfg = Application.get_env(:rice, :labeler, [])
+        url = cfg[:appview_url] || cfg[:url]
+
+        query =
+          params
+          |> Keyword.drop([:include_replies, :takenDown])
+          |> Keyword.merge(q: "", sort: "latest")
+
+        if url in [nil, ""] do
+          {:error, :appview_not_configured}
+        else
+          case Req.get(url <> "/xrpc/app.bsky.feed.searchPosts",
+                 params: query,
+                 receive_timeout: 15_000,
+                 retry: false
+               ) do
+            {:ok, %{status: 200, body: %{"posts" => posts} = body}} when is_list(posts) ->
+              {:ok, %{body | "posts" => Enum.map(posts, &%{"post" => &1})}}
+
+            {:ok, %{status: status}} ->
+              {:error, {:appview, status}}
+
+            {:error, reason} ->
+              {:error, {:transport, reason}}
+          end
+        end
+      else
+        request(:get, "aerox.moderation.queryPosts", params: params)
+      end
+    end
 
     @impl true
     def label(subject, val, comment) do

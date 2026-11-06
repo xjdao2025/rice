@@ -110,7 +110,8 @@ defmodule Rice.Accounts do
   end
 
   @spec get_user_by_did(String.t()) :: User.t() | nil
-  def get_user_by_did(did), do: Repo.one(from u in active_users(), where: u.did == ^did)
+  def get_user_by_did(did),
+    do: Repo.one(from u in active_users(), where: u.did == ^did, preload: [:avatar])
 
   @doc """
   按 core 的 `t_user.id` 找人 —— 只有老 daoJwt 的兜底认证会用到(它的 `uid`
@@ -120,7 +121,8 @@ defmodule Rice.Accounts do
   def get_user_by_legacy_id(legacy_id) when is_binary(legacy_id) and legacy_id != "" do
     Repo.one(
       from u in active_users(),
-        where: u.legacy_id == ^legacy_id and is_nil(u.disabled_at),
+        where:
+          u.legacy_id == ^legacy_id and is_nil(u.disabled_at) and not u.legacy_tokens_revoked,
         preload: [:avatar]
     )
     |> put_semi_wallet()
@@ -129,19 +131,22 @@ defmodule Rice.Accounts do
 
   def get_user_by_legacy_id(_), do: nil
 
-  @doc "按 handle / 邮箱 / 手机号找人 —— 登录时用。"
+  @doc "按 handle / 邮箱 / 手机号找人。跨区号手机号歧义时返回 nil，改用唯一 handle 或邮箱。"
   @spec get_user_by_identifier(term()) :: User.t() | nil
   def get_user_by_identifier(identifier) when is_binary(identifier) do
     normalized = String.downcase(String.trim(identifier))
 
-    Repo.one(
-      from u in active_users(),
-        where:
-          fragment("lower(?)", u.handle) == ^normalized or
-            fragment("lower(?)", u.email) == ^normalized or
-            u.phone == ^normalized,
-        limit: 1
-    )
+    case Repo.all(
+           from u in active_users(),
+             where:
+               fragment("lower(?)", u.handle) == ^normalized or
+                 fragment("lower(?)", u.email) == ^normalized or
+                 u.phone == ^normalized,
+             limit: 2
+         ) do
+      [user] -> user
+      _ -> nil
+    end
   end
 
   def get_user_by_identifier(_), do: nil
@@ -191,6 +196,19 @@ defmodule Rice.Accounts do
   end
 
   def get_public_user(_), do: nil
+
+  @doc "批量读取公开作者资料；不加载钱包或联系方式，调用方须限制批量大小。"
+  @spec public_users_by_dids([String.t()]) :: [User.t()]
+  def public_users_by_dids([]), do: []
+
+  def public_users_by_dids(dids) do
+    Repo.all(
+      from u in enabled_users(),
+        where: u.did in ^dids,
+        select: struct(u, [:id, :did, :handle, :nickname, :bio, :avatar_id, :node_member]),
+        preload: [:avatar]
+    )
+  end
 
   @doc "按昵称或 handle 搜索公开档案；不查询联系方式，也不列出停用或已注销账号。"
   @spec search_public_users(map()) :: Pagination.page(User.t())
@@ -273,7 +291,15 @@ defmodule Rice.Accounts do
         )
 
       Regex.match?(~r/^\d{5,20}$/, identifier) ->
-        Repo.one(from u in enabled_users(), where: u.phone == ^identifier, preload: [:avatar])
+        case Repo.all(
+               from u in enabled_users(),
+                 where: u.phone == ^identifier,
+                 limit: 2,
+                 preload: [:avatar]
+             ) do
+          [user] -> user
+          _ -> nil
+        end
 
       true ->
         nil
@@ -416,15 +442,25 @@ defmodule Rice.Accounts do
   """
   @spec verify_code(String.t(), String.t(), String.t(), term()) :: :ok | {:error, code_error()}
   def verify_code(channel, target, purpose, code) when is_binary(code) do
-    now = DateTime.utc_now()
+    # Hold the row through limit checking, comparison and consumption. Returning
+    # errors (not rolling back) keeps failed-attempt increments committed.
+    {:ok, result} = Repo.transaction(fn -> verify_code_locked(channel, target, purpose, code) end)
+    result
+  end
 
+  def verify_code(_, _, _, _), do: {:error, :invalid_code}
+
+  defp verify_code_locked(channel, target, purpose, code) do
     query =
       from c in VerificationCode,
         where:
           c.channel == ^channel and c.target == ^target and c.purpose == ^purpose and
             is_nil(c.consumed_at),
         order_by: [desc: c.id],
-        limit: 1
+        limit: 1,
+        lock: "FOR UPDATE"
+
+    now = DateTime.utc_now()
 
     case Repo.one(query) do
       nil ->
@@ -448,8 +484,6 @@ defmodule Rice.Accounts do
         end
     end
   end
-
-  def verify_code(_, _, _, _), do: {:error, :invalid_code}
 
   @doc """
   把一条验证码标记成已消费。**只有一个调用方能成功。**
@@ -566,20 +600,25 @@ defmodule Rice.Accounts do
         pds().create_session(identifier, password) |> login_failure()
 
       %User{disabled_at: nil} = user ->
-        case pds().create_session(user.handle, password) do
-          {:ok, session} ->
-            {:ok, token} = issue_token(user)
+        Repo.transaction(fn ->
+          lock_pds_identity(user.did)
+          if require_active_user(user.id) != :ok, do: Repo.rollback(:account_disabled)
 
-            {:ok,
-             %{
-               user: user |> put_semi_wallet() |> put_superuser(),
-               token: token,
-               pds_session: session
-             }}
+          case pds().create_session(user.did, password) do
+            {:ok, %{"did" => did} = session} when did == user.did ->
+              {:ok, token} = issue_token(user)
 
-          {:error, _} = error ->
-            login_failure(error)
-        end
+              %{
+                user: user |> put_semi_wallet() |> put_superuser(),
+                token: token,
+                pds_session: session
+              }
+
+            other ->
+              {:error, reason} = login_failure(other)
+              Repo.rollback(reason)
+          end
+        end)
 
       _disabled ->
         {:error, :account_disabled}
@@ -685,9 +724,68 @@ defmodule Rice.Accounts do
     if count > 0, do: :ok, else: {:error, :not_found}
   end
 
-  @doc "撤销一个用户的全部令牌 —— 禁用/删号/改密码时用。JWT 做不到这件事。"
+  @doc "退出当前会话；旧 daoJwt 也能在 Rice 边界撤销。调用方必须已经认证。"
+  @spec revoke_session_token(String.t()) :: :ok
+  def revoke_session_token(token) do
+    case revoke_token(token) do
+      :ok ->
+        :ok
+
+      {:error, :not_found} ->
+        Repo.insert_all(
+          Rice.Accounts.RevokedLegacyToken,
+          [
+            %{
+              token_hash: legacy_token_hash(token),
+              inserted_at: DateTime.utc_now()
+            }
+          ],
+          on_conflict: :nothing
+        )
+
+        :ok
+    end
+  end
+
+  @spec legacy_token_revoked?(String.t()) :: boolean()
+  def legacy_token_revoked?(token),
+    do:
+      Repo.exists?(
+        from t in Rice.Accounts.RevokedLegacyToken,
+          where: t.token_hash == ^legacy_token_hash(token)
+      )
+
+  # Base64 decoders may accept padded/non-canonical spellings of the RSA
+  # signature. Hash its canonical encoding so equivalent JWTs cannot evade a
+  # per-session revocation. Header/payload spelling is part of the signed input.
+  defp legacy_token_hash(token) do
+    token = normalize_legacy_token(token)
+
+    canonical =
+      case String.split(token, ".", parts: 3) do
+        [header, payload, signature] ->
+          case Base.url_decode64(signature, padding: false) do
+            {:ok, bytes} ->
+              header <> "." <> payload <> "." <> Base.url_encode64(bytes, padding: false)
+
+            :error ->
+              token
+          end
+
+        _ ->
+          token
+      end
+
+    ApiToken.hash(canonical)
+  end
+
+  defp normalize_legacy_token("Bearer " <> rest), do: normalize_legacy_token(String.trim(rest))
+  defp normalize_legacy_token(token), do: String.trim(token)
+
+  @doc "撤销一个用户的全部 Rice 令牌及旧 daoJwt —— 禁用/删号/改密码时用。"
   @spec revoke_all_tokens(User.t()) :: {:ok, non_neg_integer()}
   def revoke_all_tokens(%User{id: id}) do
+    Repo.update_all(from(u in User, where: u.id == ^id), set: [legacy_tokens_revoked: true])
     {count, _} = Repo.delete_all(from t in ApiToken, where: t.user_id == ^id)
     {:ok, count}
   end
@@ -705,11 +803,36 @@ defmodule Rice.Accounts do
   def reset_password(channel, target, code, new_password) do
     with :ok <- validate_password(new_password),
          :ok <- verify_code(channel, target, "reset_password", code),
-         {:ok, user} <- find_by_contact(channel, target),
-         :ok <- pds().update_account_password(user.did, new_password) do
-      {:ok, _} = revoke_all_tokens(user)
-      {:ok, user}
+         {:ok, user} <- find_by_contact(channel, target) do
+      # Share the lock with Semi login/adoption so no login reads a half-updated
+      # bridge credential. The upstream password is authoritative; persist its
+      # encrypted replacement before returning success.
+      Repo.transaction(fn ->
+        lock_pds_identity(user.did)
+
+        with :ok <- require_active_user(user.id),
+             :ok <- pds().update_account_password(user.did, new_password) do
+          Repo.update_all(from(l in SemiLink, where: l.did == ^user.did),
+            set: [
+              account_password_ciphertext: Rice.Vault.encrypt(new_password),
+              updated_at: DateTime.utc_now()
+            ]
+          )
+
+          {:ok, _} = revoke_all_tokens(user)
+          user
+        else
+          {:error, reason} -> Repo.rollback(reason)
+        end
+      end)
     end
+  end
+
+  @doc "PDS 密码与 Semi 凭据变更/读取的事务级互斥锁。"
+  @spec lock_pds_identity(String.t()) :: :ok
+  def lock_pds_identity(did) do
+    Repo.query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", ["pds-identity:" <> did])
+    :ok
   end
 
   @doc "改绑手机。需要新号码的验证码。"
@@ -784,7 +907,11 @@ defmodule Rice.Accounts do
   """
   @spec delete_user_with_code(User.t(), String.t(), term()) ::
           {:ok, %{user: User.t(), tokens: {non_neg_integer(), nil}}}
-          | {:error, :contact_not_set | code_error()}
+          | {:error,
+             :contact_not_set
+             | :account_has_balance
+             | :account_has_responsibilities
+             | code_error()}
           | {:error, :user, Ecto.Changeset.t(), %{}}
   def delete_user_with_code(%User{} = user, channel, code) do
     with {:ok, target} <- own_contact_target(user, channel),
@@ -802,14 +929,84 @@ defmodule Rice.Accounts do
 
   defp own_contact_target(_, _), do: {:error, :contact_not_set}
 
-  @doc "软删账号,同时撤销全部令牌。"
+  @doc "软删账号前结清余额和职责；绝不静默销毁或转移资产。"
   @spec delete_user(User.t()) ::
           {:ok, %{user: User.t(), tokens: {non_neg_integer(), nil}}}
+          | {:error, :account_has_balance | :account_has_responsibilities}
           | {:error, :user, Ecto.Changeset.t(), %{}}
   def delete_user(%User{} = user) do
     Multi.new()
-    |> Multi.update(:user, Ecto.Changeset.change(user, deleted_at: DateTime.utc_now()))
+    |> Multi.run(:user, fn repo, _ ->
+      lock_user_lifecycle(user.id)
+      current = repo.one!(from u in User, where: u.id == ^user.id, lock: "FOR NO KEY UPDATE")
+
+      cond do
+        current.grain_balance != 0 or current.grain_frozen_balance != 0 ->
+          {:error, :account_has_balance}
+
+        active_responsibilities?(current.id) ->
+          {:error, :account_has_responsibilities}
+
+        true ->
+          repo.update(Ecto.Changeset.change(current, deleted_at: DateTime.utc_now()))
+      end
+    end)
     |> Multi.delete_all(:tokens, from(t in ApiToken, where: t.user_id == ^user.id))
     |> Repo.transaction()
+    |> case do
+      {:error, :user, reason, _} when is_atom(reason) -> {:error, reason}
+      result -> result
+    end
+  end
+
+  # A retiring account cannot acquire a new application/ownership concurrently.
+  # Call before business row locks, inside the business transaction.
+  @spec require_active_user(Rice.Tsid.t()) :: :ok | {:error, :forbidden}
+  def require_active_user(id) do
+    lock_user_lifecycle(id)
+
+    if Repo.exists?(from u in enabled_users(), where: u.id == ^id),
+      do: :ok,
+      else: {:error, :forbidden}
+  end
+
+  @spec lock_user_lifecycle(Rice.Tsid.t()) :: :ok
+  def lock_user_lifecycle(id) do
+    Repo.query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", ["user-lifecycle:" <> id])
+
+    :ok
+  end
+
+  defp active_responsibilities?(id) do
+    Repo.exists?(from n in Rice.Community.Node, where: n.user_id == ^id) or
+      Repo.exists?(
+        from m in Rice.Community.Membership, where: m.user_id == ^id and m.role == "admin"
+      ) or
+      Repo.exists?(
+        from t in Rice.Tasks.Task,
+          where:
+            is_nil(t.deleted_at) and t.creator_id == ^id and
+              t.status in ~w(draft open in_progress overdue under_review)
+      ) or
+      Repo.exists?(
+        from a in Rice.Tasks.Application,
+          join: t in Rice.Tasks.Task,
+          on: t.id == a.task_id and t.round == a.round,
+          where:
+            a.user_id == ^id and a.status in ~w(pending appointed overdue under_review) and
+              t.status in ~w(open in_progress overdue under_review)
+      ) or
+      Repo.exists?(
+        from e in Rice.Events.Event,
+          where: e.creator_id == ^id and e.status in ~w(draft open in_progress)
+      ) or
+      Repo.exists?(
+        from a in Rice.Events.Application,
+          join: e in Rice.Events.Event,
+          on: e.id == a.event_id and e.round == a.round,
+          where:
+            a.user_id == ^id and a.status in ~w(pending approved) and
+              e.status in ~w(open in_progress)
+      )
   end
 end

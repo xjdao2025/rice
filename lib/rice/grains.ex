@@ -342,7 +342,10 @@ defmodule Rice.Grains do
   defp credit_account(repo, recipient, amount) do
     {schema, id} = account(recipient)
 
-    case repo.update_all(from(a in schema, where: a.id == ^id), inc: [grain_balance: amount]) do
+    query = from(a in schema, where: a.id == ^id)
+    query = if schema == User, do: where(query, [u], is_nil(u.deleted_at)), else: query
+
+    case repo.update_all(query, inc: [grain_balance: amount]) do
       {1, _} -> {:ok, :credited}
       _ -> {:error, :recipient_not_found}
     end
@@ -731,7 +734,9 @@ defmodule Rice.Grains do
           ok?: boolean()
         }
   def reconcile do
-    {user_balances, user_frozen} = sum_balances(from u in User, where: is_nil(u.deleted_at))
+    # A lifecycle flag must not erase financial liabilities from reconciliation,
+    # including balances on accounts retired before the current safeguards.
+    {user_balances, user_frozen} = sum_balances(User)
     {node_balances, node_frozen} = sum_balances(Node)
     balances = user_balances + node_balances
     frozen = user_frozen + node_frozen

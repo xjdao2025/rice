@@ -296,11 +296,17 @@ defmodule RiceWeb.Api.GrainTransferControllerTest do
     end
 
     test "余额不足 422", %{conn: conn, token: token, recipient: to} do
-      assert %{"errors" => %{"amount" => ["稻米不足"]}} =
-               conn
-               |> authed(token)
-               |> post(~p"/api/grain_transfers", %{to: to.did, amount: 101})
-               |> json_response(422)
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert %{"errors" => %{"amount" => ["稻米不足"]}} =
+                   conn
+                   |> authed(token)
+                   |> post(~p"/api/grain_transfers", %{to: to.did, amount: 101})
+                   |> json_response(422)
+        end)
+
+      assert log =~ "grain_transfer_failed scope=user reason=insufficient_balance"
+      refute log =~ to.did
     end
 
     test "转给自己 422", %{conn: conn, token: token, sender: sender} do

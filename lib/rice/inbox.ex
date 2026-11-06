@@ -36,32 +36,47 @@ defmodule Rice.Inbox do
       |> Map.put_new("limit", 100)
       |> Pagination.params()
 
-    query = from n in Notification, where: n.recipient_id == ^user.id
+    query = from n in Notification, as: :notification, where: n.recipient_id == ^user.id
     query = if before, do: from(n in query, where: n.id < ^before), else: query
+
+    # Recover legacy fee messages from the actual application at notification
+    # time, never from the event's editable current-round fee.
+    fee =
+      from a in Rice.Events.Application,
+        where:
+          a.event_id == parent_as(:notification).subject_id and
+            a.user_id == parent_as(:notification).recipient_id and
+            a.inserted_at <= parent_as(:notification).inserted_at,
+        order_by: [desc: a.id],
+        limit: 1,
+        select: %{amount: a.fee_amount}
 
     {page, more} =
       Repo.all(
         from n in query,
           left_join: event in Rice.Events.Event,
           on: n.subject_type == "event" and n.subject_id == event.id,
+          left_lateral_join: fee in subquery(fee),
+          on: n.subject_type == "event",
           order_by: [desc: n.id],
           limit: ^(limit + 1),
-          select: {n, event},
+          select: {n, event, fee.amount},
           preload: [actor: :avatar, task: []]
       )
       |> Enum.split(limit)
 
     %{
-      notifications: Enum.map(page, fn {n, event} -> format_notification(n, event) end),
+      notifications:
+        Enum.map(page, fn {n, event, amount} -> format_notification(n, event, amount) end),
       cursor: if(more == [], do: nil, else: elem(List.last(page), 0).id)
     }
   end
 
-  defp format_notification(n, event) do
+  defp format_notification(n, event, amount) do
     type = n.subject_type || "task"
     subject = event || n.task
     title = if subject, do: subject.title
-    detail = notification_detail(n, event)
+    detail = notification_detail(n, amount)
 
     %{
       uri: "business-notification:#{n.id}",
@@ -76,16 +91,18 @@ defmodule Rice.Inbox do
     }
   end
 
-  # Published fees are immutable, so existing notifications can gain context without rewriting them.
-  defp notification_detail(%{event: action, detail: detail}, %{fee_amount: amount})
-       when amount > 0 and
+  defp notification_detail(%{event: action, detail: detail}, amount)
+       when is_integer(amount) and amount > 0 and
               action in ~w(event_application_rejected event_application_removed event_application_withdrawn event_application_not_selected event_application_cancelled) do
     String.replace(detail || "报名费已退回", "报名费已退回", "报名费 #{amount} 稻米已退回")
   end
 
-  defp notification_detail(%{event: "event_completed", detail: detail}, %{fee_amount: amount})
-       when amount > 0,
-       do: (detail || "活动已结束") <> "，报名费 #{amount} 稻米已结算"
+  defp notification_detail(%{event: "event_completed", detail: detail}, amount)
+       when is_integer(amount) and amount > 0 do
+    if detail && String.contains?(detail, "稻米已结算"),
+      do: detail,
+      else: (detail || "活动已结束") <> "，报名费 #{amount} 稻米已结算"
+  end
 
   defp notification_detail(
          %{

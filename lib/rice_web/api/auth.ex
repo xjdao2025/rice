@@ -36,8 +36,8 @@ defmodule RiceWeb.Api.Auth do
   # 等于**全员静默登出**。切换后一整天只有 5 个人(共 2028 个)拿到过 rice 令牌。
   # 认这张老票让人不必被迫重登。
   #
-  # ⚠️ 这是**过渡代码**,2026-12-31 连同 `Rice.Dao` 一起删。它也**不可撤销** —— 禁用用户在老票过期前
-  # 只能靠这里的 `disabled_at` 检查拦住(见 `get_user_by_legacy_id/1`)。
+  # ⚠️ 这是过渡代码,2026-12-31 连同 Rice.Dao、旧票撤销名单和相关字段一起清理。
+  # 退出会检查单票撤销名单；改密/禁用会永久关闭该用户的旧票兜底。
   defp user_for(token) do
     case Accounts.user_by_token(token) do
       %Accounts.User{} = user ->
@@ -45,8 +45,19 @@ defmodule RiceWeb.Api.Auth do
 
       _ ->
         case Rice.Dao.verify_jwt(token) do
-          {:ok, uid} -> Accounts.get_user_by_legacy_id(uid)
-          {:error, _} -> nil
+          {:ok, uid} ->
+            user =
+              unless Accounts.legacy_token_revoked?(token),
+                do: Accounts.get_user_by_legacy_id(uid)
+
+            :telemetry.execute([:rice, :auth, :legacy], %{count: 1}, %{
+              result: if(user, do: :accepted, else: :rejected)
+            })
+
+            user
+
+          {:error, _} ->
+            nil
         end
     end
   end

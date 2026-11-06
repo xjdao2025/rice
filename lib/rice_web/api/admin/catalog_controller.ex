@@ -24,13 +24,15 @@ defmodule RiceWeb.Api.Admin.CatalogController do
   end
 
   def create(conn, params) do
-    with {:ok, record} <- Catalog.create(kind(conn), body(params)) do
+    with {:ok, attrs} <- permitted_body(conn, params),
+         {:ok, record} <- Catalog.create(kind(conn), attrs) do
       conn |> put_status(:created) |> render(:show, record: record)
     end
   end
 
   def update(conn, %{"id" => id} = params) do
-    with {:ok, record} <- Catalog.update(kind(conn), id, body(params)) do
+    with {:ok, attrs} <- permitted_body(conn, params),
+         {:ok, record} <- Catalog.update(kind(conn), id, attrs) do
       render(conn, :show, record: record)
     end
   end
@@ -50,6 +52,9 @@ defmodule RiceWeb.Api.Admin.CatalogController do
       {:ok, :ok} ->
         render(conn, :index, records: Catalog.list(kind(conn)))
 
+      {:error, :invalid_ids} ->
+        reorder(conn, %{})
+
       {:error, {:unknown_ids, missing}} ->
         conn
         |> put_status(:unprocessable_entity)
@@ -59,6 +64,35 @@ defmodule RiceWeb.Api.Admin.CatalogController do
 
   def reorder(conn, _params) do
     conn |> put_status(:unprocessable_entity) |> json(%{errors: %{ids: ["需要一个 id 数组"]}})
+  end
+
+  # Assigning a node owner also grants wallet control. Content operators can
+  # edit a node's presentation, but only financial administrators can bind or
+  # transfer its owner (including clearing the owner).
+  defp permitted_body(conn, params) do
+    attrs = body(params)
+
+    if kind(conn) == :nodes and Map.has_key?(attrs, "user_id") and
+         conn.assigns.current_admin.role != "admin" do
+      # Existing editors submit complete records, including an unchanged owner.
+      # Permit that shape but strip the field, so a concurrent admin transfer
+      # cannot be reverted between this check and the eventual UPDATE.
+      owner = if attrs["user_id"] == "", do: nil, else: attrs["user_id"]
+
+      case conn.path_params["id"] do
+        nil ->
+          if is_nil(owner), do: {:ok, Map.delete(attrs, "user_id")}, else: {:error, :forbidden}
+
+        id ->
+          with {:ok, node} <- Catalog.fetch(:nodes, id) do
+            if owner == node.user_id,
+              do: {:ok, Map.delete(attrs, "user_id")},
+              else: {:error, :forbidden}
+          end
+      end
+    else
+      {:ok, attrs}
+    end
   end
 
   # 路由参数不该被当成资源字段写进去
