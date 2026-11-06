@@ -1,0 +1,190 @@
+lib/rice_web/api/auth.ex
+  s_1ba063a55347c8::t_e1f346b81c6ca0 39-40,48
+  s_1ba063a55347c8::t_65bbeacc99c6e2 49-51
+  s_1ba063a55347c8::t_8529953f2e2b2b 52-60
+test/rice_web/api/legacy_jwt_auth_test.exs
+  s_1ba063a55347c8::t_04acdc2f7e746b 59-74
+  s_1ba063a55347c8::t_b9654f98161314 80,104-120
+  s_1ba063a55347c8::t_38f8b918076503 103
+  s_1ba063a55347c8::t_585be7ddea4b40 75-79,81,102,121-127
+lib/rice/accounts.ex
+  s_1ba063a55347c8::t_da4bb6e1c7b7dc 124-125,727-738,740-754,756,773-780
+  s_1ba063a55347c8::t_cf8672661853c1 739,755,757-772
+  s_1ba063a55347c8::t_e22e27d7b4b112 205-210
+  s_1ba063a55347c8::t_be43af1180de8d 113-114,445-451,453,460-463,807-827
+  s_1ba063a55347c8::t_32c326dd0129d6 806
+  s_1ba063a55347c8::t_3d7c4b7702c8e4 783,912-913,932,935,939-953,956-1003
+  s_1ba063a55347c8::t_4bacdd856e232b 200-201,204,211-212
+  s_1ba063a55347c8::t_8bbc047a7e85bd 134,139-149,294-302
+  s_1ba063a55347c8::t_e80a5f96b2e1cf 603-621
+  s_1ba063a55347c8::t_490ade6f0f6bc0 202-203
+  s_1ba063a55347c8::t_dbf2861cab07ee 781-782,784-785,788,831-837,910-911,914,1004-1010
+test/rice/events_test.exs
+  s_fe596f85ed66ed::t_7d76760b24e6f0 20-25
+lib/rice/grains.ex
+  s_1ba063a55347c8::t_233126cf2e7ad0 345-348,737-739
+test/rice/files_test.exs
+  s_1ba063a55347c8::t_882cf37a9ab94b 79-107,117
+  s_1ba063a55347c8::t_d3434adab52395 108-116,118-127
+lib/rice_web/api/node_wallet_controller.ex
+  s_fe596f85ed66ed::t_4a383ca65752ea 37-43
+lib/rice/community.ex
+  s_1ba063a55347c8::t_2d629c840d945f 87-88,261-263
+  s_1ba063a55347c8::t_2c46c1e57bd091 31-37,117-143
+  s_1ba063a55347c8::t_20c45d48b7a292 89,218,264-266
+test/rice/bridge_test.exs
+  s_fe596f85ed66ed::t_7d76760b24e6f0 149,155,160,183,187,244
+lib/rice/tasks/task.ex
+  s_1ba063a55347c8::t_93428abab973b3 65
+  s_1ba063a55347c8::t_56b0df47501599 29
+lib/rice/admin.ex
+  s_1ba063a55347c8::t_df31587da2845c 71
+  s_1ba063a55347c8::t_47fab38242cdb1 261,267-272
+  s_1ba063a55347c8::t_68f2ccf6c28c3b 152-167,275
+  s_1ba063a55347c8::t_a26553b123fe8a 273-274,276-279
+config/runtime.exs
+  s_1ba063a55347c8::t_e6575001b5168a 58
+test/rice/accounts_test.exs
+  s_1ba063a55347c8::t_c6c519806d3476 438-440,452,482-483
+test/rice/auth_concurrency_test.exs
+  s_1ba063a55347c8::t_f0ab13f919d27c 40
+  s_1ba063a55347c8::t_46d9c727ad4e9d 1-14,16-35,37-39,42-70
+  s_1ba063a55347c8::t_a385bd1b7d12d4 15,36,41
+  s_1ba063a55347c8::t_2c26a195366d05 71-121
+lib/rice/events/event.ex
+  s_1ba063a55347c8::t_489a1e71d81d14 19
+lib/rice/files.ex
+  s_1ba063a55347c8::t_fd13060cfd4bfd 12,65-66,88-96
+  s_1ba063a55347c8::t_71c9e26db470bc 97-102
+test/rice_web/api/review_regression_test.exs
+  s_1ba063a55347c8::t_981cce17e73c89 1-9,35-94,110-182,184-214,221-318
+  s_1ba063a55347c8::t_be49e311ac4b50 215-220
+  s_1ba063a55347c8::t_4fb95e0b2d4d37 10-34,183
+  s_1ba063a55347c8::t_5ed88bd98c3b51 95-109
+  s_1ba063a55347c8::t_8dd55de1b50c50 319-330
+lib/rice_web/api/grain_transfer_controller.ex
+  s_fe596f85ed66ed::t_4a383ca65752ea 50,54
+docs/query-performance.md
+  s_1ba063a55347c8::t_aad114b1cac09d 1-63
+lib/rice_web/api/event_json.ex
+  s_1ba063a55347c8::t_fdb7f3f7bae027 60-66
+lib/rice/bridge.ex
+  s_1ba063a55347c8::t_a9940716393bad 29,162-176,179-180,205-208,211
+  s_1ba063a55347c8::t_4d50add27e10a6 182,193,199-204,209-210,212-216
+lib/rice_web/telemetry.ex
+  s_1ba063a55347c8::t_a45ef502f11d39 55-57
+test/rice_web/api/grain_transfer_controller_test.exs
+  s_fe596f85ed66ed::t_32b78009bb14ee 307-309
+  s_fe596f85ed66ed::t_9c1f7da78aa2cb 299-306
+priv/repo/migrations/20261022081354_add_post_scan_checkpoints.exs
+  s_1ba063a55347c8::t_79a6abdbb0f4c9 5-12
+  s_1ba063a55347c8::t_6f305f192af512 2-4
+  s_1ba063a55347c8::t_a545e9be9d705f 13-14
+  s_1ba063a55347c8::t_1ae340d51f4e60 1
+priv/repo/migrations/20261022082244_add_legacy_session_revocations.exs
+  s_1ba063a55347c8::t_d189c419a3ae60 5-12
+  s_1ba063a55347c8::t_f57dfd80179d0f 1-4,13-14
+lib/rice/accounts/user.ex
+  s_1ba063a55347c8::t_0816af9d6dcf87 25
+test/rice_web/api/business_visibility_test.exs
+  s_1ba063a55347c8::t_e1f6fecff21a92 54-61
+  s_1ba063a55347c8::t_dbc6a4bf22af40 62-65
+lib/rice/tasks.ex
+  s_1ba063a55347c8::t_452d522ade0c62 940-943,1232,1235-1236,1238
+  s_1ba063a55347c8::t_4e185f06ff72ff 53,1888-1891,1893-1899,1901-1947,1949-1958
+  s_1ba063a55347c8::t_e99f2873c4b5ec 1892,1900
+  s_1ba063a55347c8::t_8e6d6aa0b6243c 82,663-667
+  s_1ba063a55347c8::t_1b853632c617d7 355-356
+  s_1ba063a55347c8::t_12006c7f01ef3b 357,668,1239,1959,1965,1968,1976,1979,1981
+test/rice/task_application_concurrency_test.exs
+  s_1ba063a55347c8::t_88ae2631b96307 246-311,313,318,326-327
+  s_1ba063a55347c8::t_b950800de7dbf2 312,314-317,319-325,328-335
+lib/rice/admin/catalog.ex
+  s_1ba063a55347c8::t_8acade5ef9c334 48,58,62-76,102
+  s_1ba063a55347c8::t_e908f297cbaf43 94-99
+  s_1ba063a55347c8::t_f63591c4ebee75 77-80,100-101
+test/rice/moderation/post_http_test.exs
+  s_1ba063a55347c8::t_b7a8b3c070be4d 1-42
+  s_1ba063a55347c8::t_5aeff19f78e142 43-60
+lib/rice_web/api/admin/catalog_controller.ex
+  s_1ba063a55347c8::t_e374e5cc7f9d50 27-28,34-35,72-90
+  s_1ba063a55347c8::t_38713f2d2f5082 55-57,69-71
+  s_1ba063a55347c8::t_887fca47dcac12 91-97
+test/rice/moderation/posts_test.exs
+  s_1ba063a55347c8::t_054fffacebf1dc 82
+  s_1ba063a55347c8::t_b73c394db36b94 101-112,134-180,184,186,194
+  s_1ba063a55347c8::t_79e74ce67d404f 181-183,185,187-193,195-198
+test/rice_web/api/attachment_controller_test.exs
+  s_fe596f85ed66ed::t_7d76760b24e6f0 307-309
+priv/repo/migrations/20261022073003_add_feed_and_list_query_indexes.exs
+  s_1ba063a55347c8::t_2e9f826ec346a3 4-25
+  s_1ba063a55347c8::t_a2cf3eebfd6c25 1-3
+  s_1ba063a55347c8::t_eaae733a824bf7 26-27
+lib/rice/moderation/posts.ex
+  s_1ba063a55347c8::t_fa3cb9bfc47cd7 4-5,11-12,16,27-51,57-65,96
+  s_1ba063a55347c8::t_c1ff3ae81cc2f3 66-90,92-93,95,97
+lib/rice_web/api/user_controller.ex
+  s_1ba063a55347c8::t_926125743e487d 18-30
+  s_1ba063a55347c8::t_8ef9aea3bbab15 31-33
+lib/rice/accounts/revoked_legacy_token.ex
+  s_1ba063a55347c8::t_8a18bd6d38c890 1-9
+lib/rice_web/api/session_controller.ex
+  s_1ba063a55347c8::t_ca82aa8309f92a 40
+docs/review-remediation.md
+  s_1ba063a55347c8::t_9ce2ceb5bbd29e 1-70
+lib/rice_web/api/transfer_diagnostics.ex
+  s_fe596f85ed66ed::t_9c1f7da78aa2cb 7-10
+  s_fe596f85ed66ed::t_4a383ca65752ea 1-6,11-20
+lib/rice_web/api/fallback_controller.ex
+  s_1ba063a55347c8::t_221e7a1de43e35 19-20
+lib/rice/events.ex
+  s_1ba063a55347c8::t_22762782e30985 545
+  s_1ba063a55347c8::t_270a7b236c131e 140-141,343,733-734,737
+  s_1ba063a55347c8::t_ebc072a07d55b1 236
+  s_1ba063a55347c8::t_c72e01d169f548 103,589,619,831-877
+  s_1ba063a55347c8::t_1b150b607798f2 540-544,620-621,674-678,732,738,799,878-879
+lib/rice/moderation/scan_state.ex
+  s_1ba063a55347c8::t_45104dbdf2125c 1-14
+lib/rice_web/router.ex
+  s_1ba063a55347c8::t_77d6a9a8f54a28 101
+test/rice/query_indexes_test.exs
+  s_1ba063a55347c8::t_e95f69d6c9a261 1-23
+  s_1ba063a55347c8::t_d68c5a6725a2e1 24-28
+lib/rice/inbox.ex
+  s_1ba063a55347c8::t_3b3c6ebd98cb94 39,42-53,59-60,63,69-70,75,79,94-95
+  s_1ba063a55347c8::t_772d0e16a42bcd 100-105
+lib/rice/admin/posts.ex
+  s_1ba063a55347c8::t_4ee4a8addc2a8d 103-124
+  s_1ba063a55347c8::t_538decdcbd9d34 125-136
+lib/rice_web/api/task_json.ex
+  s_1ba063a55347c8::t_5986b2dcfe2bf8 66-67,183-187,189,194-199,279
+  s_1ba063a55347c8::t_512328682ae7c9 280
+test/rice_web/api/list_performance_test.exs
+  s_1ba063a55347c8::t_4bbd5c13ec8f36 1-59,61-74,76,78-108,110-125,127-188
+  s_1ba063a55347c8::t_3c58c64f03c04c 60,75,77,109,126
+  s_1ba063a55347c8::t_7b6775563dc276 189-277
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7e159aed320e7bfcec2585074f090800bd843d92",
+  "prompts": {},
+  "sessions": {
+    "s_1ba063a55347c8": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a15fcc-0174-7321-8ba0-ab9a5e188b42",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    },
+    "s_fe596f85ed66ed": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1af59-9f0b-7232-9988-660bf375310d",
+        "model": "gpt-6.1-terra"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
