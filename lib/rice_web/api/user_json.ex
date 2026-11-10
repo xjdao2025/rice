@@ -5,6 +5,8 @@ defmodule RiceWeb.Api.UserJSON do
 
   @doc "自己看自己 —— 含手机、邮箱这类私有字段。"
   def data(user) do
+    {balance, frozen} = Rice.Grains.balances(user)
+
     %{
       id: user.id,
       did: user.did,
@@ -12,8 +14,8 @@ defmodule RiceWeb.Api.UserJSON do
       nickname: user.nickname,
       bio: user.bio,
       avatar: AttachmentJSON.embed(user.avatar),
-      grain_balance: user.grain_balance,
-      grain_frozen_balance: user.grain_frozen_balance,
+      grain_balance: balance,
+      grain_frozen_balance: frozen,
       node_member: user.node_member,
       can_publish_tasks: user.can_publish_tasks,
       # 后台超管(由 Accounts.put_superuser/1 按手机号填进虚拟字段)。前端拿它决定

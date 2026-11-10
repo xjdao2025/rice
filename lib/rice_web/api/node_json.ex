@@ -21,35 +21,63 @@ defmodule RiceWeb.Api.NodeJSON do
   def members(%{users: users}), do: %{data: Enum.map(users, &UserJSON.public/1)}
   def node_members(%{node: node}), do: %{data: members_for(node)}
 
-  def embed(nil), do: nil
-  def embed(%Ecto.Association.NotLoaded{}), do: nil
+  def embed(node, owner_balances \\ nil)
+  def embed(nil, _), do: nil
+  def embed(%Ecto.Association.NotLoaded{}, _), do: nil
 
-  def embed(node) do
+  def embed(node, owner_balances) do
     %{
       id: node.id,
       name: node.name,
       description: node.description,
       position: node.position,
       logo: AttachmentJSON.embed(node.logo),
-      owner: owner(node.user)
+      owner: owner(node.user, owner_balances)
     }
   end
 
-  # 节点页那三个稻米数字,生产(xjdao.xyz)一直显示的是**负责人账号的余额** —— 生产
-  # 没有节点钱包,那 735 万就记在 node_member 账号上。bff669c 把 owner/1 换成
-  # UserJSON.embed 时把这个字段丢了,页面上的数字才全成了 0。
-  defp owner(%User{grain_balance: balance, grain_frozen_balance: frozen} = user) do
+  def owner_balances(nodes) do
+    users = for %{user: %User{} = user} <- nodes, do: user
+
+    case Rice.Points.LegacyCutover.point_id() do
+      nil -> Map.new(users, &{&1.id, {&1.grain_balance, &1.grain_frozen_balance}})
+      point_id -> point_owner_balances(users, point_id)
+    end
+  end
+
+  defp point_owner_balances(users, point_id) do
+    import Ecto.Query
+    ids = Enum.map(users, & &1.id)
+
+    Rice.Repo.all(
+      from a in Rice.Points.Account,
+        join: b in Rice.Points.Balance,
+        on: b.account_id == a.id,
+        where: a.point_id == ^point_id and a.owner_type == "user" and a.owner_id in ^ids,
+        select: {a.owner_id, {b.available, b.held}}
+    )
+    |> Map.new()
+  end
+
+  defp owner(%User{} = user, balances) do
+    {balance, frozen} =
+      if is_map(balances),
+        do: Map.get(balances, user.id, {0, 0}),
+        else: Rice.Grains.balances(user)
+
     user |> UserJSON.embed() |> Map.merge(%{grain_balance: balance, grain_frozen_balance: frozen})
   end
 
-  defp owner(user), do: UserJSON.embed(user)
+  defp owner(user, _), do: UserJSON.embed(user)
 
   defp data(node, user) do
     own_application = if user, do: Enum.find(node.applications, &(&1.user_id == user.id))
 
+    {balance, frozen} = Rice.Grains.balances(node)
+
     Map.merge(embed(node), %{
-      grain_balance: node.grain_balance,
-      grain_frozen_balance: node.grain_frozen_balance,
+      grain_balance: balance,
+      grain_frozen_balance: frozen,
       role: role(node, user),
       can_manage_members: not is_nil(user) and node.user_id == user.id,
       my_application: if(own_application, do: application(own_application))

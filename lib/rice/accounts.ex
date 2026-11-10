@@ -322,9 +322,59 @@ defmodule Rice.Accounts do
   """
   @spec send_verification_code(String.t(), String.t(), String.t()) :: send_code_result()
   def send_verification_code(channel, target, purpose) do
-    with :ok <- validate_code_request(channel, target, purpose),
-         code = VerificationCode.generate_code(),
-         {:ok, record} <-
+    with :ok <- validate_code_request(channel, target, purpose) do
+      issue_verification_code(channel, target, purpose)
+    end
+  end
+
+  @doc "Sends a code to the signer's own contact, scoped to one issuance."
+  @spec send_issuance_code(User.t(), String.t(), String.t()) ::
+          send_code_result() | {:error, :contact_not_set | :invalid_target}
+  def send_issuance_code(user, channel, issuance_id) do
+    with {:ok, target} <- own_contact_target(user, channel),
+         true <- valid_target?(channel, target) do
+      issue_verification_code(channel, target, "pi:" <> issuance_id)
+    else
+      false -> {:error, :invalid_target}
+      error -> error
+    end
+  end
+
+  @doc "Consumes a code scoped to the signer's contact and issuance."
+  @spec verify_issuance_code(User.t(), String.t(), String.t(), term()) ::
+          :ok | {:error, code_error() | :contact_not_set}
+  def verify_issuance_code(user, channel, issuance_id, code) do
+    with {:ok, target} <- own_contact_target(user, channel) do
+      verify_code(channel, target, "pi:" <> issuance_id, code)
+    end
+  end
+
+  @doc "Sends a code to the signer's own contact for one treasury proposal."
+  @spec send_spend_code(User.t(), String.t(), String.t()) ::
+          send_code_result() | {:error, :contact_not_set | :invalid_target}
+  def send_spend_code(user, channel, proposal_id) do
+    with {:ok, target} <- own_contact_target(user, channel),
+         true <- valid_target?(channel, target) do
+      issue_verification_code(channel, target, "ps:" <> proposal_id)
+    else
+      false -> {:error, :invalid_target}
+      error -> error
+    end
+  end
+
+  @doc "Consumes a treasury proposal's verification code."
+  @spec verify_spend_code(User.t(), String.t(), String.t(), term()) ::
+          :ok | {:error, code_error() | :contact_not_set}
+  def verify_spend_code(user, channel, proposal_id, code) do
+    with {:ok, target} <- own_contact_target(user, channel) do
+      verify_code(channel, target, "ps:" <> proposal_id, code)
+    end
+  end
+
+  defp issue_verification_code(channel, target, purpose) do
+    code = VerificationCode.generate_code()
+
+    with {:ok, record} <-
            Repo.transaction(fn ->
              # 同一联系方式的检查与占位必须原子完成,切换用途也不能绕过。
              Repo.query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
@@ -940,14 +990,20 @@ defmodule Rice.Accounts do
       lock_user_lifecycle(user.id)
       current = repo.one!(from u in User, where: u.id == ^user.id, lock: "FOR NO KEY UPDATE")
 
+      wallet_ids = lock_point_wallets(repo, current.id)
+
       cond do
-        current.grain_balance != 0 or current.grain_frozen_balance != 0 ->
+        Rice.Grains.balances(current) != {0, 0} or point_wallet_has_balance?(repo, wallet_ids) ->
           {:error, :account_has_balance}
 
         active_responsibilities?(current.id) ->
           {:error, :account_has_responsibilities}
 
         true ->
+          repo.update_all(from(a in Rice.Points.Account, where: a.id in ^wallet_ids),
+            set: [status: "disabled", updated_at: DateTime.utc_now()]
+          )
+
           repo.update(Ecto.Changeset.change(current, deleted_at: DateTime.utc_now()))
       end
     end)
@@ -957,6 +1013,27 @@ defmodule Rice.Accounts do
       {:error, :user, reason, _} when is_atom(reason) -> {:error, reason}
       result -> result
     end
+  end
+
+  defp lock_point_wallets(repo, user_id) do
+    repo.all(
+      from a in Rice.Points.Account,
+        where: a.owner_type == "user" and a.owner_id == ^user_id,
+        where:
+          a.point_id in subquery(
+            from p in Rice.Points.Point, where: p.status != "disabled", select: p.id
+          ),
+        order_by: a.id,
+        select: a.id,
+        lock: "FOR UPDATE"
+    )
+  end
+
+  defp point_wallet_has_balance?(repo, ids) do
+    repo.exists?(
+      from b in Rice.Points.Balance,
+        where: b.account_id in ^ids and (b.available != 0 or b.held != 0)
+    )
   end
 
   # A retiring account cannot acquire a new application/ownership concurrently.

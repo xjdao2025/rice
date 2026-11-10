@@ -22,6 +22,7 @@ defmodule Rice.Admin.Grants do
           {:ok, non_neg_integer(), :created | :replayed}
           | {:error,
              :unprocessable_entity
+             | :point_issuance_required
              | :invalid_amount
              | :missing_request_id
              | :not_found
@@ -30,6 +31,20 @@ defmodule Rice.Admin.Grants do
              | Rice.Accounts.code_error()
              | Ecto.Changeset.t()}
   def grant_nodes(admin, ids, amount, request_id, code, opts \\ []) do
+    case Rice.Points.LegacyCutover.point_id() do
+      nil ->
+        legacy_grant_nodes(admin, ids, amount, request_id, code, opts)
+
+      point_id ->
+        with :ok <- validate_node_ids(ids),
+             {:ok, _tx, status} <-
+               point_grant(point_id, admin, ids, amount, request_id, code, opts) do
+          {:ok, length(Enum.uniq(ids)), status}
+        end
+    end
+  end
+
+  defp legacy_grant_nodes(admin, ids, amount, request_id, code, opts) do
     with :ok <- validate_node_ids(ids),
          :ok <- validate_node_amount(amount),
          :ok <- validate_request_id(request_id) do
@@ -127,7 +142,8 @@ defmodule Rice.Admin.Grants do
   @spec grant_node(AdminUser.t(), String.t(), term(), term(), String.t() | nil, keyword()) ::
           {:ok, Transfer.t(), :created | :replayed}
           | {:error,
-             :not_found
+             :point_issuance_required
+             | :not_found
              | :invalid_amount
              | :missing_request_id
              | :conflict
@@ -135,6 +151,28 @@ defmodule Rice.Admin.Grants do
              | Rice.Accounts.code_error()
              | Ecto.Changeset.t()}
   def grant_node(%AdminUser{} = admin, node_id, amount, request_id, code, opts \\ []) do
+    case Rice.Points.LegacyCutover.point_id() do
+      nil ->
+        legacy_grant_node(admin, node_id, amount, request_id, code, opts)
+
+      point_id ->
+        with :ok <- validate_node_id(node_id),
+             {:ok, tx, status} <-
+               point_grant(point_id, admin, [node_id], amount, request_id, code, opts, node_id) do
+          {:ok,
+           %Transfer{
+             id: tx.id,
+             kind: "grant",
+             amount: amount,
+             to_node_id: node_id,
+             memo: tx.public_note || "",
+             inserted_at: tx.inserted_at
+           }, status}
+        end
+    end
+  end
+
+  defp legacy_grant_node(admin, node_id, amount, request_id, code, opts) do
     memo = Keyword.get(opts, :memo) || ""
 
     with :ok <- validate_node_id(node_id),
@@ -185,6 +223,47 @@ defmodule Rice.Admin.Grants do
         {:ok, {:verification_error, reason}} -> {:error, reason}
         {:ok, {transfer, status}} -> {:ok, transfer, status}
         {:error, reason} -> {:error, reason}
+      end
+    end
+  end
+
+  defp point_grant(point_id, admin, ids, amount, request_id, code, opts, single_id \\ nil) do
+    with :ok <- validate_node_amount(amount),
+         :ok <- validate_request_id(request_id) do
+      ids = Enum.sort(Enum.uniq(ids))
+      memo = Keyword.get(opts, :memo) || ""
+
+      key =
+        :crypto.hash(:sha256, :erlang.term_to_binary({admin.id, single_id, request_id}))
+        |> Base.url_encode64(padding: false)
+
+      with {:ok, result} <-
+             Repo.transaction(fn ->
+               Repo.one!(
+                 from p in Rice.Points.Point, where: p.id == ^point_id, lock: "FOR UPDATE"
+               )
+
+               recipients =
+                 Enum.map(ids, fn id ->
+                   case Rice.Points.WalletAccounts.ensure_recipient(point_id, {:node, id}) do
+                     {:ok, wallet} -> %{account_id: wallet.id, amount: amount}
+                     {:error, _} -> Repo.rollback(:not_found)
+                   end
+                 end)
+
+               Rice.Points.grant_legacy_rice(
+                 point_id,
+                 %{
+                   actor_id: admin.id,
+                   idempotency_key: "admin-grant:" <> key,
+                   public_note: memo,
+                   reference_type: "admin_grant",
+                   recipients: recipients
+                 },
+                 fn -> Rice.Admin.verify_grant_code(admin, code) end
+               )
+             end) do
+        result
       end
     end
   end

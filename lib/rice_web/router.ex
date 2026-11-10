@@ -18,6 +18,10 @@ defmodule RiceWeb.Router do
     plug :fetch_current_user
   end
 
+  pipeline :point_app_api do
+    plug :accepts, ["json"]
+  end
+
   pipeline :api_authenticated do
     plug :require_authenticated_user
   end
@@ -226,9 +230,37 @@ defmodule RiceWeb.Router do
     post "/attachments", AttachmentController, :create
   end
 
+  scope "/v1", RiceWeb.Api do
+    pipe_through :point_app_api
+
+    post "/payment-intents", PointPaymentController, :create
+    get "/payment-intents/:id", PointPaymentController, :show
+  end
+
+  scope "/v1", RiceWeb.Api do
+    pipe_through [:api, :api_authenticated]
+
+    post "/points/:point_id/issuances", PointIssuanceController, :create
+    get "/points/:point_id/issuances/:id", PointIssuanceController, :show
+    post "/points/:point_id/issuances/:id/approval-code", PointIssuanceController, :approval_code
+    post "/points/:point_id/issuances/:id/approvals", PointIssuanceController, :approve
+
+    post "/points/:point_id/spend-proposals", PointSpendController, :create
+    get "/points/:point_id/spend-proposals/:id", PointSpendController, :show
+
+    post "/points/:point_id/spend-proposals/:id/approval-code",
+         PointSpendController,
+         :approval_code
+
+    post "/points/:point_id/spend-proposals/:id/approvals", PointSpendController, :approve
+  end
+
   # 需要登录的接口
   scope "/api", RiceWeb.Api do
     pipe_through [:api, :api_authenticated]
+
+    get "/point-checkout/:token", PointPaymentController, :checkout
+    post "/point-checkout/:token", PointPaymentController, :confirm
 
     delete "/session", SessionController, :delete
 

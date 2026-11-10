@@ -1,5 +1,26 @@
 import Config
 
+if raw = System.get_env("POINT_ISSUANCE_PROPOSERS") do
+  proposers = Jason.decode!(raw)
+
+  valid_id? = fn id ->
+    is_binary(id) and Regex.match?(~r/^[0-9a-z]{13}$/, id)
+  end
+
+  unless is_map(proposers) and
+           Enum.all?(proposers, fn {point_id, users} ->
+             valid_id?.(point_id) and is_list(users) and Enum.all?(users, valid_id?)
+           end) do
+    raise "POINT_ISSUANCE_PROPOSERS must map Point IDs to lists of user IDs"
+  end
+
+  config :rice, :point_issuance_proposers, proposers
+end
+
+if origin = System.get_env("POINT_CHECKOUT_ORIGIN") do
+  config :rice, :point_checkout_origin, origin
+end
+
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the
 # system starts, so it is typically used to load production configuration

@@ -5,16 +5,18 @@ defmodule RiceWeb.Api.TaskJSON do
   alias RiceWeb.Api.UserJSON
 
   def index(%{page: page} = assigns) do
+    balances = RiceWeb.Api.NodeJSON.owner_balances(Enum.map(page.entries, & &1.node))
+
     %{
-      data: Enum.map(page.entries, &data(&1, assigns[:current_user], false)),
+      data: Enum.map(page.entries, &data(&1, assigns[:current_user], false, balances)),
       meta: Rice.Pagination.meta(page)
     }
   end
 
   def show(%{task: task} = assigns),
-    do: %{data: data(task, assigns[:current_user], true)}
+    do: %{data: data(task, assigns[:current_user], true, nil)}
 
-  defp data(task, current_user, detail?) do
+  defp data(task, current_user, detail?, balances) do
     all_applications = loaded(task.applications)
     applications = Enum.filter(all_applications, &(&1.round == task.round))
     past_applications = Enum.reject(all_applications, &(&1.round == task.round))
@@ -38,7 +40,7 @@ defmodule RiceWeb.Api.TaskJSON do
       attachments:
         Enum.map(loaded(task.image_links), &RiceWeb.Api.AttachmentJSON.embed(&1.attachment)),
       requirement: task.requirement,
-      node: RiceWeb.Api.NodeJSON.embed(task.node),
+      node: RiceWeb.Api.NodeJSON.embed(task.node, balances),
       execution_deadline: task.execution_deadline,
       # 单人任务指派后不算"招满",只看申请截止
       application_closed:

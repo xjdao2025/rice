@@ -84,8 +84,17 @@ defmodule Rice.Grains do
 
   @doc "后台发放(增发)。没有付款方,总量增加。"
   @spec grant(User.t(), integer(), keyword()) ::
-          {:ok, Transfer.t()} | {:error, :recipient_not_found | Ecto.Changeset.t()}
+          {:ok, Transfer.t()}
+          | {:error, :recipient_not_found | :point_issuance_required | Ecto.Changeset.t()}
   def grant(%User{} = to, amount, opts \\ []) do
+    if Rice.Points.LegacyCutover.point_id() do
+      {:error, :point_issuance_required}
+    else
+      grant_legacy(to, amount, opts)
+    end
+  end
+
+  defp grant_legacy(to, amount, opts) do
     attrs = %{
       kind: "grant",
       to_user_id: to.id,
@@ -105,9 +114,24 @@ defmodule Rice.Grains do
 
   @doc "Reserve against a personal ID or {:node, id} inside the business transaction."
   @spec reserve_business(Ecto.Repo.t(), account(), pos_integer(), String.t()) ::
-          {:ok, Rice.Grains.Receipt.t()}
-          | {:error, :conflict | :insufficient_balance | Ecto.Changeset.t()}
+          {:ok, Rice.Grains.Receipt.t() | map()} | {:error, atom() | Ecto.Changeset.t()}
   def reserve_business(repo, account, amount, uri) when is_integer(amount) and amount > 0 do
+    case Rice.Points.LegacyCutover.point_id() do
+      nil ->
+        reserve_legacy(repo, account, amount, uri)
+
+      point_id ->
+        Rice.Points.LegacyHolds.reserve(
+          point_id,
+          account,
+          payer_actor(repo, account),
+          amount,
+          uri
+        )
+    end
+  end
+
+  defp reserve_legacy(repo, account, amount, uri) do
     lock_business_accounts(repo, [account])
 
     case repo.get_by(Rice.Grains.Receipt, subject_uri: uri, kind: "reserved") do
@@ -124,17 +148,15 @@ defmodule Rice.Grains do
   end
 
   @spec refund_business(Ecto.Repo.t(), account(), integer(), String.t()) ::
-          {:ok, Rice.Grains.Receipt.t()}
-          | {:error, :conflict | :grain_reservation_missing | Ecto.Changeset.t()}
+          {:ok, Rice.Grains.Receipt.t() | map()}
+          | {:error, atom() | Ecto.Changeset.t()}
   def refund_business(repo, account, amount, uri),
-    do: finish_business(repo, account, nil, amount, uri, "refunded")
+    do: finish_or_move(repo, account, nil, amount, uri, uri, "refunded")
 
   @spec settle_business(Ecto.Repo.t(), account(), account(), integer(), String.t()) ::
-          {:ok, Rice.Grains.Receipt.t()}
-          | {:error,
-             :conflict | :grain_reservation_missing | :recipient_not_found | Ecto.Changeset.t()}
+          {:ok, Rice.Grains.Receipt.t() | map()} | {:error, atom() | Ecto.Changeset.t()}
   def settle_business(repo, account, recipient, amount, uri),
-    do: finish_business(repo, account, recipient, amount, uri, "settled")
+    do: finish_or_move(repo, account, recipient, amount, uri, uri, "settled")
 
   @doc """
   从一笔已经冻结的总额里划出 `amount`。划出的凭证记在 `outcome_uri` 上，
@@ -153,27 +175,61 @@ defmodule Rice.Grains do
           String.t(),
           String.t()
         ) ::
-          {:ok, Rice.Grains.Receipt.t()}
-          | {:error,
-             :conflict
-             | :grain_reservation_missing
-             | :recipient_not_found
-             | Ecto.Changeset.t()}
+          {:ok, Rice.Grains.Receipt.t() | map()} | {:error, atom() | Ecto.Changeset.t()}
   def draw_reservation(repo, payer, recipient, amount, reservation_uri, outcome_uri, kind)
       when is_integer(amount) and amount > 0 and kind in ["settled", "refunded"] do
     if String.starts_with?(outcome_uri, reservation_uri <> "/") do
-      lock_business_accounts(repo, [payer, recipient])
-      reserved = repo.get_by(Rice.Grains.Receipt, subject_uri: reservation_uri, kind: "reserved")
-
-      if is_nil(reserved) or not matches_account?(reserved, :from, payer) do
-        {:error, :grain_reservation_missing}
-      else
-        draw_outcome(repo, payer, recipient, amount, reservation_uri, outcome_uri, kind, reserved)
-      end
+      finish_or_move(repo, payer, recipient, amount, reservation_uri, outcome_uri, kind)
     else
       {:error, :conflict}
     end
   end
+
+  defp finish_or_move(repo, payer, recipient, amount, reservation, outcome, kind) do
+    case Rice.Points.LegacyCutover.point_id() do
+      nil ->
+        finish_legacy(repo, payer, recipient, amount, reservation, outcome, kind)
+
+      point_id ->
+        move_imported(repo, point_id, payer, recipient, amount, reservation, outcome, kind)
+    end
+  end
+
+  defp finish_legacy(repo, payer, recipient, amount, uri, uri, kind),
+    do: finish_business(repo, payer, recipient, amount, uri, kind)
+
+  defp finish_legacy(repo, payer, recipient, amount, reservation, outcome, kind) do
+    lock_business_accounts(repo, [payer, recipient])
+    reserved = repo.get_by(Rice.Grains.Receipt, subject_uri: reservation, kind: "reserved")
+
+    if is_nil(reserved) or not matches_account?(reserved, :from, payer) do
+      {:error, :grain_reservation_missing}
+    else
+      draw_outcome(repo, payer, recipient, amount, reservation, outcome, kind, reserved)
+    end
+  end
+
+  defp move_imported(repo, point_id, payer, recipient, amount, reservation, outcome, kind) do
+    alias Rice.Points.LegacyHolds
+
+    with {:ok, hold} <- LegacyHolds.find(point_id, reservation),
+         true <- LegacyHolds.owned_by?(hold, payer) do
+      action = if kind == "settled", do: :settle, else: :release
+
+      LegacyHolds.move(point_id, action, %{
+        reservation_uri: reservation,
+        outcome_uri: outcome,
+        actor_id: payer_actor(repo, payer),
+        amount: amount,
+        recipient: recipient
+      })
+    else
+      _ -> {:error, :grain_reservation_missing}
+    end
+  end
+
+  defp payer_actor(repo, {:node, id}), do: repo.get!(Node, id).user_id
+  defp payer_actor(_repo, id), do: id
 
   # All users, then all nodes, sorted by ID. Callers settling multiple applications
   # acquire the complete set first, so opposite transfers cannot reverse lock order.
@@ -431,6 +487,7 @@ defmodule Rice.Grains do
               %{
                 kind: "gift",
                 from_node_id: node.id,
+                actor_id: admin.id,
                 to_user_id: to.id,
                 amount: amount,
                 memo: Keyword.get(opts, :memo, "") || "",
@@ -448,6 +505,28 @@ defmodule Rice.Grains do
         end
       end)
       |> Repo.preload_ok([:from_user, :to_user, :from_node, :to_node])
+    end
+  end
+
+  @doc "Reads the wallet balance from the configured ledger."
+  @spec balances(User.t() | Node.t()) :: {integer(), integer()}
+  def balances(%{grain_balance: available, grain_frozen_balance: held} = owner) do
+    case Rice.Points.LegacyCutover.point_id() do
+      nil ->
+        {available, held}
+
+      point_id ->
+        type = if is_struct(owner, Node), do: "node", else: "user"
+
+        Repo.one(
+          from account in Rice.Points.Account,
+            join: balance in Rice.Points.Balance,
+            on: balance.account_id == account.id,
+            where:
+              account.point_id == ^point_id and account.owner_type == ^type and
+                account.owner_id == ^owner.id,
+            select: {balance.available, balance.held}
+        ) || {0, 0}
     end
   end
 
@@ -489,39 +568,148 @@ defmodule Rice.Grains do
       )
       |> Pagination.paginate(Repo, opts)
 
-    combined = Enum.sort_by(transfers.entries ++ receipts.entries, & &1.id, :desc)
-    page = Enum.take(combined, opts.limit)
+    points = point_wallet_history(owner, opts)
+    legacy = Enum.map(transfers.entries ++ receipts.entries, &legacy_wallet_entry/1)
+    combined = Enum.sort_by(legacy ++ points.entries, & &1.id, :desc)
+    entries = Enum.take(combined, opts.limit)
 
     more? =
-      length(combined) > opts.limit or transfers.next_cursor != nil or receipts.next_cursor != nil
+      length(combined) > opts.limit or transfers.next_cursor != nil or
+        receipts.next_cursor != nil or points.next_cursor != nil
 
-    next_cursor = if more? and page != [], do: List.last(page).id
+    next_cursor = if more? and entries != [], do: List.last(entries).id
 
-    entries =
-      page
-      |> Enum.map(fn entry ->
-        %{
-          id: entry.id,
-          kind: entry.kind,
-          amount: entry.amount,
-          memo: Map.get(entry, :memo),
-          subject_uri: entry.subject_uri,
-          inserted_at: entry.inserted_at,
-          from_user: wallet_user(entry.from_user),
-          to_user: wallet_user(entry.to_user),
-          from_node: wallet_node(entry.from_node),
-          to_node: wallet_node(entry.to_node)
-        }
-      end)
+    {available, held} = balances(owner)
 
     %{
-      balance: owner.grain_balance,
-      frozen: owner.grain_frozen_balance,
-      earned: to_integer(earned),
+      balance: available,
+      frozen: held,
+      earned: to_integer(earned) + points.earned,
       entries: entries,
       next_cursor: next_cursor
     }
   end
+
+  defp legacy_wallet_entry(entry) do
+    %{
+      id: entry.id,
+      kind: entry.kind,
+      amount: entry.amount,
+      memo: Map.get(entry, :memo),
+      subject_uri: entry.subject_uri,
+      inserted_at: entry.inserted_at,
+      from_user: wallet_user(entry.from_user),
+      to_user: wallet_user(entry.to_user),
+      from_node: wallet_node(entry.from_node),
+      to_node: wallet_node(entry.to_node)
+    }
+  end
+
+  defp point_wallet_history(owner, opts) do
+    alias Rice.Points.{Entry, Transaction}
+
+    with point_id when is_binary(point_id) <- Rice.Points.LegacyCutover.point_id(),
+         {:ok, account} <-
+           point_account(
+             point_id,
+             if(is_struct(owner, Node), do: {:node, owner.id}, else: owner.id)
+           ) do
+      entries = from e in Entry, where: e.account_id == ^account.id
+
+      posted =
+        from t in Transaction,
+          where:
+            t.point_id == ^point_id and t.kind not in ["legacy_opening", "legacy_opening_hold"],
+          where: t.id in subquery(from e in entries, select: e.transaction_id)
+
+      page = Pagination.paginate(posted, Repo, opts)
+      ids = Enum.map(page.entries, & &1.id)
+
+      by_transaction =
+        Repo.all(from e in Entry, where: e.transaction_id in ^ids, preload: [:account])
+        |> Enum.group_by(& &1.transaction_id)
+
+      earned =
+        Repo.one(
+          from e in entries,
+            join: t in Transaction,
+            on: t.id == e.transaction_id,
+            where:
+              e.bucket == "available" and e.delta > 0 and
+                t.kind not in ["legacy_opening", "legacy_opening_hold", "hold_release"],
+            select: coalesce(sum(e.delta), 0)
+        )
+
+      %{
+        page
+        | entries:
+            Enum.map(page.entries, fn t ->
+              point_wallet_entry(t, account.id, Map.fetch!(by_transaction, t.id))
+            end)
+      }
+      |> Map.put(:earned, to_integer(earned))
+    else
+      _ -> %{entries: [], next_cursor: nil, earned: 0}
+    end
+  end
+
+  defp point_wallet_entry(tx, account_id, entries) do
+    owned = Enum.filter(entries, &(&1.account_id == account_id))
+    available = Enum.sum(for entry <- owned, entry.bucket == "available", do: entry.delta)
+    held = Enum.sum(for entry <- owned, entry.bucket == "held", do: entry.delta)
+    incoming? = available > 0 and tx.kind != "hold_release"
+    own = hd(owned).account
+
+    counterparty =
+      if incoming? do
+        Enum.find(entries, &(&1.delta < 0 and &1.account_id != account_id))
+      else
+        entries
+        |> Enum.filter(&(&1.delta > 0 and &1.account_id != account_id))
+        |> Enum.uniq_by(& &1.account_id)
+        |> case do
+          [entry] -> entry
+          _ -> nil
+        end
+      end
+
+    other = if counterparty, do: counterparty.account
+    {from_user, from_node} = wallet_point_party(if incoming?, do: other, else: own)
+    {to_user, to_node} = wallet_point_party(if incoming?, do: own, else: other)
+
+    %{
+      id: tx.id,
+      kind: point_wallet_kind(tx),
+      amount: abs(if available == 0, do: held, else: available),
+      memo: tx.public_note,
+      subject_uri: if(tx.reference_type in ["reward", "community_fund"], do: tx.reference_id),
+      inserted_at: tx.inserted_at,
+      from_user: from_user,
+      from_node: from_node,
+      to_user: to_user,
+      to_node: to_node
+    }
+  end
+
+  defp point_wallet_kind(%{kind: kind}) when kind in ["hold_reserve", "approved_hold_reserve"],
+    do: "reserved"
+
+  defp point_wallet_kind(%{kind: "hold_release"}), do: "refunded"
+  defp point_wallet_kind(%{kind: "hold_settle"}), do: "task_reward"
+  defp point_wallet_kind(%{kind: kind}) when kind in ["mint", "initial_allocation"], do: "grant"
+
+  defp point_wallet_kind(%{reference_type: type}) when type in ["reward", "community_fund"],
+    do: type
+
+  defp point_wallet_kind(_), do: "gift"
+
+  defp wallet_point_party(%{owner_type: "user", owner_id: id}),
+    do: {wallet_user(Repo.get(User, id)), nil}
+
+  defp wallet_point_party(%{owner_type: "node", owner_id: id}),
+    do: {nil, wallet_node(Repo.get(Node, id))}
+
+  defp wallet_point_party(_), do: {nil, nil}
 
   defp wallet_node(nil), do: nil
   defp wallet_node(node), do: %{id: node.id, name: node.name}
@@ -530,7 +718,45 @@ defmodule Rice.Grains do
   defp wallet_user(user), do: %{id: user.id, nickname: user.nickname, handle: user.handle}
 
   # 付款(个人或节点):记流水、扣付款人、给收款账户入账,任何一步失败整个事务回滚。
-  defp book!(%{amount: amount} = attrs, payer, recipient) do
+  defp book!(attrs, payer, recipient) do
+    case Rice.Points.LegacyCutover.point_id() do
+      nil -> book_legacy!(attrs, payer, recipient)
+      point_id -> book_point!(point_id, attrs, payer, recipient)
+    end
+  end
+
+  defp book_point!(point_id, attrs, payer, recipient) do
+    with {:ok, payer_account} <- point_account(point_id, payer),
+         {:ok, payee_account} <- Rice.Points.WalletAccounts.ensure_recipient(point_id, recipient),
+         {:ok, tx} <-
+           Rice.Points.transfer(%{
+             payer_account_id: payer_account.id,
+             actor_id: Map.get(attrs, :actor_id) || payer_actor(Repo, payer),
+             idempotency_key: point_transfer_key(attrs),
+             public_note: Map.get(attrs, :memo),
+             reference_type: attrs.kind,
+             reference_id: Map.get(attrs, :subject_uri),
+             recipients: [%{account_id: payee_account.id, amount: attrs.amount}]
+           }) do
+      struct(
+        Transfer,
+        Map.merge(Map.drop(attrs, [:actor_id]), %{id: tx.id, inserted_at: tx.inserted_at})
+      )
+    else
+      {:error, :idempotency_conflict} -> Repo.rollback(:conflict)
+      {:error, reason} -> Repo.rollback(reason)
+    end
+  end
+
+  defp point_transfer_key(%{kind: "community_fund", subject_uri: uri}) do
+    "fund:" <> Base.url_encode64(:crypto.hash(:sha256, uri), padding: false)
+  end
+
+  defp point_transfer_key(attrs), do: Map.get(attrs, :request_id) || Rice.Tsid.generate()
+
+  defp point_account(point_id, owner), do: Rice.Points.WalletAccounts.fetch(point_id, owner)
+
+  defp book_legacy!(%{amount: amount} = attrs, payer, recipient) do
     with {:ok, transfer} <- Repo.insert(Transfer.changeset(%Transfer{}, attrs)),
          {:ok, _} <- debit(Repo, payer, amount),
          {:ok, _} <- credit_account(Repo, recipient, amount) do

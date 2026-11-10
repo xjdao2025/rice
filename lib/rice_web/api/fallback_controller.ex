@@ -15,6 +15,8 @@ defmodule RiceWeb.Api.FallbackController do
 
   # 错误原因 → {状态码, errors}。文案是对外契约,改一个字前端就要跟着改。
   @errors %{
+    point_issuance_required: {:conflict, %{detail: "请通过 Point 发行提案增发积分"}},
+    spend_approval_required: {:conflict, %{detail: "此钱包的支出需要多签批准"}},
     conflict: {:conflict, %{detail: "资源状态已经变化，请刷新后重试"}},
     account_has_balance: {:conflict, %{detail: "账号仍有可用或冻结稻米，请先结清后再注销"}},
     account_has_responsibilities: {:conflict, %{detail: "账号仍有节点管理职责或未完成的任务、活动，请先处理后再注销"}},
