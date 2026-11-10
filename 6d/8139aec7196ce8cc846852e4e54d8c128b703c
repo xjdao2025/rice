@@ -1,0 +1,21 @@
+docs/community-points-design.md
+  s_26f163ddb2b2b6::t_cc990e543767a1 114
+test/rice/point_legacy_snapshot_test.exs
+  s_26f163ddb2b2b6::t_66c7c08fc6d007 150,169-198
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6d8139aec7196ce8cc846852e4e54d8c128b703c",
+  "prompts": {},
+  "sessions": {
+    "s_26f163ddb2b2b6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c4a6-b069-7d02-87ea-5530561f8d03",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
