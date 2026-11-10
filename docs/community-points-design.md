@@ -111,7 +111,7 @@
 先部署包含 Point 迁移的 Rice 和结账页版本的 rice-front。确认测试环境入口将 `/v1` 和 `/api` 路由到 Rice，将 `/point-checkout` 路由到 rice-front。Rice 的 `POINT_CHECKOUT_ORIGIN` 指向测试前端。迁移完成后，在测试库执行以下操作。正式切换前使用同样流程演练。
 
 1. 暂停应用和后台任务的资金写入，并备份测试库。运行 `bin/rice eval 'Rice.Release.point_ledger("audit")'`，核对发行总量、未结冻结及异常账户。
-2. 经社区治理授权后，以环境变量 `POINT_BOOTSTRAP` 提供 JSON，包含 `community_id`、`code`、`threshold`、`signers` 和可选 `supply_cap`。运行 `bin/rice eval 'Rice.Release.point_ledger("bootstrap")'`，记录返回的资产 ID。
+2. 设置 `POINT_LEGACY_COMMUNITY_ID`，运行 `bin/rice eval 'Rice.Release.point_ledger("prepare-legacy-rice")'` 创建稻米迁移草稿，记录返回的资产 ID。迁移后的稻米由现有后台管理员通过短信验证码向节点增发，其他积分继续使用各自的发行策略。
 3. 将资产 ID 设为 `POINT_CUTOVER_ID`。运行 `bin/rice eval 'Rice.Release.point_ledger("activate")'`，核对结果后恢复业务写入。数据库切换标记会阻止旧余额和流水继续写入。
 4. 检查个人和节点钱包、旧任务发奖、旧活动退款和新转账。验证第三方建单、浏览器确认及服务端查单。
 5. 演练回退时重新暂停资金写入。运行 `bin/rice eval 'Rice.Release.point_ledger("report")'`，检查两边对账、账户差异、未结冻结和交易清单。若尚无新交易，执行 `rollback-before-writes`。可回放时，将报告中按序排列的交易 ID 保存为 JSON 数组，通过 `POINT_REVIEWED_TRANSACTIONS` 传入，再执行 `rollback-replay`。回放会拒绝清单变化和旧账本无法表达的交易。回放成功后核对旧账本并恢复写入。

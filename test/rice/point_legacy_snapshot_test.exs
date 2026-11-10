@@ -147,7 +147,7 @@ defmodule Rice.PointLegacySnapshotTest do
     assert {50, 0} = Grains.balances(Repo.reload!(payee))
     assert {:error, :point_issuance_required} = Grains.grant(payee, 1)
 
-    assert {:error, :point_issuance_required} =
+    assert {:error, :unprocessable_entity} =
              Rice.Admin.Grants.grant_nodes(%Rice.Admin.AdminUser{}, [], 1, "old-grant", nil)
 
     refute Repo.get_by(Rice.Grains.Transfer, request_id: "after-cutover")
@@ -164,6 +164,36 @@ defmodule Rice.PointLegacySnapshotTest do
     refute Enum.any?(older, &(&1.id == gift.id))
 
     assert {:ok, %{ok?: true}} = Points.Queries.reconcile(point.id)
+  end
+
+  test "migrated Rice keeps administrator verification, atomic mint and idempotency" do
+    alias Rice.Points.{Issuers, LegacyCutover, Queries, WalletAccounts}
+    node = node_fixture()
+    admin = user_fixture()
+    {:ok, point} = Issuers.prepare_legacy_rice("test-rice")
+    {:ok, _} = LegacyCutover.activate(point.id)
+    {:ok, wallet} = WalletAccounts.ensure_recipient(point.id, {:node, node.id})
+
+    request = %{
+      actor_id: admin.id,
+      idempotency_key: "verified-rice-grant",
+      recipients: [%{account_id: wallet.id, amount: 5}]
+    }
+
+    assert {:error, :invalid_code} =
+             Rice.Points.grant_legacy_rice(point.id, request, fn -> {:error, :invalid_code} end)
+
+    assert {:ok, %{issued: 0, ok?: true}} = Queries.reconcile(point.id)
+    assert {:ok, tx, :created} = Rice.Points.grant_legacy_rice(point.id, request, fn -> :ok end)
+
+    assert {:ok, %{id: id}, :replayed} =
+             Rice.Points.grant_legacy_rice(point.id, request, fn ->
+               flunk("retry verified again")
+             end)
+
+    assert id == tx.id
+    assert {5, 0} = Grains.balances(node)
+    assert {:ok, %{issued: 5, ok?: true}} = Queries.reconcile(point.id)
   end
 
   test "database cutover guards old writers and only permits rollback before new postings" do
