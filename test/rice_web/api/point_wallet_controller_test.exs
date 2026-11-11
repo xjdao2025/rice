@@ -2,7 +2,7 @@ defmodule RiceWeb.Api.PointWalletControllerTest do
   use RiceWeb.ConnCase, async: true
 
   alias Rice.{Repo, Tsid}
-  alias Rice.Points.{Account, Balance, Point}
+  alias Rice.Points.{Account, Balance, Entry, Point, Transaction}
 
   test "only returns the authenticated user's wallets and preserves bigint amounts", %{conn: conn} do
     {user, token} = user_with_token()
@@ -21,6 +21,30 @@ defmodule RiceWeb.Api.PointWalletControllerTest do
       held: 7
     })
 
+    for {kind, bucket, delta} <- [
+          {"initial_allocation", "available", 1000},
+          {"transfer", "available", -10},
+          {"hold_release", "available", 20},
+          {"hold_reserve", "held", 7}
+        ] do
+      tx =
+        Repo.insert!(%Transaction{
+          point_id: demo.id,
+          kind: kind,
+          idempotency_scope: wallet.id,
+          idempotency_key: Tsid.generate(),
+          request_hash: "fixture"
+        })
+
+      Repo.insert!(%Entry{
+        point_id: demo.id,
+        transaction_id: tx.id,
+        account_id: wallet.id,
+        bucket: bucket,
+        delta: delta
+      })
+    end
+
     assert response(get(conn, ~p"/api/point-wallets"), 401)
 
     result =
@@ -32,8 +56,13 @@ defmodule RiceWeb.Api.PointWalletControllerTest do
 
     assert %{
              "data" => [
-               %{"code" => "DEMO", "available" => "9007199254740993", "held" => "7"},
-               %{"code" => "EMPTY", "available" => "0", "held" => "0"}
+               %{
+                 "code" => "DEMO",
+                 "available" => "9007199254740993",
+                 "held" => "7",
+                 "earned" => "1000"
+               },
+               %{"code" => "EMPTY", "available" => "0", "held" => "0", "earned" => "0"}
              ]
            } = json_response(result, 200)
   end
