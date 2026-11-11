@@ -1,0 +1,29 @@
+lib/rice_web/api/point_wallet_controller.ex
+  s_b8852265d1ad6b::t_4812e7a412126b 5,12-39,62-66
+test/rice_web/api/point_wallet_controller_test.exs
+  s_26f163ddb2b2b6::t_99cc356cd39cd2 5,24-47,59-65
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c31020056673ce8d76419dc3359f69213d86caaf",
+  "prompts": {},
+  "sessions": {
+    "s_26f163ddb2b2b6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c4a6-b069-7d02-87ea-5530561f8d03",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    },
+    "s_b8852265d1ad6b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c69d-e47f-7042-940a-31a651b823eb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
