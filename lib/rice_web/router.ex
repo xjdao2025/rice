@@ -259,6 +259,9 @@ defmodule RiceWeb.Router do
   scope "/api", RiceWeb.Api do
     pipe_through [:api, :api_authenticated]
 
+    get "/point-wallets/:point_id/transactions", PointWalletTransferController, :index
+    post "/point-wallets/:point_id/transfers", PointWalletTransferController, :create
+
     get "/point-wallets", PointWalletController, :index
     get "/point-checkout/:token", PointPaymentController, :checkout
     post "/point-checkout/:token", PointPaymentController, :confirm

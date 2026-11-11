@@ -55,6 +55,7 @@ defmodule RiceWeb.Api.PointWalletController do
         %{
           point_id: point_id,
           code: code,
+          is_rice: point_id == rice_id,
           name: if(point_id == rice_id, do: "稻米", else: code),
           status: status,
           wallet_status: wallet_status,
