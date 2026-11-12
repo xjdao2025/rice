@@ -1,0 +1,36 @@
+lib/rice/points/payments.ex
+  s_26f163ddb2b2b6::t_3413db75425852 74
+  s_26f163ddb2b2b6::t_1e2fa57980b389 7,13,20-21,26-27,40,45-47,49-73,75-91,93-99,101-134,138-150
+developer/point-integration/README.md
+  s_26f163ddb2b2b6::t_31596f454d1562 12-18,59,299
+developer/point-integration/openapi.json
+  s_26f163ddb2b2b6::t_a1f40197ae6c22 136
+lib/rice/points/payment_app.ex
+  s_26f163ddb2b2b6::t_f19b7e1a145108 6-7
+lib/rice/vault.ex
+  s_26f163ddb2b2b6::t_9f02920f5be152 3
+lib/rice_web/api/point_payment_app_controller.ex
+  s_26f163ddb2b2b6::t_02b90a504b772c 1-73
+lib/rice_web/router.ex
+  s_26f163ddb2b2b6::t_11332048af3033 265-269
+priv/repo/migrations/20261112090000_enable_payment_app_self_service.exs
+  s_26f163ddb2b2b6::t_f52690908a945e 1-28
+test/rice_web/api/point_payment_app_controller_test.exs
+  s_26f163ddb2b2b6::t_ab21352a5466cb 1-104
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6ced9cbba42a246cbe7c239eb518217ce0056e4f",
+  "prompts": {},
+  "sessions": {
+    "s_26f163ddb2b2b6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c4a6-b069-7d02-87ea-5530561f8d03",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
