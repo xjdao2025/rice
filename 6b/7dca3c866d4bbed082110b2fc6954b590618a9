@@ -1,0 +1,21 @@
+developer/point-integration/README.md
+  s_26f163ddb2b2b6::t_b2c55011016551 7-8,13,15-30,287-289,292-293,309-310
+developer/point-integration/openapi.json
+  s_26f163ddb2b2b6::t_b6b2a1eb847024 6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6b7dca3c866d4bbed082110b2fc6954b590618a9",
+  "prompts": {},
+  "sessions": {
+    "s_26f163ddb2b2b6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c4a6-b069-7d02-87ea-5530561f8d03",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "jiangplus <jiang.plus.times@gmail.com>"
+    }
+  }
+}
