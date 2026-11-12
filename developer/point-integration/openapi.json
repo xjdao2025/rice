@@ -3,7 +3,7 @@
   "info": {
     "title": "Rice Third-party Point Payments",
     "version": "2026-11-12",
-    "description": "Merchant server API implemented in Rice. App registration binds one asset, one payee wallet and one HTTPS return URL. Customer confirms in Rice-hosted checkout. Read README.md for settlement verification and Agent instructions."
+    "description": "Merchant server API implemented in Rice. App registration binds one asset, one payee wallet and one HTTPS return URL. Customer confirms in Rice-hosted checkout. Read README.md for settlement verification and Agent instructions. Personal app registration and repeatable key reveal are available at https://xjdao.net/developer/payments. Demo source: https://github.com/xjdao2025/rice-front/tree/codex/rice-point-migration/examples/point-payment-demo."
   },
   "servers": [
     {

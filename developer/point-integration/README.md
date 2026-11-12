@@ -4,14 +4,30 @@
 
 - 测试站 API Base URL 为 `https://xjdao.net`。
 - 在线 Demo 为 <https://xjdao.net/point-demo/>，目前收取 10 DEMO 积分。
-- 可运行的示例为独立的 `point-payment-demo/server.mjs`。在线体验见上方 Demo 地址。机器可读接口定义见 [`openapi.json`](openapi.json)。
+- Demo 源码位于 rice-front 仓库的 `examples/point-payment-demo`，包括建单、跳转收银台、回跳查单与模拟交付。[Demo 目录与运行说明](https://github.com/xjdao2025/rice-front/tree/codex/rice-point-migration/examples/point-payment-demo)，[server.mjs 源码](https://github.com/xjdao2025/rice-front/blob/codex/rice-point-migration/examples/point-payment-demo/server.mjs)
+- 机器可读接口定义供开发工具和 Agent 使用。[OpenAPI 3.1](openapi.json)
 - 商户服务端创建订单，将用户浏览器跳到 Rice 收银台。用户在 Rice 登录并确认付款，商户服务端查到成功后交付。
 
 ## 1. 接入前准备
 
-个人收款应用可登录测试站后进入 [积分支付应用](https://xjdao.net/developer/payments)，或从“我的 → 积分支付应用”进入。填写应用名称、自己的收款积分及 HTTPS 返回地址，注册后在应用卡片点击“查看密钥”，即可复制 `RICE_PAYMENT_KEY`。
+### 在页面申请 RICE_PAYMENT_KEY
 
-收款积分须是当前账号已拥有的可用 Point 钱包。页面默认隐藏密钥，应用所有者可以再次查看和复制，服务端加密保存可恢复副本。点击“重置密钥”并确认后，旧密钥会立即失效，所有使用该密钥的服务端都需要更新配置。
+个人收款应用通过登录账号自助注册，收款人是当前登录账号。注册入口位于“我的 → 积分支付应用”。[打开测试站注册页](https://xjdao.net/developer/payments)
+
+1. 使用收款账号登录 `xjdao.net`，在“我的积分”确认已拥有需要收取的 Point 钱包。
+2. 进入注册页，填写应用名称，选择收款积分，并填写自己应用的 HTTPS 返回地址，例如 `https://shop.example.com/rice/return`。
+3. 点击“注册应用”。页面会生成应用卡片，显示应用 ID、积分 ID、收款钱包 ID 和返回地址。
+4. 点击卡片中的“查看密钥”，再点击“复制密钥”。复制的完整值就是 `RICE_PAYMENT_KEY`。
+5. 把密钥配置到商户服务端的环境变量或密钥存储，将卡片中的“积分 ID”配置为 `RICE_POINT_ID`。
+6. 按本指南建单、跳转 Rice 收银台并查单，完成测试后再接入业务交付。
+
+收款钱包余额可以为零。注册页只展示当前账号拥有且已启用的钱包；如果没有可选积分，先由该积分发行方或已有持有人向此账号分配或转入积分，再刷新注册页。付款人需要拥有同一种积分及足够的可用余额。
+
+### 查看、重置与历史应用
+
+页面默认隐藏密钥，应用所有者可以再次查看和复制。服务端加密保存可恢复副本，应用列表不返回密钥，密钥查看响应禁止缓存。前端页面隐藏密钥或切换到后台后，需要再次点击查看。
+
+点击“重置密钥”并确认后，旧密钥会立即失效，所有使用该密钥的商户服务端都需要更新配置。重置保留原应用 ID、已有订单及幂等范围。如果只是迁移服务器，可再次查看原密钥并配置到新环境。
 
 历史应用可能只保存了不可恢复的摘要，页面会提示先重置。运维注册的个人收款应用归收款账号所有。节点收款应用仍由运维注册和管理。
 
@@ -268,9 +284,13 @@ curl --fail-with-body --silent --show-error \
 
 ## 7. 运行当前 Demo
 
-Node.js 22+ 可直接运行，无第三方依赖。
+源码、README 和环境变量说明均维护在 rice-front 的 `examples/point-payment-demo` 目录。[Demo GitHub 目录](https://github.com/xjdao2025/rice-front/tree/codex/rice-point-migration/examples/point-payment-demo)，[完整服务端实现](https://github.com/xjdao2025/rice-front/blob/codex/rice-point-migration/examples/point-payment-demo/server.mjs)
+
+Node.js 22+ 可直接运行，无第三方依赖。先在注册页为自己的收款账号创建应用，返回地址使用自己部署的 Demo 域名。
 
 ```sh
+git clone --branch codex/rice-point-migration https://github.com/xjdao2025/rice-front.git
+cd rice-front/examples/point-payment-demo
 export RICE_URL=https://xjdao.net
 # 先通过安全方式设置 RICE_PAYMENT_KEY。
 node server.mjs
@@ -285,6 +305,8 @@ Demo 用内存 Map 保存订单及交付状态，重启会丢失。商品发放�
 ## 8. 给开发 Agent 的执行指引
 
 将本节及 `openapi.json` 一起提供给 Agent。接入授权为商户侧开发，扣款确认由用户在 Rice 页面完成。
+
+Agent 可参考 Demo 中的 `rice()` API 客户端、`POST /buy/*` 建单与跳转，以及 `GET /return` 查单及模拟交付逻辑。阅读示例后，按第 4 节补齐持久化、订单访问权限、资产校验和交付唯一约束。[Demo 服务端源码](https://github.com/xjdao2025/rice-front/blob/codex/rice-point-migration/examples/point-payment-demo/server.mjs)
 
 ### 输入清单
 
