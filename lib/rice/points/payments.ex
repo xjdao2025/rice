@@ -4,26 +4,27 @@ defmodule Rice.Points.Payments do
   import Ecto.Query
   import Ecto.Changeset
 
-  alias Rice.{Points, Repo, Tsid}
+  alias Rice.{Points, Repo, Tsid, Vault}
   alias Rice.Points.{Account, PaymentApp, PaymentIntent, Point}
 
   @max_amount 9_223_372_036_854_775_807
   @order_ttl_seconds 30 * 60
 
-  @doc "Registers an application and returns its credential once to the authorized operator."
+  @doc "Registers an application, storing the credential encrypted for its owner."
   @spec register_app(String.t(), String.t(), String.t()) ::
           {:ok, %{app: PaymentApp.t(), credential: String.t()}}
           | {:error, atom() | Ecto.Changeset.t()}
   def register_app(name, account_id, return_url) do
     with true <- valid_return_url?(return_url) and valid_id?(account_id),
          %Account{status: "active", owner_type: type} = account when type != "system" <-
-           Repo.get(Account, account_id) do
-      credential = new_credential()
-
+           Repo.get(Account, account_id),
+         {:ok, credential, ciphertext} <- generate_stored_credential() do
       %PaymentApp{
         point_id: account.point_id,
         payee_account_id: account.id,
         credential_digest: digest(credential),
+        credential_ciphertext: ciphertext,
+        owner_user_id: personal_owner(account),
         return_url: return_url
       }
       |> cast(%{name: name}, [:name])
@@ -36,18 +37,115 @@ defmodule Rice.Points.Payments do
         error -> error
       end
     else
+      {:error, reason} -> {:error, reason}
       _ -> {:error, :invalid_registration}
     end
   end
 
-  @doc "Rotates an app credential and returns the replacement once to an authorized operator."
-  @spec rotate_credential(String.t()) :: {:ok, String.t()} | {:error, :not_found}
+  @doc "Rotates an app credential and stores its encrypted replacement."
+  @spec rotate_credential(String.t()) ::
+          {:ok, String.t()} | {:error, :not_found | :credential_storage_unavailable}
   def rotate_credential(app_id) do
-    credential = new_credential()
-
-    with {:ok, _} <- update_app(app_id, credential_digest: digest(credential)) do
+    with {:ok, credential, ciphertext} <- generate_stored_credential(),
+         {:ok, _} <-
+           update_app(app_id,
+             credential_digest: digest(credential),
+             credential_ciphertext: ciphertext
+           ) do
       {:ok, credential}
     end
+  end
+
+  @doc "Registers a personal collection app for the authenticated wallet owner."
+  @spec register_for_user(String.t(), String.t(), String.t(), String.t()) ::
+          {:ok, %{app: PaymentApp.t(), credential: String.t()}}
+          | {:error, atom() | Ecto.Changeset.t()}
+  def register_for_user(user_id, point_id, name, return_url) do
+    if valid_id?(user_id) and valid_id?(point_id) do
+      Repo.transaction(fn ->
+        account =
+          Repo.one(
+            from a in Account,
+              join: p in Point,
+              on: p.id == a.point_id,
+              where:
+                a.point_id == ^point_id and a.owner_type == "user" and
+                  a.owner_id == ^user_id and a.status == "active" and p.status == "active",
+              lock: "FOR SHARE"
+          ) || Repo.rollback(:not_found)
+
+        case register_app(name, account.id, return_url) do
+          {:ok, result} -> result
+          {:error, reason} -> Repo.rollback(reason)
+        end
+      end)
+    else
+      {:error, :not_found}
+    end
+  end
+
+  @doc "Lists app metadata for the authenticated owner, without secret fields."
+  @spec apps_for_user(String.t()) :: [PaymentApp.t()]
+  def apps_for_user(user_id) do
+    Repo.all(from a in PaymentApp, where: a.owner_user_id == ^user_id, order_by: [desc: a.id])
+  end
+
+  @doc "Reveals a stored app credential only to its personal collection wallet owner."
+  @spec credential_for_user(String.t(), String.t()) :: {:ok, String.t()} | {:error, atom()}
+  def credential_for_user(app_id, user_id) do
+    with {:ok, app} <- owned_app(app_id, user_id),
+         true <- is_binary(app.credential_ciphertext),
+         {:ok, credential} <- Vault.decrypt(app.credential_ciphertext),
+         true <- Plug.Crypto.secure_compare(digest(credential), app.credential_digest) do
+      {:ok, credential}
+    else
+      {:error, :not_found} -> {:error, :not_found}
+      _ -> {:error, :credential_unavailable}
+    end
+  end
+
+  @doc "Rotates a personal app credential after owner authorization."
+  @spec rotate_for_user(String.t(), String.t()) :: {:ok, String.t()} | {:error, atom()}
+  def rotate_for_user(app_id, user_id) do
+    Repo.transaction(fn ->
+      with {:ok, _app} <- owned_app(app_id, user_id),
+           {:ok, credential} <- rotate_credential(app_id) do
+        credential
+      else
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
+  end
+
+  defp owned_app(app_id, user_id) do
+    if valid_id?(app_id) and valid_id?(user_id) do
+      case Repo.one(
+             from app in PaymentApp,
+               join: a in Account,
+               on: a.id == app.payee_account_id,
+               where:
+                 app.id == ^app_id and app.owner_user_id == ^user_id and
+                   a.owner_type == "user" and a.owner_id == ^user_id
+           ) do
+        nil -> {:error, :not_found}
+        app -> {:ok, app}
+      end
+    else
+      {:error, :not_found}
+    end
+  end
+
+  defp personal_owner(%Account{owner_type: "user", owner_id: id}) do
+    if valid_id?(id) and Repo.get(Rice.Accounts.User, id), do: id
+  end
+
+  defp personal_owner(_), do: nil
+
+  defp generate_stored_credential do
+    credential = new_credential()
+    {:ok, credential, Vault.encrypt(credential)}
+  rescue
+    _ -> {:error, :credential_storage_unavailable}
   end
 
   @doc "Enables or disables payment access for a registered app."

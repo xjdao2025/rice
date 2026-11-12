@@ -133,7 +133,7 @@
       "AppBearer": {
         "type": "http",
         "scheme": "bearer",
-        "description": "App credential issued once by Rice operator. Server-side secret, distinct from customer login."
+        "description": "App credential obtained from the authenticated developer payment registration page or Rice operator. Server-side secret, distinct from customer login. Owners can reveal encrypted stored credentials again."
       }
     },
     "schemas": {

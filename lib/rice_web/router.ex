@@ -262,6 +262,11 @@ defmodule RiceWeb.Router do
     get "/point-wallets/:point_id/transactions", PointWalletTransferController, :index
     post "/point-wallets/:point_id/transfers", PointWalletTransferController, :create
 
+    get "/payment-apps", PointPaymentAppController, :index
+    post "/payment-apps", PointPaymentAppController, :create
+    post "/payment-apps/:id/credential", PointPaymentAppController, :credential
+    post "/payment-apps/:id/rotate-credential", PointPaymentAppController, :rotate
+
     get "/point-wallets", PointWalletController, :index
     get "/point-checkout/:token", PointPaymentController, :checkout
     post "/point-checkout/:token", PointPaymentController, :confirm

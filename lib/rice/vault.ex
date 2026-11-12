@@ -1,6 +1,6 @@
 defmodule Rice.Vault do
   @moduledoc """
-  AES-256-GCM encryption for secrets stored at rest (linked-account passwords).
+  AES-256-GCM encryption for secrets stored at rest (linked-account passwords and payment app credentials).
 
   Ciphertext layout: `iv(12) <> tag(16) <> ciphertext`. The key is a raw 32-byte
   binary from `config :rice, Rice.Vault, key:` (decoded from `RICE_LINK_ENC_KEY`

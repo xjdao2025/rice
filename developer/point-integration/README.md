@@ -9,7 +9,13 @@
 
 ## 1. 接入前准备
 
-请向 Rice 运维申请以下配置，并明确测试环境。
+个人收款应用可登录测试站后进入 [积分支付应用](https://xjdao.net/developer/payments)，或从“我的 → 积分支付应用”进入。填写应用名称、自己的收款积分及 HTTPS 返回地址，注册后在应用卡片点击“查看密钥”，即可复制 `RICE_PAYMENT_KEY`。
+
+收款积分须是当前账号已拥有的可用 Point 钱包。页面默认隐藏密钥，应用所有者可以再次查看和复制，服务端加密保存可恢复副本。点击“重置密钥”并确认后，旧密钥会立即失效，所有使用该密钥的服务端都需要更新配置。
+
+历史应用可能只保存了不可恢复的摘要，页面会提示先重置。运维注册的个人收款应用归收款账号所有。节点收款应用仍由运维注册和管理。
+
+接入时请准备以下配置，并明确测试环境。
 
 | 配置 | 用途 |
 | --- | --- |
@@ -50,7 +56,7 @@ bin/rice eval 'Rice.Release.point_ledger("ensure-wallet")'
 bin/rice eval 'Rice.Release.point_ledger("register-payment-app")'
 ```
 
-注册结果包含 `app_id` 和一次性返回的明文 `credential`。运维应通过私密渠道交付凭证。应用停用、启用和凭证轮换由运维设置 `POINT_PAYMENT_APP_ID` 后分别执行 `disable-payment-app`、`enable-payment-app`、`rotate-payment-credential`。轮换会使旧凭证失效，应协调更新商户服务端配置。
+运维命令的注册结果包含 `app_id` 和明文 `credential`，应通过私密渠道交付凭证。个人应用的收款账号也可在注册页再次查看新版本加密保存的密钥。应用停用、启用和凭证轮换由运维设置 `POINT_PAYMENT_APP_ID` 后分别执行 `disable-payment-app`、`enable-payment-app`、`rotate-payment-credential`。轮换会使旧凭证失效，应协调更新商户服务端配置。
 
 ## 2. 完整支付流程
 
@@ -290,7 +296,7 @@ RICE_PAYMENT_KEY=<通过密钥存储提供，禁止写入生成的源码、文�
 MERCHANT_RETURN_URL=https://<商户域名>/rice/return
 ```
 
-还需要明确商品定价规则、本地订单存储、当前用户身份及交付动作。缺少应用注册、凭证或资产 ID 时，先完成不依赖这些配置的本地代码，并向运维索取缺失配置。
+还需要明确商品定价规则、本地订单存储、当前用户身份及交付动作。缺少应用注册、凭证或资产 ID 时，先完成不依赖这些配置的本地代码，再请收款账号持有人到注册页创建应用并提供配置，或向运维申请节点收款应用。
 
 ### 实现步骤
 
