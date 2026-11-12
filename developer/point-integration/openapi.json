@@ -1,0 +1,277 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Rice Third-party Point Payments",
+    "version": "2026-11-12",
+    "description": "Merchant server API implemented in Rice. App registration binds one asset, one payee wallet and one HTTPS return URL. Customer confirms in Rice-hosted checkout. Read README.md for settlement verification and Agent instructions."
+  },
+  "servers": [
+    {
+      "url": "https://xjdao.net",
+      "description": "Test environment"
+    }
+  ],
+  "security": [
+    {
+      "AppBearer": []
+    }
+  ],
+  "paths": {
+    "/v1/payment-intents": {
+      "post": {
+        "operationId": "createPaymentIntent",
+        "summary": "Create or replay a payment attempt",
+        "description": "Same app + external_order_id + same amount replays the same payment ID with HTTP 201, without extending expiration. Different amount returns 409. Persist the attempt before calling. Validate checkout_url against configured checkout origin, then send the browser there.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePaymentRequest"
+              },
+              "example": {
+                "external_order_id": "order-20261112-001",
+                "amount": "10"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created or idempotently replayed. checkout_url may be freshly signed on replay.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "allOf": [
+                        {
+                          "$ref": "#/components/schemas/PaymentIntent"
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "checkout_url"
+                          ],
+                          "properties": {
+                            "checkout_url": {
+                              "type": "string",
+                              "format": "uri",
+                              "description": "Opaque Rice browser checkout URL. Validate origin and /point-checkout/ path, preserve verbatim."
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          }
+        }
+      }
+    },
+    "/v1/payment-intents/{id}": {
+      "get": {
+        "operationId": "getPaymentIntent",
+        "summary": "Read an app-owned payment attempt",
+        "description": "Query with the merchant app credential. Verify ID, external_order_id, point_id, amount, succeeded status and transaction_id before idempotent fulfillment. Browser return parameters alone do not establish payment.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/OpaqueId"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "App-owned payment, without checkout_url.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PaymentIntent"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "AppBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "App credential issued once by Rice operator. Server-side secret, distinct from customer login."
+      }
+    },
+    "schemas": {
+      "OpaqueId": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Rice opaque ID. Preserve verbatim."
+      },
+      "Amount": {
+        "type": "string",
+        "pattern": "^[1-9][0-9]{0,18}$",
+        "minLength": 1,
+        "maxLength": 19,
+        "description": "Canonical positive integer text, numeric value <= 9223372036854775807. Never use a JSON number.",
+        "example": "10"
+      },
+      "CreatePaymentRequest": {
+        "type": "object",
+        "required": [
+          "external_order_id",
+          "amount"
+        ],
+        "properties": {
+          "external_order_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255,
+            "description": "1–255 UTF-8 bytes, not whitespace-only and no NUL. maxLength alone counts characters; server additionally enforces byte length."
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Amount"
+          }
+        }
+      },
+      "PaymentIntent": {
+        "type": "object",
+        "required": [
+          "id",
+          "external_order_id",
+          "status",
+          "point_id",
+          "amount",
+          "expires_at"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "external_order_id": {
+            "type": "string",
+            "description": "Merchant payment attempt ID, unique within the app."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "succeeded",
+              "expired",
+              "canceled"
+            ]
+          },
+          "point_id": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Amount"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC expiration, 30 minutes after creation. A succeeded payment stays succeeded."
+          },
+          "transaction_id": {
+            "$ref": "#/components/schemas/OpaqueId",
+            "description": "Present on succeeded payments. Required by merchant fulfillment verification."
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "examples": [
+              "invalid_app_credential",
+              "not_found",
+              "idempotency_conflict",
+              "invalid_order",
+              "payee_unavailable"
+            ]
+          }
+        }
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "401 invalid_app_credential. Check app credential, environment and active status.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "404 not_found. ID does not exist or belongs to another app.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "409 idempotency_conflict. Existing external_order_id has another amount.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Unprocessable": {
+        "description": "422 invalid_order or payee_unavailable.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    }
+  }
+}
